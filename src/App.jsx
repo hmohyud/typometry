@@ -61,9 +61,9 @@ const FINGER_NAMES = {
 // ============================================================
 const FINGERTIP_POSITIONS = {
   pinky:  { cx: 495, cy: 220 },
-  ring:   { cx: 400, cy: 125 },
+  ring:   { cx: 398, cy: 121 },
   middle: { cx: 304, cy: 49 },
-  index:  { cx: 175, cy: 95 },
+  index:  { cx: 178, cy: 95 },
   thumb:  { cx: 50, cy: 340 },
 }
 // ============================================================
@@ -316,7 +316,7 @@ const TIPS = {
       <TipTitle>Capital Letter Penalty</TipTitle>
       <TipText>How much slower you type capital letters compared to lowercase.</TipText>
       <TipText>Includes the time to coordinate the Shift key.</TipText>
-      <TipHint>40-80% slower is typical</TipHint>
+      <TipHint>80-150% slower is typical</TipHint>
     </>
   ),
   punctuationPenalty: (
@@ -332,7 +332,7 @@ const TIPS = {
       <TipTitle>Error Recovery</TipTitle>
       <TipText>How much your speed drops in the 3 keystrokes after making an error.</TipText>
       <TipText>Shows how much errors disrupt your flow.</TipText>
-      <TipHint>10-30% slowdown is typical</TipHint>
+      <TipHint>60-90% slowdown is typical</TipHint>
     </>
   ),
   hesitations: (
@@ -988,10 +988,10 @@ function App() {
     } else if (avgFlowRatio > 70 && avgConsistency > 60) {
       archetype = 'The Flow State'
       archetypeDesc = 'Locked in, consistent rhythm, in the zone'
-    } else if (avgRecoveryPenalty > 30) {
+    } else if (avgRecoveryPenalty > 90) {
       archetype = 'The Rattled'
       archetypeDesc = 'Errors throw off their groove'
-    } else if (avgRecoveryPenalty < 10 && totalErrors > 0) {
+    } else if (avgRecoveryPenalty < 60 && totalErrors > 0) {
       archetype = 'The Unfazed'
       archetypeDesc = 'Errors don\'t break their stride'
     } else if (wpm > 80) {
@@ -1394,10 +1394,10 @@ function App() {
     } else if (flowRatio > 70 && consistency > 60) {
       archetype = 'The Flow State'
       archetypeDesc = 'Locked in, consistent rhythm, in the zone'
-    } else if (recoveryPenalty > 30) {
+    } else if (recoveryPenalty > 90) {
       archetype = 'The Rattled'
       archetypeDesc = 'Errors throw off their groove'
-    } else if (recoveryPenalty < 10 && errorCount > 0) {
+    } else if (recoveryPenalty < 60 && errorCount > 0) {
       archetype = 'The Unfazed'
       archetypeDesc = 'Errors don\'t break their stride'
     } else if (wpm > 80) {
@@ -2084,8 +2084,8 @@ function App() {
                 <KeyboardHeatmap keyStats={stats.keyStats} mode={heatmapMode} />
                 
                 <div className="keyboard-flows">
-                  <KeyboardFlowMap topBigrams={stats.slowestBigrams} flowType="slow" />
                   <KeyboardFlowMap topBigrams={stats.fastestBigrams} flowType="fast" />
+                  <KeyboardFlowMap topBigrams={stats.slowestBigrams} flowType="slow" />
                 </div>
               </div>
               
@@ -2126,10 +2126,10 @@ function App() {
           
           <div className="bigrams-container">
             <div className="bigrams">
-              <p className="bigram-label">slowest transitions</p>
+              <p className="bigram-label">fastest transitions</p>
               <div className="bigram-list">
-                {stats.slowestBigrams.map(({ bigram, avg, distance }, i) => (
-                  <span key={i} className="bigram">
+                {stats.fastestBigrams.map(({ bigram, avg, distance }, i) => (
+                  <span key={i} className="bigram fast">
                     <code>{formatBigram(bigram)}</code>
                     <span className="bigram-meta">
                       <span className="bigram-time">{Math.round(avg)}ms</span>
@@ -2140,10 +2140,10 @@ function App() {
               </div>
             </div>
             <div className="bigrams">
-              <p className="bigram-label">fastest transitions</p>
+              <p className="bigram-label">slowest transitions</p>
               <div className="bigram-list">
-                {stats.fastestBigrams.map(({ bigram, avg, distance }, i) => (
-                  <span key={i} className="bigram fast">
+                {stats.slowestBigrams.map(({ bigram, avg, distance }, i) => (
+                  <span key={i} className="bigram">
                     <code>{formatBigram(bigram)}</code>
                     <span className="bigram-meta">
                       <span className="bigram-time">{Math.round(avg)}ms</span>
@@ -2302,7 +2302,7 @@ function App() {
                   <div className="detail-row">
                     <span className="detail-label">capital letter penalty</span>
                     <span className="detail-value">
-                      <span className={stats.behavioral.capitalPenalty > 80 ? 'text-warn' : ''}>
+                      <span className={stats.behavioral.capitalPenalty > 150 ? 'text-warn' : ''}>
                         {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
                       </span>
                       <span className="detail-note">slower on capitals</span>
@@ -2326,7 +2326,7 @@ function App() {
                   <div className="detail-row">
                     <span className="detail-label">error recovery</span>
                     <span className="detail-value">
-                      <span className={stats.behavioral.recoveryPenalty > 40 ? 'text-warn' : ''}>
+                      <span className={stats.behavioral.recoveryPenalty > 90 ? 'text-warn' : ''}>
                         {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
                       </span>
                       <span className="detail-note">slower after mistakes</span>
@@ -2489,10 +2489,10 @@ function App() {
                 
                 <div className="bigrams-container">
                   <div className="bigrams">
-                    <p className="bigram-label">all-time slowest</p>
+                    <p className="bigram-label">all-time fastest</p>
                     <div className="bigram-list">
-                      {cumulativeStats.slowestBigrams.map(({ bigram, avg }, i) => (
-                        <span key={i} className="bigram">
+                      {cumulativeStats.fastestBigrams.map(({ bigram, avg }, i) => (
+                        <span key={i} className="bigram fast">
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">{Math.round(avg)}ms</span>
@@ -2502,10 +2502,10 @@ function App() {
                     </div>
                   </div>
                   <div className="bigrams">
-                    <p className="bigram-label">all-time fastest</p>
+                    <p className="bigram-label">all-time slowest</p>
                     <div className="bigram-list">
-                      {cumulativeStats.fastestBigrams.map(({ bigram, avg }, i) => (
-                        <span key={i} className="bigram fast">
+                      {cumulativeStats.slowestBigrams.map(({ bigram, avg }, i) => (
+                        <span key={i} className="bigram">
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">{Math.round(avg)}ms</span>
@@ -2556,8 +2556,8 @@ function App() {
                     <KeyboardHeatmap keyStats={cumulativeStats.keyStats} mode={heatmapMode} />
                     
                     <div className="keyboard-flows">
-                      <KeyboardFlowMap topBigrams={cumulativeStats.slowestBigrams} flowType="slow" />
                       <KeyboardFlowMap topBigrams={cumulativeStats.fastestBigrams} flowType="fast" />
+                      <KeyboardFlowMap topBigrams={cumulativeStats.slowestBigrams} flowType="slow" />
                     </div>
                   </div>
                 )}
@@ -2697,7 +2697,7 @@ function App() {
                         <div className="detail-row">
                           <span className="detail-label">capital letter penalty</span>
                           <span className="detail-value">
-                            <span className={cumulativeStats.behavioral.capitalPenalty > 80 ? 'text-warn' : ''}>
+                            <span className={cumulativeStats.behavioral.capitalPenalty > 150 ? 'text-warn' : ''}>
                               {cumulativeStats.behavioral.capitalPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.capitalPenalty}%
                             </span>
                             <span className="detail-note">slower on capitals</span>
@@ -2721,7 +2721,7 @@ function App() {
                         <div className="detail-row">
                           <span className="detail-label">error recovery</span>
                           <span className="detail-value">
-                            <span className={cumulativeStats.behavioral.recoveryPenalty > 40 ? 'text-warn' : ''}>
+                            <span className={cumulativeStats.behavioral.recoveryPenalty > 90 ? 'text-warn' : ''}>
                               {cumulativeStats.behavioral.recoveryPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.recoveryPenalty}%
                             </span>
                             <span className="detail-note">slower after mistakes</span>
