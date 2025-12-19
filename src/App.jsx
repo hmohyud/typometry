@@ -13,6 +13,47 @@ const STORAGE_KEYS = {
   HISTORY: 'typometry_history',
 }
 
+// Finger assignments for conventional touch typing
+const FINGER_MAP = {
+  '`': 'L-pinky', '1': 'L-pinky', 'q': 'L-pinky', 'a': 'L-pinky', 'z': 'L-pinky',
+  '2': 'L-ring', 'w': 'L-ring', 's': 'L-ring', 'x': 'L-ring',
+  '3': 'L-middle', 'e': 'L-middle', 'd': 'L-middle', 'c': 'L-middle',
+  '4': 'L-index', '5': 'L-index', 'r': 'L-index', 't': 'L-index', 
+  'f': 'L-index', 'g': 'L-index', 'v': 'L-index', 'b': 'L-index',
+  '6': 'R-index', '7': 'R-index', 'y': 'R-index', 'u': 'R-index',
+  'h': 'R-index', 'j': 'R-index', 'n': 'R-index', 'm': 'R-index',
+  '8': 'R-middle', 'i': 'R-middle', 'k': 'R-middle', ',': 'R-middle',
+  '9': 'R-ring', 'o': 'R-ring', 'l': 'R-ring', '.': 'R-ring',
+  '0': 'R-pinky', '-': 'R-pinky', '=': 'R-pinky', 'p': 'R-pinky',
+  '[': 'R-pinky', ']': 'R-pinky', ';': 'R-pinky', "'": 'R-pinky',
+  '/': 'R-pinky', '\\': 'R-pinky',
+  ' ': 'thumb',
+}
+
+const FINGER_KEYS = {
+  'L-pinky': ['`','1','Q','A','Z'],
+  'L-ring': ['2','W','S','X'],
+  'L-middle': ['3','E','D','C'],
+  'L-index': ['4','5','R','T','F','G','V','B'],
+  'R-index': ['6','7','Y','U','H','J','N','M'],
+  'R-middle': ['8','I','K',','],
+  'R-ring': ['9','O','L','.'],
+  'R-pinky': ['0','-','=','P','[',']',';',"'",'/','\\'],
+  'thumb': ['space'],
+}
+
+const FINGER_NAMES = {
+  'L-pinky': 'Left Pinky',
+  'L-ring': 'Left Ring',
+  'L-middle': 'Left Middle',
+  'L-index': 'Left Index',
+  'R-index': 'Right Index',
+  'R-middle': 'Right Middle',
+  'R-ring': 'Right Ring',
+  'R-pinky': 'Right Pinky',
+  'thumb': 'Thumbs',
+}
+
 // Tooltip content for stats
 const TIPS = {
   // Basic stats
@@ -442,6 +483,271 @@ const Histogram = ({ data, width = 200, height = 60, bins = 15, color = '#e2b714
   )
 }
 
+// Graph icon for stats button
+const GraphIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 3v18h18" />
+    <path d="M18 17V9" />
+    <path d="M13 17V5" />
+    <path d="M8 17v-3" />
+  </svg>
+)
+
+// Mini keyboard for tooltip
+const MiniKeyboard = ({ highlightKeys, color }) => {
+  const rows = [
+    ['`','1','2','3','4','5','6','7','8','9','0','-','='],
+    ['Q','W','E','R','T','Y','U','I','O','P','[',']','\\'],
+    ['A','S','D','F','G','H','J','K','L',';',"'"],
+    ['Z','X','C','V','B','N','M',',','.','/'],
+  ]
+  const offsets = [0, 8, 12, 20]
+  const isSpace = highlightKeys.includes('space')
+  
+  return (
+    <svg viewBox="0 0 200 95" className="mini-kb">
+      <rect x="0" y="0" width="200" height="95" rx="4" fill="#1a1a1b" />
+      {rows.map((row, ri) => (
+        row.map((key, ki) => {
+          const lit = highlightKeys.includes(key)
+          return (
+            <rect key={`${ri}-${ki}`}
+              x={4 + offsets[ri] + ki * 15}
+              y={4 + ri * 16}
+              width={13} height={14} rx={2}
+              fill={lit ? color : '#2c2e31'}
+            />
+          )
+        })
+      ))}
+      <rect x={55} y={68} width={70} height={14} rx={2} fill={isSpace ? color : '#2c2e31'} />
+    </svg>
+  )
+}
+
+// Finger performance visualization with elegant hand outlines
+const FingerHands = ({ fingerStats }) => {
+  const [hovered, setHovered] = useState(null)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+  const containerRef = useRef(null)
+  
+  const fingers = ['L-pinky', 'L-ring', 'L-middle', 'L-index', 'R-index', 'R-middle', 'R-ring', 'R-pinky']
+  
+  // Calculate averages
+  const speeds = fingers.map(f => fingerStats[f]?.avgInterval || 0).filter(v => v > 0)
+  const accs = fingers.map(f => fingerStats[f]?.accuracy || 0)
+  const avgSpeed = speeds.length > 0 ? Math.round(speeds.reduce((a,b) => a+b, 0) / speeds.length) : 0
+  const avgAcc = accs.length > 0 ? Math.round(accs.reduce((a,b) => a+b, 0) / accs.length) : 0
+  
+  const minSpeed = Math.min(...speeds)
+  const maxSpeed = Math.max(...speeds)
+  
+  const getColor = (finger) => {
+    const data = fingerStats[finger]
+    if (!data || data.total === 0) return '#3c3e41'
+    const speed = data.avgInterval
+    if (maxSpeed === minSpeed) return '#98c379'
+    const t = (speed - minSpeed) / (maxSpeed - minSpeed)
+    // Green (fast) -> Yellow -> Red (slow)
+    if (t < 0.5) {
+      const r = Math.round(152 + 74 * t * 2)
+      const g = Math.round(195 - 12 * t * 2)
+      const b = Math.round(121 - 101 * t * 2)
+      return `rgb(${r},${g},${b})`
+    } else {
+      const r = Math.round(226 - 2 * (t - 0.5) * 2)
+      const g = Math.round(183 - 75 * (t - 0.5) * 2)
+      const b = Math.round(20 + 97 * (t - 0.5) * 2)
+      return `rgb(${r},${g},${b})`
+    }
+  }
+  
+  const handleHover = (finger, e) => {
+    setHovered(finger)
+    if (containerRef.current && e) {
+      const rect = containerRef.current.getBoundingClientRect()
+      setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top - 10 })
+    }
+  }
+  
+  const hoveredData = hovered ? fingerStats[hovered] : null
+  const hoveredColor = hovered ? getColor(hovered) : '#888'
+  
+  // Elegant hand path - left hand (palm facing down, fingers spread)
+  const handPath = `
+    M 55 145
+    C 50 130, 48 115, 46 100
+    L 44 75
+    C 43 68, 40 62, 38 55
+    L 34 30
+    C 33 24, 35 20, 40 20
+    C 45 20, 47 24, 47 30
+    L 48 45
+    L 46 28
+    C 45 18, 48 12, 55 12
+    C 62 12, 65 18, 64 28
+    L 62 48
+    L 64 25
+    C 64 14, 68 8, 76 8
+    C 84 8, 88 14, 87 25
+    L 84 50
+    L 88 28
+    C 89 16, 94 11, 102 12
+    C 110 13, 113 20, 111 32
+    L 104 60
+    C 106 58, 112 56, 120 60
+    C 130 66, 132 78, 126 90
+    L 112 110
+    C 105 125, 95 140, 85 145
+    Z
+  `
+  
+  // Fingernail shapes for each finger (small curved rectangles at fingertips)
+  const leftNails = [
+    { x: 36, y: 18, w: 8, h: 6 },   // pinky
+    { x: 52, y: 10, w: 9, h: 6 },   // ring
+    { x: 73, y: 6, w: 10, h: 6 },   // middle
+    { x: 97, y: 10, w: 10, h: 6 },  // index
+  ]
+  
+  // Fingertip positions for left hand
+  const leftTips = [
+    { finger: 'L-pinky', cx: 40, cy: 20 },
+    { finger: 'L-ring', cx: 57, cy: 12 },
+    { finger: 'L-middle', cx: 78, cy: 8 },
+    { finger: 'L-index', cx: 102, cy: 14 },
+  ]
+  const leftThumb = { cx: 126, cy: 72 }
+  
+  return (
+    <div className="finger-hands" ref={containerRef}>
+      <div className="finger-hands-header">
+        <div className="finger-hands-title">
+          <span>Finger Performance</span>
+          <span className="finger-hands-note">*conventional placement</span>
+        </div>
+        <div className="finger-hands-avg">
+          avg: <span className="fh-speed">{avgSpeed}ms</span> · <span className="fh-acc">{avgAcc}%</span>
+        </div>
+      </div>
+      
+      <svg viewBox="0 0 300 155" className="finger-hands-svg">
+        {/* Left hand */}
+        <g transform="translate(-5, 0)">
+          <path d={handPath} fill="none" stroke="#4a4a4a" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round"/>
+          {/* Fingernails */}
+          {leftNails.map((nail, i) => (
+            <rect key={`nail-l-${i}`} x={nail.x} y={nail.y} width={nail.w} height={nail.h} rx="2" fill="none" stroke="#3a3a3a" strokeWidth="0.8"/>
+          ))}
+          {/* Fingertips */}
+          {leftTips.map(({ finger, cx, cy }) => (
+            <circle key={finger} cx={cx} cy={cy} r="10"
+              fill={getColor(finger)}
+              stroke={hovered === finger ? '#fff' : 'transparent'}
+              strokeWidth="2"
+              fillOpacity="0.85"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={(e) => handleHover(finger, e)}
+              onMouseMove={(e) => handleHover(finger, e)}
+              onMouseLeave={() => setHovered(null)}
+            />
+          ))}
+          {/* Thumb */}
+          <circle cx={leftThumb.cx} cy={leftThumb.cy} r="10"
+            fill={getColor('thumb')}
+            stroke={hovered === 'thumb' ? '#fff' : 'transparent'}
+            strokeWidth="2"
+            fillOpacity="0.85"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={(e) => handleHover('thumb', e)}
+            onMouseMove={(e) => handleHover('thumb', e)}
+            onMouseLeave={() => setHovered(null)}
+          />
+        </g>
+        
+        {/* Right hand (mirrored) */}
+        <g transform="translate(305, 0) scale(-1, 1)">
+          <path d={handPath} fill="none" stroke="#4a4a4a" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round"/>
+          {/* Fingernails */}
+          {leftNails.map((nail, i) => (
+            <rect key={`nail-r-${i}`} x={nail.x} y={nail.y} width={nail.w} height={nail.h} rx="2" fill="none" stroke="#3a3a3a" strokeWidth="0.8"/>
+          ))}
+          {/* Fingertips */}
+          {[
+            { finger: 'R-pinky', cx: 40, cy: 20 },
+            { finger: 'R-ring', cx: 57, cy: 12 },
+            { finger: 'R-middle', cx: 78, cy: 8 },
+            { finger: 'R-index', cx: 102, cy: 14 },
+          ].map(({ finger, cx, cy }) => (
+            <circle key={finger} cx={cx} cy={cy} r="10"
+              fill={getColor(finger)}
+              stroke={hovered === finger ? '#fff' : 'transparent'}
+              strokeWidth="2"
+              fillOpacity="0.85"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={(e) => handleHover(finger, e)}
+              onMouseMove={(e) => handleHover(finger, e)}
+              onMouseLeave={() => setHovered(null)}
+            />
+          ))}
+          {/* Thumb */}
+          <circle cx={leftThumb.cx} cy={leftThumb.cy} r="10"
+            fill={getColor('thumb')}
+            stroke={hovered === 'thumb' ? '#fff' : 'transparent'}
+            strokeWidth="2"
+            fillOpacity="0.85"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={(e) => handleHover('thumb', e)}
+            onMouseMove={(e) => handleHover('thumb', e)}
+            onMouseLeave={() => setHovered(null)}
+          />
+        </g>
+      </svg>
+      
+      {/* Legend */}
+      <div className="finger-hands-legend">
+        <span>fast</span>
+        <div className="fh-gradient" />
+        <span>slow</span>
+      </div>
+      
+      {/* Tooltip with full stats */}
+      {hovered && hoveredData && hoveredData.total > 0 && (
+        <div className="finger-tooltip" style={{ 
+          left: Math.min(Math.max(tooltipPos.x, 110), 190), 
+          top: tooltipPos.y,
+          transform: 'translate(-50%, -100%)'
+        }}>
+          <div className="ft-header" style={{ borderColor: hoveredColor }}>
+            {FINGER_NAMES[hovered]}
+          </div>
+          <div className="ft-stats">
+            <div className="ft-stat">
+              <span className="ft-label">Speed</span>
+              <span className="ft-value">{hoveredData.avgInterval}ms</span>
+              <span className={`ft-diff ${hoveredData.avgInterval < avgSpeed ? 'good' : hoveredData.avgInterval > avgSpeed ? 'bad' : ''}`}>
+                {hoveredData.avgInterval < avgSpeed ? `${avgSpeed - hoveredData.avgInterval}ms faster` : 
+                 hoveredData.avgInterval > avgSpeed ? `${hoveredData.avgInterval - avgSpeed}ms slower` : 'avg'}
+              </span>
+            </div>
+            <div className="ft-stat">
+              <span className="ft-label">Accuracy</span>
+              <span className="ft-value">{hoveredData.accuracy}%</span>
+              <span className={`ft-diff ${hoveredData.accuracy > avgAcc ? 'good' : hoveredData.accuracy < avgAcc ? 'bad' : ''}`}>
+                {hoveredData.accuracy > avgAcc ? `+${hoveredData.accuracy - avgAcc}%` : 
+                 hoveredData.accuracy < avgAcc ? `${hoveredData.accuracy - avgAcc}%` : 'avg'}
+              </span>
+            </div>
+          </div>
+          <div className="ft-keys">
+            <MiniKeyboard highlightKeys={FINGER_KEYS[hovered]} color={hoveredColor} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [currentText, setCurrentText] = useState('')
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -578,6 +884,27 @@ function App() {
       keyStats[key].avgInterval = times.length > 0
         ? times.reduce((a, b) => a + b, 0) / times.length
         : 0
+    })
+    
+    // Aggregate fingerStats
+    const fingerStats = {}
+    const fingerOrder = ['L-pinky', 'L-ring', 'L-middle', 'L-index', 'R-index', 'R-middle', 'R-ring', 'R-pinky', 'thumb']
+    fingerOrder.forEach(f => { fingerStats[f] = { times: [], correct: 0, total: 0 } })
+    history.forEach(h => {
+      if (h.fingerStats) {
+        Object.entries(h.fingerStats).forEach(([finger, data]) => {
+          if (fingerStats[finger]) {
+            if (data.times) fingerStats[finger].times.push(...data.times)
+            fingerStats[finger].correct += data.correct || 0
+            fingerStats[finger].total += data.total || 0
+          }
+        })
+      }
+    })
+    Object.keys(fingerStats).forEach(f => {
+      const times = fingerStats[f].times
+      fingerStats[f].avgInterval = times.length > 0 ? Math.round(times.reduce((a,b) => a+b, 0) / times.length) : 0
+      fingerStats[f].accuracy = fingerStats[f].total > 0 ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 100) : 100
     })
     
     // Aggregate behavioral stats (weighted averages by char count)
@@ -735,6 +1062,7 @@ function App() {
       impressiveBigrams,
       counts,
       keyStats,
+      fingerStats,
       history, // Include history for review
       behavioral: {
         momentum: Math.round(avgMomentum * 10) / 10,
@@ -1159,6 +1487,30 @@ function App() {
         : 0
     })
     
+    // Finger statistics
+    const fingerStats = {}
+    const fingerOrder = ['L-pinky', 'L-ring', 'L-middle', 'L-index', 'R-index', 'R-middle', 'R-ring', 'R-pinky', 'thumb']
+    fingerOrder.forEach(f => { fingerStats[f] = { times: [], correct: 0, total: 0 } })
+    
+    data.forEach(d => {
+      if (d.expected) {
+        const finger = FINGER_MAP[d.expected.toLowerCase()] || FINGER_MAP[d.expected]
+        if (finger && fingerStats[finger]) {
+          fingerStats[finger].total++
+          if (d.correct) {
+            fingerStats[finger].correct++
+            if (d.interval) fingerStats[finger].times.push(d.interval)
+          }
+        }
+      }
+    })
+    
+    Object.keys(fingerStats).forEach(f => {
+      const times = fingerStats[f].times
+      fingerStats[f].avgInterval = times.length > 0 ? Math.round(times.reduce((a,b) => a+b, 0) / times.length) : 0
+      fingerStats[f].accuracy = fingerStats[f].total > 0 ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 100) : 100
+    })
+    
     // Aggregate bigrams
     const bigramMap = {}
     bigramsWithDistance.forEach(({ bigram, interval, distance }) => {
@@ -1283,6 +1635,7 @@ function App() {
         burstCount: bursts.length,
       },
       keyStats,
+      fingerStats,
     }
   }, [])
 
@@ -1376,6 +1729,7 @@ function App() {
         bigrams: finalStats.bigrams,
         counts: finalStats.counts,
         keyStats: finalStats.keyStats,
+        fingerStats: finalStats.fingerStats,
         behavioral: {
           momentum: finalStats.behavioral.momentum,
           flowRatio: finalStats.behavioral.flowRatio,
@@ -1465,9 +1819,24 @@ function App() {
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
+      {/* Stats icon button - positioned absolutely */}
+      {!isActive && !isComplete && cumulativeStats && cumulativeStats.sessions > 0 && (
+        <button 
+          className="stats-icon-btn"
+          onClick={() => {
+            setIsComplete(true)
+            setStatsView('alltime')
+          }}
+          title="View past stats"
+        >
+          <GraphIcon />
+        </button>
+      )}
+      
       <header>
         <h1>typometry</h1>
         <p className="tagline">absurdly detailed stats about how you type</p>
+        <p className="attribution">inspired by <a href="https://monkeytype.com" target="_blank" rel="noopener noreferrer">monkeytype</a></p>
         <p className="progress">{completedCount} / {totalParagraphs} paragraphs completed</p>
       </header>
 
@@ -1476,21 +1845,22 @@ function App() {
           {renderText()}
         </div>
         
-        {!isActive && !isComplete && (
-          <p className="hint">start typing...</p>
-        )}
-        
-        {isActive && !isComplete && (
-          <div className="live-stats">
-            <span>{typed.length} / {currentText.length}</span>
-          </div>
-        )}
+        <div className="typing-hint-container">
+          <p className="hint" style={{ visibility: (!isActive && !isComplete) ? 'visible' : 'hidden' }}>
+            start typing...
+          </p>
+          {isActive && !isComplete && (
+            <div className="live-stats">
+              <span>{typed.length} / {currentText.length}</span>
+            </div>
+          )}
+        </div>
       </main>
 
-      {isComplete && stats && (
+      {(isComplete && stats) || (isComplete && statsView === 'alltime' && cumulativeStats) ? (
         <section className="stats">
           {/* Stats View Toggle */}
-          {cumulativeStats && cumulativeStats.sessions > 1 && (
+          {cumulativeStats && cumulativeStats.sessions > 1 && stats && (
             <div className="stats-header">
               <div className="stats-toggle">
                 <button 
@@ -1520,7 +1890,25 @@ function App() {
             </div>
           )}
           
-          {statsView === 'current' ? (
+          {/* Header for all-time only view (no current stats) */}
+          {!stats && statsView === 'alltime' && cumulativeStats && (
+            <div className="stats-header alltime-only">
+              <h3 className="alltime-title">All Time Stats ({cumulativeStats.sessions} sessions)</h3>
+              <button 
+                className="history-btn"
+                onClick={() => setShowHistory(true)}
+                title="View session history"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                History
+              </button>
+            </div>
+          )}
+          
+          {statsView === 'current' && stats ? (
             <>
               {/* Current paragraph stats */}
               <div className="stat-grid primary">
@@ -1701,6 +2089,11 @@ function App() {
                   <KeyboardFlowMap topBigrams={stats.fastestBigrams} flowType="fast" />
                 </div>
               </div>
+              
+              {/* Finger Performance */}
+              {stats.fingerStats && (
+                <FingerHands fingerStats={stats.fingerStats} />
+              )}
               
               <div className="graphs-section">
             <div className="graph-card">
@@ -2170,6 +2563,11 @@ function App() {
                   </div>
                 )}
                 
+                {/* Finger Performance for All Time */}
+                {cumulativeStats.fingerStats && (
+                  <FingerHands fingerStats={cumulativeStats.fingerStats} />
+                )}
+                
                 {/* Behavioral Insights for All Time */}
                 {cumulativeStats.behavioral && (
                   <div className="behavioral-section">
@@ -2360,7 +2758,7 @@ function App() {
           
           <p className="restart-hint">press enter or space to continue</p>
         </section>
-      )}
+      ) : null}
 
       <footer>
         <button className="reset-btn" onClick={() => resetTest()}>next</button>

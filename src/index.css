@@ -1233,3 +1233,216 @@ footer {
     min-width: 40px;
   }
 }
+
+/* Attribution */
+.attribution {
+  color: #4a4a4a;
+  font-size: 0.7rem;
+  margin-top: -0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.attribution a {
+  color: #4a4a4a;
+  text-decoration: underline;
+  text-decoration-color: #3c3e41;
+  transition: color 0.15s;
+}
+
+.attribution a:hover {
+  color: #e2b714;
+}
+
+/* Stats icon button - positioned in corner */
+.stats-icon-btn {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1a1a1b;
+  border: 1px solid #2c2e31;
+  color: #646669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  z-index: 50;
+}
+
+.stats-icon-btn:hover {
+  border-color: #e2b714;
+  color: #e2b714;
+  background: #232528;
+}
+
+/* Typing hint container - fixed height to prevent shift */
+.typing-hint-container {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.typing-hint-container .hint {
+  margin: 0;
+}
+
+.typing-hint-container .live-stats {
+  position: absolute;
+}
+
+/* All-time only header */
+.stats-header.alltime-only {
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+
+.alltime-title {
+  color: #d1d0c5;
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Finger Hands Visualization */
+.finger-hands {
+  position: relative;
+  padding: 1rem;
+  background: #0f0f0f;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.finger-hands-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.finger-hands-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  color: #646669;
+  font-size: 0.85rem;
+}
+
+.finger-hands-note {
+  font-size: 0.65rem;
+  color: #4a4a4a;
+}
+
+.finger-hands-avg {
+  font-size: 0.75rem;
+  color: #646669;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.finger-hands-avg .fh-speed {
+  color: #e2b714;
+}
+
+.finger-hands-avg .fh-acc {
+  color: #98c379;
+}
+
+.finger-hands-svg {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.finger-hands-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.65rem;
+  color: #4a4a4a;
+}
+
+.fh-gradient {
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #98c379, #e2b714, #e06c75);
+}
+
+/* Finger Tooltip */
+.finger-tooltip {
+  position: absolute;
+  background: #1a1a1b;
+  border: 1px solid #2c2e31;
+  border-radius: 8px;
+  padding: 0;
+  z-index: 100;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.ft-header {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: #d1d0c5;
+  border-bottom: 2px solid;
+  font-weight: 500;
+}
+
+.ft-stats {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ft-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ft-label {
+  color: #646669;
+  font-size: 0.7rem;
+  width: 55px;
+}
+
+.ft-value {
+  color: #d1d0c5;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  width: 45px;
+}
+
+.ft-diff {
+  font-size: 0.65rem;
+  color: #646669;
+}
+
+.ft-diff.good {
+  color: #98c379;
+}
+
+.ft-diff.bad {
+  color: #e06c75;
+}
+
+.ft-keys {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #2c2e31;
+}
+
+.mini-kb {
+  width: 100%;
+  height: auto;
+  display: block;
+}
