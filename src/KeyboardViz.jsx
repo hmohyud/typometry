@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 // Keyboard layout for rendering
 const KEYBOARD_ROWS = [
@@ -42,6 +42,9 @@ const interpolateColor = (value, min, max, coldColor, hotColor) => {
 }
 
 export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
+  const [hoveredKey, setHoveredKey] = useState(null)
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  
   const { colors } = useMemo(() => {
     if (!keyStats || Object.keys(keyStats).length === 0) {
       return { colors: {} }
@@ -75,10 +78,26 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
 
   const totalWidth = 14 * (KEY_WIDTH + KEY_GAP)
   const totalHeight = 5 * (KEY_HEIGHT + KEY_GAP)
+  
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    })
+  }
+  
+  const hoveredStats = hoveredKey ? (keyStats?.[hoveredKey] || keyStats?.[hoveredKey.toLowerCase()]) : null
 
   return (
     <div className="keyboard-viz">
-      <svg width={totalWidth} height={totalHeight} viewBox={`0 0 ${totalWidth} ${totalHeight}`}>
+      <svg 
+        width={totalWidth} 
+        height={totalHeight} 
+        viewBox={`0 0 ${totalWidth} ${totalHeight}`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoveredKey(null)}
+      >
         {KEYBOARD_ROWS.map((row, rowIndex) => {
           let x = ROW_OFFSETS[rowIndex] * (KEY_WIDTH + KEY_GAP)
           return row.map((key, keyIndex) => {
@@ -87,11 +106,14 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
             const keyX = x
             x += width + KEY_GAP
             
-            const stats = keyStats?.[key] || keyStats?.[key.toLowerCase()]
             const label = key === ' ' ? 'space' : key
             
             return (
-              <g key={`${rowIndex}-${keyIndex}`}>
+              <g 
+                key={`${rowIndex}-${keyIndex}`}
+                onMouseEnter={() => setHoveredKey(key)}
+                style={{ cursor: 'default' }}
+              >
                 <rect
                   x={keyX}
                   y={rowIndex * (KEY_HEIGHT + KEY_GAP)}
@@ -110,19 +132,45 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
                   fontSize={key === ' ' ? 10 : 12}
                   fill="var(--text)"
                   opacity={0.8}
+                  style={{ pointerEvents: 'none' }}
                 >
                   {label}
                 </text>
-                {stats && (
-                  <title>
-{key === ' ' ? 'space' : key}: {Math.round(stats.avgInterval || 0)}ms avg | {Math.round((stats.accuracy || 1) * 100)}% accurate ({stats.errors || 0} errors) | {stats.count || 0} presses
-                  </title>
-                )}
               </g>
             )
           })
         })}
       </svg>
+      
+      {/* Mouse-following tooltip */}
+      {hoveredKey && hoveredStats && (
+        <div 
+          className="keyboard-key-tooltip"
+          style={{
+            position: 'absolute',
+            left: mousePos.x + 12,
+            top: mousePos.y + 12,
+            background: 'rgba(30, 33, 36, 0.95)',
+            border: '1px solid #444',
+            borderRadius: '6px',
+            padding: '0.4rem 0.6rem',
+            pointerEvents: 'none',
+            zIndex: 100,
+            whiteSpace: 'nowrap',
+            fontSize: '0.75rem',
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text)' }}>
+            {hoveredKey === ' ' ? 'space' : hoveredKey}
+          </div>
+          <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <span><span style={{ color: 'var(--text)' }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg speed</span>
+            <span><span style={{ color: 'var(--text)' }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors || 0} errors)</span>
+            <span><span style={{ color: 'var(--text)' }}>{hoveredStats.count || 0}</span> presses</span>
+          </div>
+        </div>
+      )}
+      
       <div className="keyboard-legend">
         <span className="legend-label">{mode === 'speed' ? 'fast' : 'accurate'}</span>
         <div className="legend-gradient" style={{

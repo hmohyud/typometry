@@ -208,8 +208,9 @@ h1 {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  overflow: hidden;
+  overflow: visible;
   max-width: 100%;
+  position: relative;
 }
 
 .keyboard-viz svg {
