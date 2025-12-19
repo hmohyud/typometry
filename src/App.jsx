@@ -15,6 +15,77 @@ const STORAGE_KEYS = {
 
 // Tooltip content for stats
 const TIPS = {
+  // Basic stats
+  wpm: (
+    <>
+      <TipTitle>Words Per Minute</TipTitle>
+      <TipText>Your typing speed, calculated as (characters / 5) / minutes.</TipText>
+      <TipText>The standard "word" is 5 characters including spaces.</TipText>
+      <TipHint>Average: 40 WPM | Good: 60+ | Fast: 80+</TipHint>
+    </>
+  ),
+  accuracy: (
+    <>
+      <TipTitle>Accuracy</TipTitle>
+      <TipText>Percentage of characters typed correctly on the first attempt.</TipText>
+      <TipText>Backspaced corrections count against accuracy.</TipText>
+      <TipHint>95%+ is considered good accuracy</TipHint>
+    </>
+  ),
+  consistency: (
+    <>
+      <TipTitle>Consistency</TipTitle>
+      <TipText>How steady your typing speed is throughout the text.</TipText>
+      <TipText>Based on the coefficient of variation of your keystroke intervals.</TipText>
+      <TipHint>Higher % = more even, metronomic typing</TipHint>
+    </>
+  ),
+  time: (
+    <>
+      <TipTitle>Time</TipTitle>
+      <TipText>Total time from first keystroke to last keystroke.</TipText>
+    </>
+  ),
+  avgKeystroke: (
+    <>
+      <TipTitle>Average Keystroke</TipTitle>
+      <TipText>Mean time between consecutive keystrokes in milliseconds.</TipText>
+      <TipText>Lower = faster typing.</TipText>
+      <TipHint>100ms ≈ 120 WPM | 200ms ≈ 60 WPM</TipHint>
+    </>
+  ),
+  avgWordTime: (
+    <>
+      <TipTitle>Average Word Time</TipTitle>
+      <TipText>Mean time to complete each word (space to space).</TipText>
+      <TipText>Includes thinking time between words.</TipText>
+    </>
+  ),
+  errors: (
+    <>
+      <TipTitle>Errors</TipTitle>
+      <TipText>Number of incorrect keystrokes detected.</TipText>
+      <TipText>Each backspace after a wrong character counts as recovering from an error.</TipText>
+    </>
+  ),
+  totalChars: (
+    <>
+      <TipTitle>Total Characters</TipTitle>
+      <TipText>Cumulative characters typed across all sessions.</TipText>
+    </>
+  ),
+  totalTime: (
+    <>
+      <TipTitle>Total Time</TipTitle>
+      <TipText>Cumulative typing time across all sessions.</TipText>
+    </>
+  ),
+  sessions: (
+    <>
+      <TipTitle>Sessions</TipTitle>
+      <TipText>Number of completed paragraphs/typing tests.</TipText>
+    </>
+  ),
   profileStrength: (
     <>
       <TipTitle>Profile Strength</TipTitle>
@@ -485,6 +556,30 @@ function App() {
       correctSpaces: history.reduce((sum, h) => sum + (h.counts?.correctSpaces || 0), 0),
     }
     
+    // Aggregate keyStats for keyboard heatmap
+    const keyStats = {}
+    history.forEach(h => {
+      if (h.keyStats) {
+        Object.entries(h.keyStats).forEach(([key, data]) => {
+          if (!keyStats[key]) {
+            keyStats[key] = { times: [], count: 0 }
+          }
+          // Add all times and count from this session
+          if (data.times) {
+            keyStats[key].times.push(...data.times)
+          }
+          keyStats[key].count += data.count || 0
+        })
+      }
+    })
+    // Calculate averages for aggregated keyStats
+    Object.keys(keyStats).forEach(key => {
+      const times = keyStats[key].times
+      keyStats[key].avgInterval = times.length > 0
+        ? times.reduce((a, b) => a + b, 0) / times.length
+        : 0
+    })
+    
     // Aggregate behavioral stats (weighted averages by char count)
     const behavioralHistory = history.filter(h => h.behavioral)
     const totalBehavioralChars = behavioralHistory.reduce((sum, h) => sum + h.charCount, 0)
@@ -639,6 +734,7 @@ function App() {
       fastestBigrams,
       impressiveBigrams,
       counts,
+      keyStats,
       history, // Include history for review
       behavioral: {
         momentum: Math.round(avgMomentum * 10) / 10,
@@ -1279,6 +1375,7 @@ function App() {
         distances: finalStats.distances,
         bigrams: finalStats.bigrams,
         counts: finalStats.counts,
+        keyStats: finalStats.keyStats,
         behavioral: {
           momentum: finalStats.behavioral.momentum,
           flowRatio: finalStats.behavioral.flowRatio,
@@ -1427,78 +1524,92 @@ function App() {
             <>
               {/* Current paragraph stats */}
               <div className="stat-grid primary">
-                <div className="stat">
-                  <span className="stat-value">
-                    {stats.wpm}
-                    {cumulativeStats && cumulativeStats.sessions > 1 && (
-                      <span className={`stat-delta ${stats.wpm >= cumulativeStats.wpm ? 'positive' : 'negative'}`}>
-                        {stats.wpm >= cumulativeStats.wpm ? '↑' : '↓'}{Math.abs(stats.wpm - cumulativeStats.wpm)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="stat-label">wpm</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">
-                    {stats.accuracy}%
-                    {cumulativeStats && cumulativeStats.sessions > 1 && (
-                      <span className={`stat-delta ${stats.accuracy >= cumulativeStats.accuracy ? 'positive' : 'negative'}`}>
-                        {stats.accuracy >= cumulativeStats.accuracy ? '↑' : '↓'}{Math.abs(stats.accuracy - cumulativeStats.accuracy)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="stat-label">accuracy</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">
-                    {stats.consistency}%
-                    {cumulativeStats && cumulativeStats.sessions > 1 && (
-                      <span className={`stat-delta ${stats.consistency >= cumulativeStats.consistency ? 'positive' : 'negative'}`}>
-                        {stats.consistency >= cumulativeStats.consistency ? '↑' : '↓'}{Math.abs(stats.consistency - cumulativeStats.consistency)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="stat-label">consistency</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">{stats.totalTime}s</span>
-                  <span className="stat-label">time</span>
-                </div>
+                <Tooltip content={TIPS.wpm}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {stats.wpm}
+                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                        <span className={`stat-delta ${stats.wpm >= cumulativeStats.wpm ? 'positive' : 'negative'}`}>
+                          {stats.wpm >= cumulativeStats.wpm ? '↑' : '↓'}{Math.abs(stats.wpm - cumulativeStats.wpm)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">wpm</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.accuracy}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {stats.accuracy}%
+                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                        <span className={`stat-delta ${stats.accuracy >= cumulativeStats.accuracy ? 'positive' : 'negative'}`}>
+                          {stats.accuracy >= cumulativeStats.accuracy ? '↑' : '↓'}{Math.abs(stats.accuracy - cumulativeStats.accuracy)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">accuracy</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.consistency}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {stats.consistency}%
+                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                        <span className={`stat-delta ${stats.consistency >= cumulativeStats.consistency ? 'positive' : 'negative'}`}>
+                          {stats.consistency >= cumulativeStats.consistency ? '↑' : '↓'}{Math.abs(stats.consistency - cumulativeStats.consistency)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">consistency</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.time}>
+                  <div className="stat">
+                    <span className="stat-value">{stats.totalTime}s</span>
+                    <span className="stat-label">time</span>
+                  </div>
+                </Tooltip>
               </div>
               
               <div className="stat-grid secondary">
-                <div className="stat small">
-                  <span className="stat-value">
-                    {stats.avgInterval}ms
-                    {cumulativeStats && cumulativeStats.sessions > 1 && (
-                      <span className={`stat-delta ${stats.avgInterval <= cumulativeStats.avgInterval ? 'positive' : 'negative'}`}>
-                        {stats.avgInterval <= cumulativeStats.avgInterval ? '↓' : '↑'}{Math.abs(stats.avgInterval - cumulativeStats.avgInterval)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="stat-label">avg keystroke</span>
-                </div>
-                <div className="stat small">
-                  <span className="stat-value">{stats.avgWordInterval}ms</span>
-                  <span className="stat-label">avg word time</span>
-                </div>
+                <Tooltip content={TIPS.avgKeystroke}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {stats.avgInterval}ms
+                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                        <span className={`stat-delta ${stats.avgInterval <= cumulativeStats.avgInterval ? 'positive' : 'negative'}`}>
+                          {stats.avgInterval <= cumulativeStats.avgInterval ? '↓' : '↑'}{Math.abs(stats.avgInterval - cumulativeStats.avgInterval)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">avg keystroke</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.avgWordTime}>
+                  <div className="stat small">
+                    <span className="stat-value">{stats.avgWordInterval}ms</span>
+                    <span className="stat-label">avg word time</span>
+                  </div>
+                </Tooltip>
                 <Tooltip content={TIPS.avgTravel}>
                   <div className="stat small">
                     <span className="stat-value">{stats.avgDistance}</span>
                     <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
                   </div>
                 </Tooltip>
-                <div className="stat small">
-                  <span className="stat-value">
-                    {stats.errorCount}
-                    {cumulativeStats && cumulativeStats.sessions > 1 && (
-                      <span className={`stat-delta ${stats.errorCount <= cumulativeStats.avgErrors ? 'positive' : 'negative'}`}>
-                        {stats.errorCount <= cumulativeStats.avgErrors ? '↓' : '↑'}{Math.abs(Math.round((stats.errorCount - cumulativeStats.avgErrors) * 10) / 10)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="stat-label">errors</span>
-                </div>
+                <Tooltip content={TIPS.errors}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {stats.errorCount}
+                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                        <span className={`stat-delta ${stats.errorCount <= cumulativeStats.avgErrors ? 'positive' : 'negative'}`}>
+                          {stats.errorCount <= cumulativeStats.avgErrors ? '↓' : '↑'}{Math.abs(Math.round((stats.errorCount - cumulativeStats.avgErrors) * 10) / 10)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">errors</span>
+                  </div>
+                </Tooltip>
               </div>
               
               {/* Character Counts */}
@@ -1868,43 +1979,57 @@ function App() {
             cumulativeStats && (
               <>
                 <div className="stat-grid primary">
-                  <div className="stat">
-                    <span className="stat-value">{cumulativeStats.wpm}</span>
-                    <span className="stat-label">avg wpm</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-value">{cumulativeStats.accuracy}%</span>
-                    <span className="stat-label">accuracy</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-value">{cumulativeStats.totalChars.toLocaleString()}</span>
-                    <span className="stat-label">total chars</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-value">{Math.round(cumulativeStats.totalTime / 60)}m</span>
-                    <span className="stat-label">total time</span>
-                  </div>
+                  <Tooltip content={TIPS.wpm}>
+                    <div className="stat">
+                      <span className="stat-value">{cumulativeStats.wpm}</span>
+                      <span className="stat-label">avg wpm</span>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content={TIPS.accuracy}>
+                    <div className="stat">
+                      <span className="stat-value">{cumulativeStats.accuracy}%</span>
+                      <span className="stat-label">accuracy</span>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content={TIPS.totalChars}>
+                    <div className="stat">
+                      <span className="stat-value">{cumulativeStats.totalChars.toLocaleString()}</span>
+                      <span className="stat-label">total chars</span>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content={TIPS.totalTime}>
+                    <div className="stat">
+                      <span className="stat-value">{Math.round(cumulativeStats.totalTime / 60)}m</span>
+                      <span className="stat-label">total time</span>
+                    </div>
+                  </Tooltip>
                 </div>
                 
                 <div className="stat-grid secondary">
-                  <div className="stat small">
-                    <span className="stat-value">{cumulativeStats.avgInterval}ms</span>
-                    <span className="stat-label">avg keystroke</span>
-                  </div>
-                  <div className="stat small">
-                    <span className="stat-value">{cumulativeStats.avgWordInterval}ms</span>
-                    <span className="stat-label">avg word time</span>
-                  </div>
+                  <Tooltip content={TIPS.avgKeystroke}>
+                    <div className="stat small">
+                      <span className="stat-value">{cumulativeStats.avgInterval}ms</span>
+                      <span className="stat-label">avg keystroke</span>
+                    </div>
+                  </Tooltip>
+                  <Tooltip content={TIPS.avgWordTime}>
+                    <div className="stat small">
+                      <span className="stat-value">{cumulativeStats.avgWordInterval}ms</span>
+                      <span className="stat-label">avg word time</span>
+                    </div>
+                  </Tooltip>
                   <Tooltip content={TIPS.avgTravel}>
                     <div className="stat small">
                       <span className="stat-value">{cumulativeStats.avgDistance}</span>
                       <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
                     </div>
                   </Tooltip>
-                  <div className="stat small">
-                    <span className="stat-value">{cumulativeStats.sessions}</span>
-                    <span className="stat-label">sessions</span>
-                  </div>
+                  <Tooltip content={TIPS.sessions}>
+                    <div className="stat small">
+                      <span className="stat-value">{cumulativeStats.sessions}</span>
+                      <span className="stat-label">sessions</span>
+                    </div>
+                  </Tooltip>
                 </div>
                 
                 {/* Counts breakdown */}
@@ -2012,6 +2137,35 @@ function App() {
                           </span>
                         </span>
                       ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Keyboard Analysis for All Time */}
+                {cumulativeStats.keyStats && Object.keys(cumulativeStats.keyStats).length > 0 && (
+                  <div className="keyboard-section">
+                    <div className="keyboard-header">
+                      <h3>Keyboard Analysis (All Time)</h3>
+                      <div className="mini-toggles">
+                        <button 
+                          className={`mini-toggle ${heatmapMode === 'speed' ? 'active' : ''}`}
+                          onClick={() => setHeatmapMode('speed')}
+                        >
+                          Speed
+                        </button>
+                        <button 
+                          className={`mini-toggle ${heatmapMode === 'frequency' ? 'active' : ''}`}
+                          onClick={() => setHeatmapMode('frequency')}
+                        >
+                          Frequency
+                        </button>
+                      </div>
+                    </div>
+                    <KeyboardHeatmap keyStats={cumulativeStats.keyStats} mode={heatmapMode} />
+                    
+                    <div className="keyboard-flows">
+                      <KeyboardFlowMap topBigrams={cumulativeStats.slowestBigrams} flowType="slow" />
+                      <KeyboardFlowMap topBigrams={cumulativeStats.fastestBigrams} flowType="fast" />
                     </div>
                   </div>
                 )}
