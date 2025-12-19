@@ -3,6 +3,7 @@ import sentences from "./sentences.json";
 import { getKeyDistance } from "./keyboard";
 import { KeyboardHeatmap, KeyboardFlowMap } from "./KeyboardViz";
 import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
+import { useGlobalStats } from "./useGlobalStats";
 
 // Flatten all paragraphs into one pool with indices
 const ALL_PARAGRAPHS = Object.values(sentences).flat();
@@ -1103,9 +1104,12 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
     const reverseKey = `${t.to}->${t.from}`;
     const reverse = fingerTransitions[reverseKey];
     
+    // Only include reverse if it has enough data to display (count >= 2)
+    const reverseValid = reverse && reverse.count >= 2;
+    
     // Calculate combined stats for the chord
     const forwardCount = t.count || 0;
-    const reverseCount = reverse?.count || 0;
+    const reverseCount = reverseValid ? reverse.count : 0;
     const totalCount = forwardCount + reverseCount;
     
     // Weight average by count
@@ -1124,7 +1128,7 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
       avg: Math.round(combinedAvg),
       count: totalCount,
       forward: t,
-      reverse: reverse && reverse.count >= 2 ? reverse : null
+      reverse: reverseValid ? reverse : null
     });
   });
   
@@ -1164,18 +1168,43 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   });
   
   // Get color based on speed (green = fast, red = slow)
+  // Color scale: use percentile-based coloring for better spread
+  // Sort times and find percentile boundaries
+  const sortedTimes = [...avgTimes].sort((a, b) => a - b);
+  const p20 = sortedTimes[Math.floor(sortedTimes.length * 0.2)] || minTime;
+  const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.5)] || (minTime + maxTime) / 2;
+  const p80 = sortedTimes[Math.floor(sortedTimes.length * 0.8)] || maxTime;
+  
   const getChordColor = (avg) => {
-    if (maxTime === minTime) return '#98c379';
-    const t = (avg - minTime) / (maxTime - minTime);
+    if (sortedTimes.length <= 1) return '#98c379';
+    
+    // Normalize to 0-1 based on percentile position for better spread
+    let t;
+    if (avg <= p20) {
+      t = 0.1 * (avg - minTime) / (p20 - minTime || 1);
+    } else if (avg <= p50) {
+      t = 0.1 + 0.35 * (avg - p20) / (p50 - p20 || 1);
+    } else if (avg <= p80) {
+      t = 0.45 + 0.35 * (avg - p50) / (p80 - p50 || 1);
+    } else {
+      t = 0.8 + 0.2 * (avg - p80) / (maxTime - p80 || 1);
+    }
+    t = Math.max(0, Math.min(1, t));
+    
+    // Smooth 3-color gradient: green (#98c379) → yellow (#e5c07b) → red (#e06c75)
     if (t < 0.5) {
-      const r = Math.round(152 + 74 * t * 2);
-      const g = Math.round(195 - 12 * t * 2);
-      const b = Math.round(121 - 101 * t * 2);
+      // Green to Yellow
+      const tt = t * 2;
+      const r = Math.round(152 + (229 - 152) * tt);
+      const g = Math.round(195 + (192 - 195) * tt);
+      const b = Math.round(121 + (123 - 121) * tt);
       return `rgb(${r},${g},${b})`;
     } else {
-      const r = Math.round(226 - 2 * (t - 0.5) * 2);
-      const g = Math.round(183 - 75 * (t - 0.5) * 2);
-      const b = Math.round(20 + 97 * (t - 0.5) * 2);
+      // Yellow to Red
+      const tt = (t - 0.5) * 2;
+      const r = Math.round(229 + (224 - 229) * tt);
+      const g = Math.round(192 - (192 - 108) * tt);
+      const b = Math.round(123 - (123 - 117) * tt);
       return `rgb(${r},${g},${b})`;
     }
   };
@@ -1393,6 +1422,16 @@ function App() {
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Global stats from Supabase for comparisons
+  const { 
+    globalAverages, 
+    submitStats: submitToSupabase, 
+    resetUserId,
+    compareToGlobal,
+    sessionCount: globalSessionCount,
+    loading: globalStatsLoading 
+  } = useGlobalStats();
 
   const lastKeystrokeTime = useRef(null);
   const startTime = useRef(null);
@@ -2673,6 +2712,39 @@ function App() {
         const newHistory = [...history, historyEntry];
         saveToStorage(STORAGE_KEYS.HISTORY, newHistory);
 
+        // Submit to Supabase for global stats
+        submitToSupabase({
+          // Core stats
+          wpm: finalStats.wpm,
+          accuracy: finalStats.accuracy,
+          avgInterval: finalStats.avgInterval,
+          totalChars: finalStats.charCount,
+          totalTime,
+          errorCount: finalStats.errorCount,
+          sentenceId: currentIndex,
+          
+          // Variance stats
+          stdDev: finalStats.stdDev,
+          consistency: finalStats.consistency,
+          
+          // Percentiles
+          percentiles: finalStats.percentiles,
+          
+          // Counts breakdown
+          counts: finalStats.counts,
+          
+          // Bigram & finger data
+          bigrams: finalStats.bigrams,
+          fingerStats: finalStats.fingerStats,
+          fingerTransitions: finalStats.fingerTransitions,
+          
+          // Behavioral stats
+          behavioral: finalStats.behavioral,
+          
+          // Raw keystroke data for later analysis
+          keystrokes: [...keystrokeData, keystroke],
+        });
+
         // Update cumulative stats
         setCumulativeStats(calculateCumulativeStats(newHistory));
       }
@@ -2725,6 +2797,8 @@ function App() {
     resetTest(true);
     setCumulativeStats(null);
     setCompletedCount(0);
+    // Generate new anonymous user ID
+    resetUserId();
   };
 
   const startClearHold = () => {
@@ -2910,6 +2984,14 @@ function App() {
                       )}
                     </span>
                     <span className="stat-label">wpm</span>
+                    {/* {globalAverages && (
+                      <span className={`stat-global ${stats.wpm >= globalAverages.avg_wpm ? 'above' : 'below'}`}>
+                        {stats.wpm >= globalAverages.p90_wpm ? 'top 10%' :
+                         stats.wpm >= globalAverages.p75_wpm ? 'top 25%' :
+                         stats.wpm >= globalAverages.p50_wpm ? 'above avg' :
+                         'below avg'}
+                      </span>
+                    )} */}
                   </div>
                 </Tooltip>
                 <Tooltip content={TIPS.accuracy}>
