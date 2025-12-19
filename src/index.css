@@ -39,7 +39,7 @@ body {
 /* Header */
 header {
   text-align: center;
-  margin-bottom: 3rem;
+  /* margin-bottom: 3rem; */
 }
 
 h1 {
@@ -219,7 +219,8 @@ h1 {
 }
 
 .keyboard-legend {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.65rem;
@@ -234,6 +235,14 @@ h1 {
 
 .legend-label {
   text-transform: lowercase;
+}
+
+.legend-label:first-child {
+  text-align: right;
+}
+
+.legend-label:last-child {
+  text-align: left;
 }
 
 .keyboard-flows {

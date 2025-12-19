@@ -2789,9 +2789,9 @@ function App() {
             monkeytype
           </a>
         </p>
-        <p className="progress">
+        {/* <p className="progress">
           {completedCount} / {totalParagraphs} paragraphs completed
-        </p>
+        </p> */}
       </header>
 
       <main className="typing-area">
