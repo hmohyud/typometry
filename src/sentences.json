@@ -1,81 +1,37 @@
 {
-  "warmup": [
-    "the quick brown fox jumps over the lazy dog",
-    "pack my box with five dozen liquor jugs",
-    "how vexingly quick daft zebras jump",
-    "the five boxing wizards jump quickly",
-    "sphinx of black quartz judge my vow"
-  ],
-  "common": [
-    "I need to send that email before the meeting starts",
-    "Can you grab coffee on your way back from lunch",
-    "Let me know when you have a chance to review this",
-    "Thanks for getting back to me so quickly",
-    "I'll follow up with them tomorrow morning",
-    "Does Thursday afternoon work for a quick call",
-    "Just wanted to check in on the status of this",
-    "Sounds good to me, let's move forward with that",
-    "I appreciate you taking the time to help with this",
-    "Let me pull up the document and share my screen"
-  ],
-  "code": [
-    "const result = await fetch(url).then(res => res.json())",
-    "function handleClick(event) { event.preventDefault(); }",
-    "if (user && user.isActive) { return user.permissions; }",
-    "const [state, setState] = useState(initialValue);",
-    "export default function App({ children }) { return children; }",
-    "npm install --save-dev typescript @types/node",
-    "git commit -m 'fix: resolve edge case in parser'",
-    "python -m venv .venv && source .venv/bin/activate",
-    "docker run -p 3000:3000 --env-file .env app:latest",
-    "SELECT id, name FROM users WHERE active = true LIMIT 10;"
-  ],
-  "prose": [
-    "The afternoon light slanted through the window, casting long shadows across the floor.",
-    "She paused at the doorway, keys in hand, trying to remember what she had forgotten.",
-    "It wasn't the answer he wanted, but it was the only honest one he could give.",
-    "The city hummed with its usual Friday energy, everyone eager for the weekend.",
-    "He read the message twice, then a third time, still not quite believing it.",
-    "Rain tapped against the glass like impatient fingers demanding attention.",
-    "They had been walking for hours, but the path ahead showed no sign of ending.",
-    "Sometimes the simplest explanation is the right one, even when it hurts.",
-    "The old bookstore smelled of dust and possibility in equal measure.",
-    "She smiled, not because anything was funny, but because there was nothing else to do."
+  "narrative": [
+    "The coffee had gone cold hours ago, but she kept the mug close anyway. It was a comfort thing, like the worn sweater she refused to throw out. The rain tapped against the window in an uneven rhythm. She thought about calling him, then thought better of it. Some conversations were better left for daylight. The cursor blinked on her screen, patient and undemanding. Tomorrow would be different, she told herself. Tomorrow always was.",
+    "He found the letter tucked inside a book he hadn't opened in years. The paper had yellowed at the edges, and the handwriting was unmistakably his mother's. He sat down slowly, not trusting his legs. The words blurred as he read them, then sharpened into focus. She had known all along. She had forgiven him before he even asked. The book fell closed in his lap, and he sat there until the light changed.",
+    "The train pulled away from the platform just as she reached it. For a moment she stood there, breathless and frustrated. Then something shifted. The next train would come in twenty minutes. Twenty minutes she hadn't expected to have. She bought a coffee, sat on a bench, and watched strangers hurry past. A child waved at her from a stroller. She waved back. Sometimes missing what you wanted led to something you needed.",
+    "They had been walking for three hours when the trail markers disappeared. The map showed a fork that didn't exist in reality. He wanted to turn back. She wanted to push forward. They argued briefly, then fell into silence. The forest didn't care about their disagreement. Eventually they picked a direction and kept moving. That was the thing about being lost. You had to keep moving anyway.",
+    "The restaurant was empty except for an old man in the corner booth. He ordered the same thing every Tuesday, the waitress said. Meatloaf, mashed potatoes, black coffee. He always left a twenty dollar tip and never said more than thank you. She wondered what his story was. Everyone had one. The kitchen bell rang, and she went back to work, carrying other people's meals to other people's tables."
   ],
   "technical": [
-    "The algorithm runs in O(n log n) time with O(n) space complexity.",
-    "Memoization trades memory for speed by caching computed results.",
-    "HTTP status code 429 indicates the client has sent too many requests.",
-    "A closure captures variables from its enclosing lexical scope.",
-    "The event loop processes the callback queue after the call stack empties.",
-    "Garbage collection reclaims memory occupied by unreachable objects.",
-    "A race condition occurs when timing affects program correctness.",
-    "The DOM API allows scripts to dynamically access document content.",
-    "WebSockets enable full-duplex communication over a single TCP connection.",
-    "JSON Web Tokens encode claims as a URL-safe string for authentication."
+    "The function was supposed to return a sorted array, but edge cases kept breaking it. Null inputs, empty arrays, arrays with one element. Each fix introduced a new bug somewhere else. He stepped away from the keyboard and stared at the whiteboard. Sometimes the solution came when you stopped looking for it. He drew the problem from scratch, tracing the data flow with a dry erase marker. There it was. The off-by-one error hiding in plain sight.",
+    "Database migrations are deceptively simple until they aren't. You write the schema change, test it locally, push it to staging. Everything works. Then production reveals the million rows you forgot about. The migration times out. Connections pile up. Users start complaining. Rollback isn't clean because some data already changed. Next time, you tell yourself, you'll batch the updates. Next time you'll test with production-scale data. Next time.",
+    "The API returned a 200 status code, but the response body was empty. He checked the logs. Nothing unusual. He checked the network tab. Request looked fine. He added console logs everywhere, rebuilt the project, cleared the cache. Still empty. Two hours later he found it. A middleware was swallowing the response before it reached the client. Six lines of code written eight months ago by someone who no longer worked there.",
+    "Version control saved him again. The feature branch had diverged so far from main that merging seemed impossible. Conflicts in every file. Logic that contradicted itself. He considered starting over, but the commit history told a story. Small, atomic commits with clear messages. He cherry-picked the ones that mattered, tested each change, rebuilt the feature piece by piece. It took a full day, but the code was cleaner than before.",
+    "Memory leaks are patient killers. The application runs fine for hours, days even. Then performance degrades. Response times creep up. Eventually the server crashes and everyone panics. Finding the leak is detective work. Heap snapshots, allocation timelines, reference chains. Usually it's something small. An event listener never removed. A cache that grows forever. A closure holding onto objects it no longer needs."
   ],
-  "numbers": [
-    "The meeting is scheduled for 3:45 PM in room 204.",
-    "Order #48291 shipped on 12/15/2024 via UPS Ground.",
-    "The budget increased by 23% from $150,000 to $184,500.",
-    "Please call (555) 867-5309 between 9 AM and 5 PM.",
-    "Version 2.0.1 was released on 2024-01-17 at 14:32 UTC.",
-    "The password must be 8-16 characters with at least 1 number.",
-    "Flight AA 1847 departs at 6:20 AM from gate B12.",
-    "The dimensions are 1920x1080 pixels at 72 dpi.",
-    "Invoice total: $2,847.50 (includes 8.25% sales tax).",
-    "The server responded in 247ms with a 200 OK status."
+  "reflective": [
+    "Most of what we worry about never happens. We spend hours rehearsing conversations that go differently than we imagined. We prepare for disasters that never arrive. The real challenges come sideways, from directions we never thought to watch. Maybe that's the point. We can't prepare for everything, so we prepare for something. It gives us the illusion of control. Sometimes the illusion is enough to get us through.",
+    "Habits form slowly, then all at once. For weeks you force yourself to do the thing. It feels unnatural, effortful, wrong. Then one morning you do it without thinking. The resistance is gone. The path is worn smooth. This works in both directions, of course. Good habits and bad ones follow the same rules. The only difference is which ones you choose to reinforce. Every day is a vote for the person you're becoming.",
+    "Time moves strangely when you're paying attention to it. Minutes stretch and hours compress. A conversation can feel like a lifetime. A year can vanish in a blink. The trick, maybe, is to stop measuring. To let moments be whatever size they want to be. But we're not built for that. We count and compare and calculate. We turn experience into numbers because numbers feel real. Even when they lie.",
+    "Asking for help is harder than it should be. We tell ourselves we don't want to be a burden. We tell ourselves we should be able to figure it out alone. Pride disguises itself as self-reliance. But everyone needs help sometimes. Everyone has carried weight they couldn't lift alone. The people who seem most capable usually got that way because someone helped them first. Strength isn't doing everything yourself. It's knowing when to reach out.",
+    "Perfectionism is procrastination wearing a fancy coat. We tell ourselves we're waiting until we can do it right. We're not waiting. We're hiding. The messy first draft is always better than the pristine nothing. Ships that stay in harbor are safe, but that's not what ships are for. Launch the thing. Fix it in public. Learn from the embarrassment. The people who seem fearless are just better at acting before the fear takes hold."
   ],
-  "tricky": [
-    "The queue requires a unique technique to execute.",
-    "She sells seashells by the seashore, surely.",
-    "Specifically, the Pacific species specialize in specifications.",
-    "The sixth sick sheik's sixth sheep's sick.",
-    "Fred fed Ted bread, and Ted fed Fred bread.",
-    "How much wood would a woodchuck chuck if a woodchuck could chuck wood?",
-    "Whether the weather is cold, or whether the weather is hot.",
-    "I saw Susie sitting in a shoeshine shop.",
-    "Eleven benevolent elephants elegantly elevated.",
-    "The rhythm of the algorithm was arithmetically incorrect."
+  "descriptive": [
+    "The market opened at dawn, before the heat made standing unbearable. Vendors arranged their stalls with practiced efficiency. Pyramids of oranges, bundles of herbs, fish laid out on ice that wouldn't last until noon. The smell was overwhelming at first, then faded into background noise. Customers haggled in three languages. Children ran between the stalls, chased by mothers and shopkeepers. By ten o'clock the crowds would thin. By noon the market would be a memory until tomorrow.",
+    "The library occupied the entire third floor of a building that used to be a factory. Tall windows let in light that fell across reading tables in long rectangles. The shelves were mismatched, donated over decades from estates and closings. Nothing was organized by any system an outsider could understand. The librarian knew where everything was. She had been there forty years and remembered every book that came and went. People whispered without being told to.",
+    "Snow changed everything about the neighborhood. Cars became white lumps. Fences disappeared. The usual landmarks lost their meaning. Children appeared from nowhere, dragging sleds and building forts. Sound traveled differently, muffled and close. The city felt smaller, more manageable. For a few hours, nobody went anywhere. Everyone was stuck together, watching the same storm, waiting for the same plows. Then the roads cleared and the world sped up again.",
+    "The workshop smelled like sawdust and machine oil. Tools hung on pegboard walls, each outlined in marker so you knew where it belonged. The workbench was scarred with decades of projects. Cuts and burns and stains that told stories. He had learned everything here, watching his grandfather's hands shape wood into furniture. Now the hands were his own, older than he remembered, doing the same work. The radio played songs from before he was born.",
+    "The beach at low tide revealed a different world. Tide pools held galaxies of small life. Crabs sidled under rocks. Anemones closed when touched. The wet sand held footprints for seconds before erasing them. She walked the waterline, looking for sea glass worn smooth by years of tumbling. Each piece had been trash once. A bottle thrown overboard, a broken window, someone's discarded thing. Now they were treasures, transformed by time and patience."
+  ],
+  "instructional": [
+    "Start with the smallest possible version that could work. Don't plan for scale you don't have. Don't solve problems you don't have yet. Build the thing, put it in front of users, and watch what happens. They will surprise you. They will use it wrong. They will ask for features you never imagined. That's the information you need. You can't think your way to product market fit. You have to build your way there, one embarrassing version at a time.",
+    "Writing clearly is thinking clearly. If you can't explain something simply, you don't understand it well enough. Start by writing badly. Get the ideas out of your head and onto the page. Don't edit while you write. That's two different jobs using two different parts of your brain. Finish the draft, then go back. Cut everything that doesn't need to be there. Read it out loud. If you stumble, rewrite. Repeat until the words disappear and only the meaning remains.",
+    "Debugging is a skill that improves with practice. Start by reproducing the bug consistently. If you can't make it happen on demand, you're not ready to fix it. Form a hypothesis about the cause. Design an experiment to test it. Change one thing at a time and observe the result. Keep notes. The bug you're chasing today will have a cousin next month. When you finally find it, ask why it was possible in the first place. Fix the system, not just the symptom.",
+    "Giving feedback is an act of respect. It means you believe someone can improve. Start with what's working. Be specific. Then address what could be better, also specifically. Vague criticism helps no one. Own your perspective. Say I think or I noticed rather than presenting opinions as facts. Ask questions instead of making accusations. Remember that the goal is growth, not punishment. The best feedback leaves someone energized to try again.",
+    "Learning a new skill follows a predictable pattern. First, unconscious incompetence. You don't know what you don't know. Then conscious incompetence. You see the gap between where you are and where you want to be. This stage is uncomfortable. Push through it. Next comes conscious competence. You can do the thing, but it requires focus. Finally, unconscious competence. The skill becomes automatic. Most people quit in stage two. Don't be most people."
   ]
 }

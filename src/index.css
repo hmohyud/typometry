@@ -7,12 +7,15 @@
 :root {
   --bg: #0f0f0f;
   --bg-secondary: #1a1a1a;
+  --bg-tertiary: #242424;
   --text: #d4d4d4;
   --text-muted: #525252;
   --accent: #e2b714;
+  --accent-dim: rgba(226, 183, 20, 0.6);
   --correct: #91d891;
   --incorrect: #e85c5c;
   --current-bg: rgba(226, 183, 20, 0.15);
+  --fast: #6ecf6e;
 }
 
 body {
@@ -63,7 +66,7 @@ h1 {
 }
 
 .text-display {
-  font-size: 1.375rem;
+  font-size: 1.25rem;
   line-height: 1.8;
   text-align: left;
   max-width: 100%;
@@ -104,6 +107,12 @@ h1 {
   animation: pulse 2s ease-in-out infinite;
 }
 
+.live-stats {
+  margin-top: 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
@@ -122,9 +131,19 @@ h1 {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-grid.primary {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stat-grid.secondary {
+  grid-template-columns: repeat(4, 1fr);
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
 }
 
 .stat {
@@ -138,49 +157,122 @@ h1 {
   color: var(--accent);
 }
 
+.stat.small .stat-value {
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.bigrams {
-  text-align: center;
-  padding: 1.5rem;
+/* Graphs section */
+.graphs-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.graph-card {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.graph-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.sparkline, .histogram {
+  display: block;
+}
+
+/* Percentiles */
+.percentiles {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1rem;
   background: var(--bg-secondary);
   border-radius: 8px;
   margin-bottom: 1.5rem;
 }
 
-.bigram-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 1rem;
-}
-
-.bigram-list {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.bigram {
+.percentile {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
 }
 
-.bigram code {
-  font-size: 1rem;
+.percentile-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.percentile-value {
+  font-size: 0.9rem;
   color: var(--text);
-  background: var(--bg);
+}
+
+/* Bigrams */
+.bigrams-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.bigrams {
+  text-align: center;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.bigram-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.bigram-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bigram {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 0.25rem 0.5rem;
+  background: var(--bg-tertiary);
   border-radius: 4px;
+}
+
+.bigram code {
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.bigram.fast code {
+  color: var(--fast);
 }
 
 .bigram-time {
@@ -218,16 +310,17 @@ footer {
 }
 
 /* Responsive */
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .container {
     padding: 2rem 1rem;
   }
   
   .text-display {
-    font-size: 1.125rem;
+    font-size: 1.1rem;
   }
   
-  .stat-grid {
+  .stat-grid.primary,
+  .stat-grid.secondary {
     grid-template-columns: repeat(2, 1fr);
   }
   
@@ -235,7 +328,34 @@ footer {
     font-size: 1.5rem;
   }
   
-  .bigram-list {
+  .graphs-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .graph-card {
+    padding: 1rem 0.5rem;
+  }
+  
+  .percentiles {
+    flex-wrap: wrap;
     gap: 1rem;
+  }
+  
+  .bigrams-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 400px) {
+  .text-display {
+    font-size: 1rem;
+  }
+  
+  .percentiles {
+    gap: 0.75rem;
+  }
+  
+  .percentile-value {
+    font-size: 0.8rem;
   }
 }
