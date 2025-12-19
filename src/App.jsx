@@ -1,11 +1,34 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import sentences from './sentences.json'
 
-const CATEGORIES = Object.keys(sentences)
+// Flatten all sentences into one pool
+const ALL_SENTENCES = Object.values(sentences).flat()
+
+// Shuffle helper
+const shuffle = (arr) => {
+  const shuffled = [...arr]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
+// Build a paragraph from random sentences (targeting ~150-250 chars)
+const buildParagraph = () => {
+  const shuffled = shuffle(ALL_SENTENCES)
+  let paragraph = ''
+  let i = 0
+  while (paragraph.length < 150 && i < shuffled.length) {
+    if (paragraph) paragraph += ' '
+    paragraph += shuffled[i]
+    i++
+  }
+  return paragraph
+}
 
 function App() {
-  const [category, setCategory] = useState('common')
-  const [currentSentence, setCurrentSentence] = useState('')
+  const [currentText, setCurrentText] = useState('')
   const [typed, setTyped] = useState('')
   const [isActive, setIsActive] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -16,13 +39,8 @@ function App() {
   const startTime = useRef(null)
   const containerRef = useRef(null)
 
-  const getRandomSentence = useCallback((cat) => {
-    const pool = sentences[cat]
-    return pool[Math.floor(Math.random() * pool.length)]
-  }, [])
-
   const resetTest = useCallback(() => {
-    setCurrentSentence(getRandomSentence(category))
+    setCurrentText(buildParagraph())
     setTyped('')
     setIsActive(false)
     setIsComplete(false)
@@ -31,11 +49,11 @@ function App() {
     lastKeystrokeTime.current = null
     startTime.current = null
     containerRef.current?.focus()
-  }, [category, getRandomSentence])
+  }, [])
 
   useEffect(() => {
     resetTest()
-  }, [category])
+  }, [])
 
   useEffect(() => {
     containerRef.current?.focus()
@@ -50,7 +68,7 @@ function App() {
     const correctChars = data.filter(d => d.correct).length
     const accuracy = data.length > 0 ? (correctChars / data.length) * 100 : 0
     
-    const words = currentSentence.split(' ').length
+    const words = currentText.split(' ').length
     const minutes = totalTime / 60000
     const wpm = minutes > 0 ? Math.round(words / minutes) : 0
     
@@ -76,7 +94,7 @@ function App() {
       slowestBigrams: bigramAvgs.slice(0, 5),
       totalTime: Math.round(totalTime / 1000 * 10) / 10
     }
-  }, [currentSentence])
+  }, [currentText])
 
   const handleKeyDown = useCallback((e) => {
     if (isComplete) {
@@ -107,7 +125,7 @@ function App() {
 
     if (e.key.length !== 1) return
 
-    const expectedChar = currentSentence[typed.length]
+    const expectedChar = currentText[typed.length]
     const isCorrect = e.key === expectedChar
     const interval = lastKeystrokeTime.current !== null 
       ? now - lastKeystrokeTime.current 
@@ -127,15 +145,15 @@ function App() {
     setTyped(prev => prev + e.key)
 
     // Check completion
-    if (typed.length + 1 === currentSentence.length) {
+    if (typed.length + 1 === currentText.length) {
       const totalTime = now - startTime.current
       setIsComplete(true)
       setStats(calculateStats([...keystrokeData, keystroke], totalTime))
     }
-  }, [isActive, isComplete, typed, currentSentence, keystrokeData, calculateStats, resetTest])
+  }, [isActive, isComplete, typed, currentText, keystrokeData, calculateStats, resetTest])
 
-  const renderSentence = () => {
-    return currentSentence.split('').map((char, i) => {
+  const renderText = () => {
+    return currentText.split('').map((char, i) => {
       let className = 'char'
       
       if (i < typed.length) {
@@ -166,21 +184,9 @@ function App() {
         <p className="tagline">your typing, measured</p>
       </header>
 
-      <nav className="categories">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            className={`cat-btn ${category === cat ? 'active' : ''}`}
-            onClick={() => setCategory(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </nav>
-
       <main className="typing-area">
-        <div className="sentence">
-          {renderSentence()}
+        <div className="text-display">
+          {renderText()}
         </div>
         
         {!isActive && !isComplete && (
