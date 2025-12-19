@@ -1009,18 +1009,18 @@ const MiniHandSVG = ({ finger, highlighted, onMouseEnter, onMouseLeave, showBoth
         {/* Left hand */}
         <svg viewBox="0 0 540.501 640.304" className="chord-hand-svg chord-thumb-hand" style={{ transform: 'scaleX(-1)' }}>
           <g transform="matrix(0.8746401,0,0,-0.8518511,33.878521,592.87107)">
-            <polyline points={handPolyline1} fill="none" stroke={highlighted ? '#888' : '#555'} strokeWidth="4" strokeLinecap="square" strokeMiterlimit="10" />
-            <polyline points={handPolyline2} fill="none" stroke={highlighted ? '#888' : '#555'} strokeWidth="4" strokeLinecap="square" strokeMiterlimit="10" />
+            <polyline points={handPolyline1} fill="none" stroke={highlighted ? '#999' : '#666'} strokeWidth="6" strokeLinecap="square" strokeMiterlimit="10" />
+            <polyline points={handPolyline2} fill="none" stroke={highlighted ? '#999' : '#666'} strokeWidth="6" strokeLinecap="square" strokeMiterlimit="10" />
           </g>
-          <circle cx={tipPos.cx} cy={tipPos.cy} r="34" fill={highlighted ? '#e2b714' : '#777'} stroke={highlighted ? '#fff' : '#333'} strokeWidth="4" />
+          <circle cx={tipPos.cx} cy={tipPos.cy} r="34" fill={highlighted ? '#e2b714' : '#56b6c2'} stroke={highlighted ? '#fff' : '#232528'} strokeWidth="4" />
         </svg>
         {/* Right hand */}
         <svg viewBox="0 0 540.501 640.304" className="chord-hand-svg chord-thumb-hand">
           <g transform="matrix(0.8746401,0,0,-0.8518511,33.878521,592.87107)">
-            <polyline points={handPolyline1} fill="none" stroke={highlighted ? '#888' : '#555'} strokeWidth="4" strokeLinecap="square" strokeMiterlimit="10" />
-            <polyline points={handPolyline2} fill="none" stroke={highlighted ? '#888' : '#555'} strokeWidth="4" strokeLinecap="square" strokeMiterlimit="10" />
+            <polyline points={handPolyline1} fill="none" stroke={highlighted ? '#999' : '#666'} strokeWidth="6" strokeLinecap="square" strokeMiterlimit="10" />
+            <polyline points={handPolyline2} fill="none" stroke={highlighted ? '#999' : '#666'} strokeWidth="6" strokeLinecap="square" strokeMiterlimit="10" />
           </g>
-          <circle cx={tipPos.cx} cy={tipPos.cy} r="34" fill={highlighted ? '#e2b714' : '#777'} stroke={highlighted ? '#fff' : '#333'} strokeWidth="4" />
+          <circle cx={tipPos.cx} cy={tipPos.cy} r="34" fill={highlighted ? '#e2b714' : '#56b6c2'} stroke={highlighted ? '#fff' : '#232528'} strokeWidth="4" />
         </svg>
       </div>
     );
@@ -1038,27 +1038,27 @@ const MiniHandSVG = ({ finger, highlighted, onMouseEnter, onMouseLeave, showBoth
         <polyline
           points={handPolyline1}
           fill="none"
-          stroke={highlighted ? '#888' : '#555'}
-          strokeWidth="4"
+          stroke={highlighted ? '#999' : '#666'}
+          strokeWidth="6"
           strokeLinecap="square"
           strokeMiterlimit="10"
         />
         <polyline
           points={handPolyline2}
           fill="none"
-          stroke={highlighted ? '#888' : '#555'}
-          strokeWidth="4"
+          stroke={highlighted ? '#999' : '#666'}
+          strokeWidth="6"
           strokeLinecap="square"
           strokeMiterlimit="10"
         />
       </g>
-      {/* Larger fingertip dot */}
+      {/* Larger fingertip dot - vibrant cyan */}
       <circle
         cx={tipPos.cx}
         cy={tipPos.cy}
         r="34"
-        fill={highlighted ? '#e2b714' : '#777'}
-        stroke={highlighted ? '#fff' : '#333'}
+        fill={highlighted ? '#e2b714' : '#56b6c2'}
+        stroke={highlighted ? '#fff' : '#232528'}
         strokeWidth="4"
       />
     </svg>
@@ -1071,10 +1071,11 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   const [hoveredNode, setHoveredNode] = useState(null);
   
   // 9 fingers evenly distributed - THUMB at TOP
+  // Right hand on right side (clockwise), Left hand on left side
   const fingers = [
     'thumb',
-    'L-index', 'L-middle', 'L-ring', 'L-pinky',
-    'R-pinky', 'R-ring', 'R-middle', 'R-index'
+    'R-index', 'R-middle', 'R-ring', 'R-pinky',
+    'L-pinky', 'L-ring', 'L-middle', 'L-index'
   ];
   
   const fullNames = {
@@ -1096,7 +1097,7 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   const maxTime = Math.max(...avgTimes);
   
   // Circle geometry - 9 nodes evenly spaced (40 degrees apart)
-  const cx = 200, cy = 200, radius = 140;
+  const cx = 200, cy = 200, radius = 160;
   const nodeSize = 55; // Size of mini hand SVG
   const thumbNodeWidth = 95; // Wider for two hands
   
@@ -1167,18 +1168,30 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
             const isHovered = hoveredChord && hoveredChord.from === t.from && hoveredChord.to === t.to;
             const isConnected = hoveredNode && (t.from === hoveredNode || t.to === hoveredNode);
             
+            // Calculate direction and offset endpoints to avoid overlapping hands
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const offsetAmount = 30; // Offset from node center
+            
+            // Offset start and end points
+            const startX = from.x + (dx / dist) * offsetAmount;
+            const startY = from.y + (dy / dist) * offsetAmount;
+            const endX = to.x - (dx / dist) * offsetAmount;
+            const endY = to.y - (dy / dist) * offsetAmount;
+            
             // Curved path toward center
-            const midX = (from.x + to.x) / 2;
-            const midY = (from.y + to.y) / 2;
-            const pullX = (cx - midX) * 0.4;
-            const pullY = (cy - midY) * 0.4;
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const pullX = (cx - midX) * 0.5;
+            const pullY = (cy - midY) * 0.5;
             const ctrlX = midX + pullX;
             const ctrlY = midY + pullY;
             
             return (
               <path
                 key={`${t.from}-${t.to}`}
-                d={`M ${from.x} ${from.y} Q ${ctrlX} ${ctrlY} ${to.x} ${to.y}`}
+                d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
                 fill="none"
                 stroke={getChordColor(t.avg)}
                 strokeWidth={isHovered ? getWidth(t.count) + 3 : getWidth(t.count)}
