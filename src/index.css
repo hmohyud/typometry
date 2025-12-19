@@ -552,33 +552,46 @@ h1 {
   font-size: 0.875rem;
   color: var(--text-muted);
   margin-bottom: 1rem;
+  font-style: italic;
 }
 
-.confidence-bar {
-  position: relative;
+.profile-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  cursor: help;
+}
+
+.strength-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.strength-bar {
+  flex: 1;
   height: 6px;
   background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
-  margin-top: 0.75rem;
 }
 
-.confidence-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
+.strength-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   border-radius: 3px;
   transition: width 0.5s ease;
 }
 
-.confidence-label {
-  position: absolute;
-  right: 0;
-  top: -18px;
-  font-size: 0.65rem;
-  color: var(--text-muted);
+.strength-value {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 500;
+  min-width: 2.5rem;
+  text-align: right;
 }
 
 .behavioral-header {
@@ -603,6 +616,12 @@ h1 {
   border-radius: 8px;
   padding: 1rem;
   text-align: center;
+  cursor: help;
+  transition: background 0.15s ease;
+}
+
+.behavioral-card:hover {
+  background: var(--bg-tertiary);
 }
 
 .behavioral-main {
@@ -643,6 +662,11 @@ h1 {
   align-items: center;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--bg-tertiary);
+  cursor: help;
+}
+
+.detail-row:hover {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .detail-row:last-child {
@@ -777,6 +801,27 @@ footer {
 .reset-btn.danger:hover {
   opacity: 1;
   background: rgba(232, 92, 92, 0.1);
+}
+
+/* Hold to clear button */
+.hold-btn {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.hold-btn-text {
+  position: relative;
+  z-index: 1;
+}
+
+.hold-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(232, 92, 92, 0.3);
+  transition: width 0.05s linear;
 }
 
 /* Responsive */

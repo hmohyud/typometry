@@ -12,6 +12,56 @@ const STORAGE_KEYS = {
   HISTORY: 'typometry_history',
 }
 
+// Tooltip descriptions for stats
+const TOOLTIPS = {
+  profileStrength: "How strongly your typing matches this archetype. Based on flow consistency, rhythm, accuracy, and error recovery.",
+  correctionStyle: {
+    label: "How you handle mistakes",
+    perfectionist: "You fix errors immediately, never letting mistakes slip by",
+    quickCorrector: "You catch errors quickly, usually within a character or two",
+    steady: "Balanced approach - you notice errors but don't obsess over instant fixes",
+    flowTyper: "You prioritize momentum, fixing errors in batches",
+    bulldozer: "You power through mistakes, correcting them later or not at all"
+  },
+  flowState: "Percentage of keystrokes within ±30% of your average speed. Higher = more consistent rhythm, you're 'in the zone'.",
+  maxBurst: "Longest streak of consecutive fast keystrokes (faster than 80% of your average). Shows your peak performance potential.",
+  speedProfile: {
+    label: "How consistent your typing speed is over time",
+    metronome: "Extremely consistent timing, like a human metronome",
+    consistent: "Steady pace with minimal variation",
+    variable: "Natural variation in speed, adapting to content",
+    erratic: "Highly variable timing, possibly indicating unfamiliar content or fatigue"
+  },
+  handBalance: "Compares typing speed between left-hand keys (QWERTASDFGZXCVB) and right-hand keys. Shows which hand is faster.",
+  homeRow: "Speed difference on home row keys (ASDFGHJKL) vs your overall average. Positive = faster on home row.",
+  numberRow: "Speed difference on number row (1234567890) vs your overall average. Positive = slower on numbers.",
+  endurance: {
+    label: "How your speed changes from start to finish",
+    warmingUp: "You start slow and speed up significantly as you go",
+    accelerating: "You gain speed as you settle into rhythm",
+    steady: "Consistent speed throughout",
+    slowing: "Slight decrease in speed toward the end",
+    fatigued: "Notable slowdown as you progress"
+  },
+  capitalPenalty: "How much slower you type capital letters compared to lowercase. Includes Shift key coordination time.",
+  punctuationPenalty: "How much slower you type punctuation marks compared to letters.",
+  errorRecovery: "How much your speed drops in the 3 keystrokes after making an error. Shows how errors affect your flow.",
+  hesitations: "Pauses longer than 500ms. Could indicate thinking, difficult sequences, or distractions.",
+  errorDistribution: {
+    label: "How your errors are distributed",
+    clustered: "Errors tend to come in groups - one mistake leads to more",
+    spreadOut: "Errors are evenly distributed throughout",
+    random: "No particular pattern to when errors occur"
+  },
+  backspaceBehavior: {
+    label: "How you use backspace relative to errors made",
+    efficient: "About 1 backspace per error - precise corrections",
+    cautious: "1.5+ backspaces per error - you double-check corrections",
+    overCorrector: "2+ backspaces per error - you may over-correct or re-type sections",
+    incompleteFixes: "Less than 1 backspace per error - some errors left uncorrected"
+  }
+}
+
 // Load/save helpers
 const loadFromStorage = (key, defaultValue) => {
   try {
@@ -121,10 +171,13 @@ function App() {
   const [totalParagraphs] = useState(ALL_PARAGRAPHS.length)
   const [statsView, setStatsView] = useState('current') // 'current' | 'alltime'
   const [heatmapMode, setHeatmapMode] = useState('speed') // 'speed' | 'frequency'
+  const [clearHoldProgress, setClearHoldProgress] = useState(0)
   
   const lastKeystrokeTime = useRef(null)
   const startTime = useRef(null)
   const containerRef = useRef(null)
+  const clearHoldTimer = useRef(null)
+  const clearHoldInterval = useRef(null)
 
   // Load completed indices on mount
   const [completedIndices, setCompletedIndices] = useState(() => 
@@ -1061,11 +1114,30 @@ function App() {
   }
 
   const clearHistory = () => {
-    if (window.confirm('Clear all history and start fresh?')) {
-      resetTest(true)
-      setCumulativeStats(null)
-      setCompletedCount(0)
+    resetTest(true)
+    setCumulativeStats(null)
+    setCompletedCount(0)
+  }
+  
+  const startClearHold = () => {
+    setClearHoldProgress(0)
+    clearHoldInterval.current = setInterval(() => {
+      setClearHoldProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(clearHoldInterval.current)
+          clearHistory()
+          return 0
+        }
+        return prev + 5 // 20 steps over ~1 second
+      })
+    }, 50)
+  }
+  
+  const cancelClearHold = () => {
+    if (clearHoldInterval.current) {
+      clearInterval(clearHoldInterval.current)
     }
+    setClearHoldProgress(0)
   }
 
   return (
@@ -1124,7 +1196,7 @@ function App() {
                 <div className="stat">
                   <span className="stat-value">
                     {stats.wpm}
-                    {cumulativeStats && (
+                    {cumulativeStats && cumulativeStats.sessions > 1 && (
                       <span className={`stat-delta ${stats.wpm >= cumulativeStats.wpm ? 'positive' : 'negative'}`}>
                         {stats.wpm >= cumulativeStats.wpm ? '↑' : '↓'}{Math.abs(stats.wpm - cumulativeStats.wpm)}
                       </span>
@@ -1135,7 +1207,7 @@ function App() {
                 <div className="stat">
                   <span className="stat-value">
                     {stats.accuracy}%
-                    {cumulativeStats && (
+                    {cumulativeStats && cumulativeStats.sessions > 1 && (
                       <span className={`stat-delta ${stats.accuracy >= cumulativeStats.accuracy ? 'positive' : 'negative'}`}>
                         {stats.accuracy >= cumulativeStats.accuracy ? '↑' : '↓'}{Math.abs(stats.accuracy - cumulativeStats.accuracy)}
                       </span>
@@ -1157,7 +1229,7 @@ function App() {
                 <div className="stat small">
                   <span className="stat-value">
                     {stats.avgInterval}ms
-                    {cumulativeStats && (
+                    {cumulativeStats && cumulativeStats.sessions > 1 && (
                       <span className={`stat-delta ${stats.avgInterval <= cumulativeStats.avgInterval ? 'positive' : 'negative'}`}>
                         {stats.avgInterval <= cumulativeStats.avgInterval ? '↓' : '↑'}{Math.abs(stats.avgInterval - cumulativeStats.avgInterval)}
                       </span>
@@ -1354,19 +1426,22 @@ function App() {
               <div className="archetype-card">
                 <span className="archetype-name">{stats.behavioral.archetype}</span>
                 <span className="archetype-desc">{stats.behavioral.archetypeDesc}</span>
-                <div className="confidence-bar">
-                  <div 
-                    className="confidence-fill" 
-                    style={{ width: `${stats.behavioral.confidenceScore}%` }}
-                  />
-                  <span className="confidence-label">{stats.behavioral.confidenceScore}% confidence</span>
+                <div className="profile-strength" title="How strongly your typing matches this archetype. Based on flow consistency, rhythm, accuracy, and error recovery.">
+                  <span className="strength-label">profile strength</span>
+                  <div className="strength-bar">
+                    <div 
+                      className="strength-fill" 
+                      style={{ width: `${stats.behavioral.confidenceScore}%` }}
+                    />
+                  </div>
+                  <span className="strength-value">{stats.behavioral.confidenceScore}%</span>
                 </div>
               </div>
               
               <h3 className="behavioral-header">Typing Profile</h3>
               
               <div className="behavioral-grid">
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={`${TOOLTIPS.correctionStyle.label}. ${TOOLTIPS.correctionStyle[stats.behavioral.momentumLabel.replace(' ', '')] || ''}`}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.momentumLabel}</span>
                     <span className="behavioral-label">correction style</span>
@@ -1378,7 +1453,7 @@ function App() {
                   </p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={TOOLTIPS.flowState}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.flowRatio}%</span>
                     <span className="behavioral-label">flow state</span>
@@ -1386,7 +1461,7 @@ function App() {
                   <p className="behavioral-detail">keystrokes in rhythm zone</p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={TOOLTIPS.maxBurst}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.maxBurst}</span>
                     <span className="behavioral-label">max burst</span>
@@ -1396,7 +1471,7 @@ function App() {
                   </p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={`${TOOLTIPS.speedProfile.label}. ${TOOLTIPS.speedProfile[stats.behavioral.speedProfile] || ''}`}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.speedProfile}</span>
                     <span className="behavioral-label">speed profile</span>
@@ -1406,7 +1481,7 @@ function App() {
               </div>
               
               <div className="behavioral-grid">
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={TOOLTIPS.handBalance}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.dominantHand}</span>
                     <span className="behavioral-label">hand balance</span>
@@ -1416,7 +1491,7 @@ function App() {
                   </p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={TOOLTIPS.homeRow}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">
                       {stats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{stats.behavioral.homeRowAdvantage}%
@@ -1428,7 +1503,7 @@ function App() {
                   </p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={TOOLTIPS.numberRow}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">
                       {stats.behavioral.numberRowPenalty > 0 ? '+' : ''}{stats.behavioral.numberRowPenalty}%
@@ -1440,7 +1515,7 @@ function App() {
                   </p>
                 </div>
                 
-                <div className="behavioral-card">
+                <div className="behavioral-card" title={`${TOOLTIPS.endurance.label}. ${TOOLTIPS.endurance[stats.behavioral.fatigueLabel.replace(' ', '')] || ''}`}>
                   <div className="behavioral-main">
                     <span className="behavioral-value">{stats.behavioral.fatigueLabel}</span>
                     <span className="behavioral-label">endurance</span>
@@ -1452,7 +1527,7 @@ function App() {
               </div>
               
               <div className="behavioral-details">
-                <div className="detail-row">
+                <div className="detail-row" title={TOOLTIPS.capitalPenalty}>
                   <span className="detail-label">capital letter penalty</span>
                   <span className="detail-value">
                     <span className={stats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
@@ -1462,7 +1537,7 @@ function App() {
                   </span>
                 </div>
                 
-                <div className="detail-row">
+                <div className="detail-row" title={TOOLTIPS.punctuationPenalty}>
                   <span className="detail-label">punctuation penalty</span>
                   <span className="detail-value">
                     <span className={stats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
@@ -1472,7 +1547,7 @@ function App() {
                   </span>
                 </div>
                 
-                <div className="detail-row">
+                <div className="detail-row" title={TOOLTIPS.errorRecovery}>
                   <span className="detail-label">error recovery</span>
                   <span className="detail-value">
                     <span className={stats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
@@ -1482,7 +1557,7 @@ function App() {
                   </span>
                 </div>
                 
-                <div className="detail-row">
+                <div className="detail-row" title={TOOLTIPS.hesitations}>
                   <span className="detail-label">hesitations</span>
                   <span className="detail-value">
                     {stats.behavioral.hesitationCount}
@@ -1492,12 +1567,12 @@ function App() {
                   </span>
                 </div>
                 
-                <div className="detail-row">
+                <div className="detail-row" title={TOOLTIPS.errorDistribution.label}>
                   <span className="detail-label">error distribution</span>
                   <span className="detail-value">{stats.behavioral.errorPattern}</span>
                 </div>
                 
-                <div className="detail-row">
+                <div className="detail-row" title={`${TOOLTIPS.backspaceBehavior.label}. ${TOOLTIPS.backspaceBehavior[stats.behavioral.backspaceLabel.replace(' ', '').replace('-', '')] || ''}`}>
                   <span className="detail-label">backspace behavior</span>
                   <span className="detail-value">
                     {stats.behavioral.backspaceLabel}
@@ -1666,19 +1741,22 @@ function App() {
                     <div className="archetype-card">
                       <span className="archetype-name">{cumulativeStats.behavioral.archetype}</span>
                       <span className="archetype-desc">{cumulativeStats.behavioral.archetypeDesc}</span>
-                      <div className="confidence-bar">
-                        <div 
-                          className="confidence-fill" 
-                          style={{ width: `${cumulativeStats.behavioral.confidenceScore}%` }}
-                        />
-                        <span className="confidence-label">{cumulativeStats.behavioral.confidenceScore}% confidence</span>
+                      <div className="profile-strength" title="How strongly your typing matches this archetype across all sessions.">
+                        <span className="strength-label">profile strength</span>
+                        <div className="strength-bar">
+                          <div 
+                            className="strength-fill" 
+                            style={{ width: `${cumulativeStats.behavioral.confidenceScore}%` }}
+                          />
+                        </div>
+                        <span className="strength-value">{cumulativeStats.behavioral.confidenceScore}%</span>
                       </div>
                     </div>
                     
                     <h3 className="behavioral-header">Typing Profile (All Time)</h3>
                     
                     <div className="behavioral-grid">
-                      <div className="behavioral-card">
+                      <div className="behavioral-card" title={TOOLTIPS.correctionStyle.label}>
                         <div className="behavioral-main">
                           <span className="behavioral-value">{cumulativeStats.behavioral.momentumLabel}</span>
                           <span className="behavioral-label">correction style</span>
@@ -1690,7 +1768,7 @@ function App() {
                         </p>
                       </div>
                       
-                      <div className="behavioral-card">
+                      <div className="behavioral-card" title={TOOLTIPS.flowState}>
                         <div className="behavioral-main">
                           <span className="behavioral-value">{cumulativeStats.behavioral.flowRatio}%</span>
                           <span className="behavioral-label">flow state</span>
@@ -1822,7 +1900,24 @@ function App() {
 
       <footer>
         <button className="reset-btn" onClick={() => resetTest()}>next</button>
-        <button className="reset-btn danger" onClick={clearHistory}>clear history</button>
+        <button 
+          className="reset-btn danger hold-btn"
+          onMouseDown={startClearHold}
+          onMouseUp={cancelClearHold}
+          onMouseLeave={cancelClearHold}
+          onTouchStart={startClearHold}
+          onTouchEnd={cancelClearHold}
+        >
+          <span className="hold-btn-text">
+            {clearHoldProgress > 0 ? 'clearing...' : 'hold to clear history'}
+          </span>
+          {clearHoldProgress > 0 && (
+            <span 
+              className="hold-progress" 
+              style={{ width: `${clearHoldProgress}%` }}
+            />
+          )}
+        </button>
       </footer>
     </div>
   )
