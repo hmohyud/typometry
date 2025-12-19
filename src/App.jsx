@@ -385,6 +385,7 @@ function App() {
   const [statsView, setStatsView] = useState('current') // 'current' | 'alltime'
   const [heatmapMode, setHeatmapMode] = useState('speed') // 'speed' | 'frequency'
   const [clearHoldProgress, setClearHoldProgress] = useState(0)
+  const [showHistory, setShowHistory] = useState(false)
   
   const lastKeystrokeTime = useRef(null)
   const startTime = useRef(null)
@@ -619,12 +620,18 @@ function App() {
       .sort((a, b) => (b.distance / b.avg) - (a.distance / a.avg))
       .slice(0, 5)
     
+    // Average errors per session
+    const avgErrors = totalErrors / history.length
+    
     return {
       sessions: history.length,
       totalChars,
+      totalErrors,
       totalTime: Math.round(totalTime / 1000),
       wpm,
       accuracy,
+      consistency: Math.round(avgConsistency),
+      avgErrors: Math.round(avgErrors * 10) / 10,
       avgInterval: Math.round(avgInterval),
       avgWordInterval: Math.round(avgWordInterval),
       avgDistance: Math.round(avgDistance * 100) / 100,
@@ -632,6 +639,7 @@ function App() {
       fastestBigrams,
       impressiveBigrams,
       counts,
+      history, // Include history for review
       behavioral: {
         momentum: Math.round(avgMomentum * 10) / 10,
         momentumLabel,
@@ -1386,18 +1394,31 @@ function App() {
         <section className="stats">
           {/* Stats View Toggle */}
           {cumulativeStats && cumulativeStats.sessions > 1 && (
-            <div className="stats-toggle">
+            <div className="stats-header">
+              <div className="stats-toggle">
+                <button 
+                  className={`toggle-btn ${statsView === 'current' ? 'active' : ''}`}
+                  onClick={() => setStatsView('current')}
+                >
+                  This Paragraph
+                </button>
+                <button 
+                  className={`toggle-btn ${statsView === 'alltime' ? 'active' : ''}`}
+                  onClick={() => setStatsView('alltime')}
+                >
+                  All Time ({cumulativeStats.sessions})
+                </button>
+              </div>
               <button 
-                className={`toggle-btn ${statsView === 'current' ? 'active' : ''}`}
-                onClick={() => setStatsView('current')}
+                className="history-btn"
+                onClick={() => setShowHistory(true)}
+                title="View session history"
               >
-                This Paragraph
-              </button>
-              <button 
-                className={`toggle-btn ${statsView === 'alltime' ? 'active' : ''}`}
-                onClick={() => setStatsView('alltime')}
-              >
-                All Time ({cumulativeStats.sessions})
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                History
               </button>
             </div>
           )}
@@ -1429,7 +1450,14 @@ function App() {
                   <span className="stat-label">accuracy</span>
                 </div>
                 <div className="stat">
-                  <span className="stat-value">{stats.consistency}%</span>
+                  <span className="stat-value">
+                    {stats.consistency}%
+                    {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      <span className={`stat-delta ${stats.consistency >= cumulativeStats.consistency ? 'positive' : 'negative'}`}>
+                        {stats.consistency >= cumulativeStats.consistency ? '↑' : '↓'}{Math.abs(stats.consistency - cumulativeStats.consistency)}
+                      </span>
+                    )}
+                  </span>
                   <span className="stat-label">consistency</span>
                 </div>
                 <div className="stat">
@@ -1461,7 +1489,14 @@ function App() {
                   </div>
                 </Tooltip>
                 <div className="stat small">
-                  <span className="stat-value">{stats.errorCount}</span>
+                  <span className="stat-value">
+                    {stats.errorCount}
+                    {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      <span className={`stat-delta ${stats.errorCount <= cumulativeStats.avgErrors ? 'positive' : 'negative'}`}>
+                        {stats.errorCount <= cumulativeStats.avgErrors ? '↓' : '↑'}{Math.abs(Math.round((stats.errorCount - cumulativeStats.avgErrors) * 10) / 10)}
+                      </span>
+                    )}
+                  </span>
                   <span className="stat-label">errors</span>
                 </div>
               </div>
@@ -2194,6 +2229,63 @@ function App() {
           )}
         </button>
       </footer>
+      
+      {/* History Modal */}
+      {showHistory && cumulativeStats && cumulativeStats.history && (
+        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
+          <div className="modal history-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Session History</h2>
+              <button className="modal-close" onClick={() => setShowHistory(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="history-list">
+                {[...cumulativeStats.history].reverse().map((session, i) => {
+                  const date = new Date(session.timestamp)
+                  const minutes = session.totalTime / 60000
+                  const wpm = minutes > 0 ? Math.round((session.charCount / 5) / minutes) : 0
+                  const accuracy = session.charCount > 0 
+                    ? Math.round(((session.charCount - session.errorCount) / session.charCount) * 100) 
+                    : 0
+                  
+                  return (
+                    <div key={session.timestamp} className="history-item">
+                      <div className="history-item-header">
+                        <span className="history-date">
+                          {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span className="history-session">#{cumulativeStats.history.length - i}</span>
+                      </div>
+                      <div className="history-item-stats">
+                        <span className="history-stat">
+                          <span className="history-stat-value">{wpm}</span>
+                          <span className="history-stat-label">wpm</span>
+                        </span>
+                        <span className="history-stat">
+                          <span className="history-stat-value">{accuracy}%</span>
+                          <span className="history-stat-label">accuracy</span>
+                        </span>
+                        <span className="history-stat">
+                          <span className="history-stat-value">{session.consistency || '—'}%</span>
+                          <span className="history-stat-label">consistency</span>
+                        </span>
+                        <span className="history-stat">
+                          <span className="history-stat-value">{session.errorCount}</span>
+                          <span className="history-stat-label">errors</span>
+                        </span>
+                        <span className="history-stat">
+                          <span className="history-stat-value">{Math.round(session.totalTime / 1000)}s</span>
+                          <span className="history-stat-label">time</span>
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
