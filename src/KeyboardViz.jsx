@@ -87,6 +87,38 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
     })
   }
   
+  // Get color for a value on the green-red scale
+  const getSpeedColor = (avgInterval) => {
+    if (!keyStats || Object.keys(keyStats).length === 0) return 'var(--text)'
+    const speeds = Object.values(keyStats).map(s => s.avgInterval).filter(v => v > 0)
+    if (speeds.length === 0) return 'var(--text)'
+    const min = Math.min(...speeds)
+    const max = Math.max(...speeds)
+    if (max === min) return 'rgb(110, 207, 110)'
+    const ratio = (avgInterval - min) / (max - min)
+    // Green (fast) to red (slow)
+    if (ratio < 0.5) {
+      const r = Math.round(110 + 122 * ratio * 2)
+      const g = Math.round(207 - 24 * ratio * 2)
+      const b = Math.round(110 - 90 * ratio * 2)
+      return `rgb(${r},${g},${b})`
+    } else {
+      const r = Math.round(232)
+      const g = Math.round(183 - 91 * (ratio - 0.5) * 2)
+      const b = Math.round(20 + 72 * (ratio - 0.5) * 2)
+      return `rgb(${r},${g},${b})`
+    }
+  }
+  
+  const getAccuracyColor = (accuracy) => {
+    // Green (high accuracy) to red (low accuracy)
+    if (accuracy >= 0.95) return 'rgb(110, 207, 110)'
+    if (accuracy >= 0.9) return 'rgb(180, 195, 80)'
+    if (accuracy >= 0.8) return 'rgb(226, 183, 20)'
+    if (accuracy >= 0.7) return 'rgb(232, 140, 60)'
+    return 'rgb(232, 92, 92)'
+  }
+  
   const hoveredStats = hoveredKey ? (keyStats?.[hoveredKey] || keyStats?.[hoveredKey.toLowerCase()]) : null
 
   return (
@@ -164,8 +196,8 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
             {hoveredKey === ' ' ? 'space' : hoveredKey}
           </div>
           <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <span><span style={{ color: 'var(--text)' }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg speed</span>
-            <span><span style={{ color: 'var(--text)' }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors || 0} errors)</span>
+            <span><span style={{ color: getSpeedColor(hoveredStats.avgInterval || 0), fontWeight: 500 }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg speed</span>
+            <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors || 0} errors)</span>
             <span><span style={{ color: 'var(--text)' }}>{hoveredStats.count || 0}</span> presses</span>
           </div>
         </div>

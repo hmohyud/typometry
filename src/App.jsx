@@ -920,7 +920,7 @@ const FingerHands = ({ fingerStats }) => {
         <div
           className="finger-tooltip"
           style={{
-            left: Math.min(Math.max(tooltipPos.x, 110), 210),
+            left: tooltipPos.x,
             top: tooltipPos.y,
             transform: "translate(-50%, -100%)",
           }}
