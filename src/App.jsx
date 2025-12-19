@@ -1413,6 +1413,7 @@ function App() {
   const [typed, setTyped] = useState("");
   const [isActive, setIsActive] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [viewingPastStats, setViewingPastStats] = useState(false); // True when viewing stats via button (not after completing)
   const [keystrokeData, setKeystrokeData] = useState([]);
   const [stats, setStats] = useState(null);
   const [cumulativeStats, setCumulativeStats] = useState(null);
@@ -2599,6 +2600,15 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
+      // If viewing past stats, any key dismisses and resumes typing mode
+      if (viewingPastStats) {
+        e.preventDefault();
+        setViewingPastStats(false);
+        setIsComplete(false);
+        setStatsView("current");
+        return;
+      }
+      
       if (isComplete) {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -2752,6 +2762,7 @@ function App() {
     [
       isActive,
       isComplete,
+      viewingPastStats,
       typed,
       currentText,
       currentIndex,
@@ -2837,6 +2848,7 @@ function App() {
           <button
             className="stats-icon-btn"
             onClick={() => {
+              setViewingPastStats(true);
               setIsComplete(true);
               setStatsView("alltime");
             }}
@@ -2869,7 +2881,22 @@ function App() {
       </header>
 
       <main className="typing-area">
-        <div className="text-display">{renderText()}</div>
+        <div className={`text-display ${viewingPastStats ? 'dimmed' : ''}`}>
+          {renderText()}
+          {viewingPastStats && (
+            <div 
+              className="resume-overlay"
+              onClick={() => {
+                setViewingPastStats(false);
+                setIsComplete(false);
+                setStatsView("current");
+                containerRef.current?.focus();
+              }}
+            >
+              <span>click or press any key to resume</span>
+            </div>
+          )}
+        </div>
 
         <div className="typing-hint-container">
           <p
