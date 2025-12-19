@@ -520,6 +520,10 @@ h1 {
   color: var(--fast);
 }
 
+.bigram.slow code {
+  color: var(--incorrect);
+}
+
 .bigram.impressive code {
   color: var(--accent);
 }
@@ -1603,6 +1607,71 @@ footer {
   pointer-events: none;
   z-index: 20;
   min-width: 130px;
+}
+
+.chord-mouse-tooltip {
+  position: absolute;
+  background: rgba(30, 33, 36, 0.95);
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  pointer-events: none;
+  z-index: 100;
+  min-width: 200px;
+  white-space: nowrap;
+}
+
+.chord-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.chord-tooltip-row .chord-tooltip-route {
+  font-size: 0.7rem;
+  color: var(--text);
+  margin-bottom: 0;
+}
+
+.chord-tooltip-values {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.chord-tooltip-values span:first-child {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chord-tooltip-nodata {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.chord-tooltip-avg {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #3a3d41;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.chord-tooltip-avg span:first-child {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.chord-tooltip-avg span:last-child {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .chord-tooltip-node {

@@ -42,28 +42,35 @@ const interpolateColor = (value, min, max, coldColor, hotColor) => {
 }
 
 export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
-  const { colors, maxVal, minVal } = useMemo(() => {
+  const { colors } = useMemo(() => {
     if (!keyStats || Object.keys(keyStats).length === 0) {
-      return { colors: {}, maxVal: 0, minVal: 0 }
+      return { colors: {} }
     }
     
     const values = Object.values(keyStats).map(s => 
-      mode === 'speed' ? s.avgInterval : s.count
+      mode === 'speed' ? s.avgInterval : (s.accuracy !== undefined ? s.accuracy : 1)
     )
     const max = Math.max(...values)
     const min = Math.min(...values)
     
     const cols = {}
     Object.entries(keyStats).forEach(([key, stats]) => {
-      const val = mode === 'speed' ? stats.avgInterval : stats.count
-      // For speed: slower = hotter (red), faster = cooler (green)
-      // For frequency: more = hotter
-      const coldColor = mode === 'speed' ? 'rgb(110, 207, 110)' : 'rgb(30, 30, 30)'
-      const hotColor = mode === 'speed' ? 'rgb(232, 92, 92)' : 'rgb(226, 183, 20)'
+      const val = mode === 'speed' ? stats.avgInterval : (stats.accuracy !== undefined ? stats.accuracy : 1)
+      // For speed: slower (high value) = red, faster (low value) = green
+      // For accuracy: high accuracy = green, low accuracy = red
+      let coldColor, hotColor
+      if (mode === 'speed') {
+        coldColor = 'rgb(110, 207, 110)'  // green for fast (low ms)
+        hotColor = 'rgb(232, 92, 92)'     // red for slow (high ms)
+      } else {
+        // Accuracy: low value (0) = red, high value (1) = green
+        coldColor = 'rgb(232, 92, 92)'    // red for low accuracy
+        hotColor = 'rgb(110, 207, 110)'   // green for high accuracy
+      }
       cols[key.toLowerCase()] = interpolateColor(val, min, max, coldColor, hotColor)
     })
     
-    return { colors: cols, maxVal: max, minVal: min }
+    return { colors: cols }
   }, [keyStats, mode])
 
   const totalWidth = 14 * (KEY_WIDTH + KEY_GAP)
@@ -108,7 +115,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
                 </text>
                 {stats && (
                   <title>
-                    {key === ' ' ? 'space' : key}: {mode === 'speed' ? `${Math.round(stats.avgInterval)}ms avg` : `${stats.count} times`}
+{key === ' ' ? 'space' : key}: {Math.round(stats.avgInterval || 0)}ms avg | {Math.round((stats.accuracy || 1) * 100)}% accurate ({stats.errors || 0} errors) | {stats.count || 0} presses
                   </title>
                 )}
               </g>
@@ -117,19 +124,17 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
         })}
       </svg>
       <div className="keyboard-legend">
-        <span className="legend-label">{mode === 'speed' ? 'fast' : 'rare'}</span>
+        <span className="legend-label">{mode === 'speed' ? 'fast' : 'accurate'}</span>
         <div className="legend-gradient" style={{
-          background: mode === 'speed' 
-            ? 'linear-gradient(to right, rgb(110, 207, 110), rgb(232, 92, 92))'
-            : 'linear-gradient(to right, rgb(30, 30, 30), rgb(226, 183, 20))'
+          background: 'linear-gradient(to right, rgb(110, 207, 110), rgb(232, 92, 92))'
         }} />
-        <span className="legend-label">{mode === 'speed' ? 'slow' : 'frequent'}</span>
+        <span className="legend-label">{mode === 'speed' ? 'slow' : 'error-prone'}</span>
       </div>
     </div>
   )
 }
 
-export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
+export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'speed' }) => {
   // Original dimensions (will be scaled via viewBox and CSS)
   const fullWidth = 14 * (KEY_WIDTH + KEY_GAP)
   const fullHeight = 5 * (KEY_HEIGHT + KEY_GAP)
@@ -147,7 +152,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
         const to = KEY_COORDS[bigram[1]]
         return from && to && bigram[0] !== bigram[1]
       })
-      .map(({ bigram, avg }, index) => {
+      .map(({ bigram, avg, accuracy }, index) => {
         const from = KEY_COORDS[bigram[0]]
         const to = KEY_COORDS[bigram[1]]
         
@@ -176,12 +181,22 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
           endY,
           angle: Math.atan2(endY - (midY + perpY), endX - (midX + perpX)),
           avg,
+          accuracy,
           opacity: 1 - (index * 0.15)
         }
       })
   }, [topBigrams])
 
+  // Colors: green for good (fast/accurate), red for bad (slow/error-prone)
   const color = flowType === 'slow' ? 'var(--incorrect)' : 'var(--fast)'
+  
+  // Label based on mode
+  let label
+  if (mode === 'accuracy') {
+    label = flowType === 'slow' ? 'error-prone' : 'most accurate'
+  } else {
+    label = flowType === 'slow' ? 'slowest' : 'fastest'
+  }
 
   return (
     <div className="keyboard-viz flow-viz">
@@ -214,7 +229,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
         {/* Draw arrows */}
         <defs>
           <marker
-            id={`arrow-${flowType}`}
+            id={`arrow-${flowType}-${mode}`}
             markerWidth="8"
             markerHeight="8"
             refX="6"
@@ -225,7 +240,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
           </marker>
         </defs>
         
-        {arrows.map(({ key, path, opacity, avg }) => (
+        {arrows.map(({ key, path, opacity, avg, accuracy }) => (
           <g key={key}>
             <path
               d={path}
@@ -233,13 +248,15 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
               stroke={color}
               strokeWidth={2}
               opacity={opacity}
-              markerEnd={`url(#arrow-${flowType})`}
+              markerEnd={`url(#arrow-${flowType}-${mode})`}
             />
-            <title>{key[0]} → {key[1]}: {Math.round(avg)}ms</title>
+            <title>{key[0]} → {key[1]}: {mode === 'accuracy' 
+              ? `${Math.round((accuracy || 1) * 100)}% accurate` 
+              : `${Math.round(avg)}ms avg`}</title>
           </g>
         ))}
       </svg>
-      <p className="flow-label">{flowType === 'slow' ? 'slowest' : 'fastest'} transitions</p>
+      <p className="flow-label">{label} transitions</p>
     </div>
   )
 }

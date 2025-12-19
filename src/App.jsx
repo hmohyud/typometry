@@ -1069,6 +1069,8 @@ const MiniHandSVG = ({ finger, highlighted, onMouseEnter, onMouseLeave, showBoth
 const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   const [hoveredChord, setHoveredChord] = useState(null);
   const [hoveredNode, setHoveredNode] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
   
   // 9 fingers evenly distributed - THUMB at TOP
   // Right hand on right side (clockwise), Left hand on left side
@@ -1084,14 +1086,55 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
     'R-index': 'Right Index', 'R-middle': 'Right Middle', 'R-ring': 'Right Ring', 'R-pinky': 'Right Pinky'
   };
   
-  // Convert transitions object to array
-  const transitions = Object.values(fingerTransitions || {}).filter(t => t.count >= 2);
+  // Convert transitions object to array and deduplicate (combine A→B and B→A)
+  const allTransitions = Object.entries(fingerTransitions || {});
+  const seenPairs = new Set();
+  const deduplicatedTransitions = [];
+  
+  allTransitions.forEach(([key, t]) => {
+    if (t.count < 2) return;
+    
+    // Create a canonical key (alphabetically sorted pair)
+    const pairKey = [t.from, t.to].sort().join('|');
+    if (seenPairs.has(pairKey)) return;
+    seenPairs.add(pairKey);
+    
+    // Find the reverse transition
+    const reverseKey = `${t.to}->${t.from}`;
+    const reverse = fingerTransitions[reverseKey];
+    
+    // Calculate combined stats for the chord
+    const forwardCount = t.count || 0;
+    const reverseCount = reverse?.count || 0;
+    const totalCount = forwardCount + reverseCount;
+    
+    // Weight average by count
+    let combinedAvg;
+    if (forwardCount > 0 && reverseCount > 0) {
+      combinedAvg = (t.avg * forwardCount + reverse.avg * reverseCount) / totalCount;
+    } else if (forwardCount > 0) {
+      combinedAvg = t.avg;
+    } else {
+      combinedAvg = reverse.avg;
+    }
+    
+    deduplicatedTransitions.push({
+      from: t.from,
+      to: t.to,
+      avg: Math.round(combinedAvg),
+      count: totalCount,
+      forward: t,
+      reverse: reverse && reverse.count >= 2 ? reverse : null
+    });
+  });
+  
+  const transitions = deduplicatedTransitions;
   
   if (transitions.length === 0) {
     return null;
   }
   
-  // Get min/max for color scaling
+  // Get min/max for color scaling (use combined avg)
   const avgTimes = transitions.map(t => t.avg);
   const minTime = Math.min(...avgTimes);
   const maxTime = Math.max(...avgTimes);
@@ -1156,6 +1199,17 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   
   const hoveredFingerData = hoveredNode ? fingerStats?.[hoveredNode] : null;
   
+  // Track mouse position relative to container
+  const handleMouseMove = (e) => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setMousePos({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      });
+    }
+  };
+  
   return (
     <div className="finger-chord-diagram">
       <div className="chord-header">
@@ -1163,7 +1217,7 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
         <span className="chord-subtitle">speed between fingers</span>
       </div>
       
-      <div className="chord-container">
+      <div className="chord-container" ref={containerRef} onMouseMove={handleMouseMove}>
         {/* SVG for the chord lines */}
         <svg viewBox="0 0 400 400" className="chord-lines-svg">
           {sortedTransitions.map((t) => {
@@ -1236,20 +1290,61 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
           );
         })}
         
-        {/* Center tooltip */}
+        {/* Mouse-following tooltip */}
         {(hoveredChord || (hoveredNode && hoveredFingerData)) && (
-          <div className="chord-center-tooltip">
-            {hoveredChord && !hoveredNode && (
-              <>
-                <div className="chord-tooltip-route">
-                  {fullNames[hoveredChord.from]} → {fullNames[hoveredChord.to]}
-                </div>
-                <div className="chord-tooltip-stats">
-                  <span className="chord-tooltip-time">{hoveredChord.avg}ms</span>
-                  <span className="chord-tooltip-count">{hoveredChord.count} transitions</span>
-                </div>
-              </>
-            )}
+          <div 
+            className="chord-mouse-tooltip"
+            style={{
+              left: mousePos.x + 15,
+              top: mousePos.y + 15,
+            }}
+          >
+            {hoveredChord && !hoveredNode && (() => {
+              const forward = hoveredChord.forward;
+              const reverse = hoveredChord.reverse;
+              const forwardColor = forward ? getChordColor(forward.avg) : null;
+              const reverseColor = reverse ? getChordColor(reverse.avg) : null;
+              
+              return (
+                <>
+                  {/* Forward direction */}
+                  <div className="chord-tooltip-row">
+                    <span className="chord-tooltip-route">
+                      {fullNames[hoveredChord.from]} → {fullNames[hoveredChord.to]}
+                    </span>
+                    {forward ? (
+                      <span className="chord-tooltip-values">
+                        <span style={{ color: forwardColor }}>{forward.avg}ms</span>
+                        <span className="chord-tooltip-count">{forward.count}×</span>
+                      </span>
+                    ) : (
+                      <span className="chord-tooltip-nodata">no data</span>
+                    )}
+                  </div>
+                  
+                  {/* Reverse direction */}
+                  <div className="chord-tooltip-row">
+                    <span className="chord-tooltip-route">
+                      {fullNames[hoveredChord.to]} → {fullNames[hoveredChord.from]}
+                    </span>
+                    {reverse ? (
+                      <span className="chord-tooltip-values">
+                        <span style={{ color: reverseColor }}>{reverse.avg}ms</span>
+                        <span className="chord-tooltip-count">{reverse.count}×</span>
+                      </span>
+                    ) : (
+                      <span className="chord-tooltip-nodata">no data</span>
+                    )}
+                  </div>
+                  
+                  {/* Average */}
+                  <div className="chord-tooltip-avg">
+                    <span>avg</span>
+                    <span style={{ color: getChordColor(hoveredChord.avg) }}>{hoveredChord.avg}ms</span>
+                  </div>
+                </>
+              );
+            })()}
             {hoveredNode && hoveredFingerData && (
               <>
                 <div className="chord-tooltip-header">{fullNames[hoveredNode]}</div>
@@ -1295,7 +1390,7 @@ function App() {
   const [completedCount, setCompletedCount] = useState(0);
   const [totalParagraphs] = useState(ALL_PARAGRAPHS.length);
   const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime'
-  const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'frequency'
+  const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -1433,21 +1528,25 @@ function App() {
       if (h.keyStats) {
         Object.entries(h.keyStats).forEach(([key, data]) => {
           if (!keyStats[key]) {
-            keyStats[key] = { times: [], count: 0 };
+            keyStats[key] = { times: [], count: 0, correct: 0, errors: 0 };
           }
           // Add all times and count from this session
           if (data.times) {
             keyStats[key].times.push(...data.times);
           }
           keyStats[key].count += data.count || 0;
+          keyStats[key].correct += data.correct || 0;
+          keyStats[key].errors += data.errors || 0;
         });
       }
     });
-    // Calculate averages for aggregated keyStats
+    // Calculate averages and accuracy for aggregated keyStats
     Object.keys(keyStats).forEach((key) => {
       const times = keyStats[key].times;
       keyStats[key].avgInterval =
         times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+      keyStats[key].accuracy = 
+        keyStats[key].count > 0 ? keyStats[key].correct / keyStats[key].count : 1;
     });
 
     // Aggregate fingerStats
@@ -1638,11 +1737,19 @@ function App() {
     const bigramMap = {};
     history.forEach((h) => {
       if (h.bigrams) {
-        h.bigrams.forEach(({ bigram, avg, distance }) => {
-          if (!bigramMap[bigram]) {
-            bigramMap[bigram] = { times: [], distance };
+        h.bigrams.forEach(({ bigram, avg, distance, accuracy, errors }) => {
+          const lowerBigram = bigram.toLowerCase();
+          if (!bigramMap[lowerBigram]) {
+            bigramMap[lowerBigram] = { times: [], distance, correct: 0, total: 0 };
           }
-          bigramMap[bigram].times.push(avg);
+          bigramMap[lowerBigram].times.push(avg);
+          // Accumulate accuracy data
+          if (accuracy !== undefined && errors !== undefined) {
+            // Reverse calculate: if we have count and errors, we can get correct
+            const count = 1; // Each bigram entry represents one occurrence
+            bigramMap[lowerBigram].total += count;
+            bigramMap[lowerBigram].correct += accuracy * count;
+          }
         });
       }
     });
@@ -1651,7 +1758,10 @@ function App() {
       ([bigram, data]) => ({
         bigram,
         avg: data.times.reduce((a, b) => a + b, 0) / data.times.length,
+        count: data.times.length,
         distance: data.distance,
+        accuracy: data.total > 0 ? data.correct / data.total : 1,
+        errors: data.total - data.correct,
       })
     );
 
@@ -1660,6 +1770,16 @@ function App() {
       .slice(0, 5);
     const fastestBigrams = [...aggregatedBigrams]
       .sort((a, b) => a.avg - b.avg)
+      .slice(0, 5);
+    
+    // Accuracy-sorted bigrams for accuracy mode
+    const mostAccurateBigrams = [...aggregatedBigrams]
+      .filter(b => b.count >= 2)
+      .sort((a, b) => b.accuracy - a.accuracy)
+      .slice(0, 5);
+    const leastAccurateBigrams = [...aggregatedBigrams]
+      .filter(b => b.count >= 2 && b.errors > 0)
+      .sort((a, b) => a.accuracy - b.accuracy)
       .slice(0, 5);
 
     // Impressive bigrams: fast but far (distance > 3, time < median)
@@ -1692,6 +1812,8 @@ function App() {
       avgDistance: Math.round(avgDistance * 100) / 100,
       slowestBigrams,
       fastestBigrams,
+      mostAccurateBigrams,
+      leastAccurateBigrams,
       impressiveBigrams,
       counts,
       keyStats,
@@ -2113,8 +2235,11 @@ function App() {
     // Keyboard distances - only track CORRECT consecutive keystrokes
     const distances = [];
     const bigramsWithDistance = [];
+    
+    // Track bigram accuracy (correct vs total for each bigram)
+    const bigramAccuracyMap = {};
 
-    // Build list of correct keystrokes only
+    // Build list of correct keystrokes only for speed/distance
     const correctKeystrokes = data.filter((d) => d.correct);
 
     for (let i = 1; i < correctKeystrokes.length; i++) {
@@ -2136,6 +2261,24 @@ function App() {
         }
       }
     }
+    
+    // Track all bigrams (including errors) for accuracy mode
+    for (let i = 1; i < data.length; i++) {
+      const prev = data[i - 1];
+      const curr = data[i];
+      
+      if (curr.expected && prev.expected && prev.expected !== curr.expected) {
+        const bigram = (prev.expected + curr.expected).toLowerCase();
+        if (!bigramAccuracyMap[bigram]) {
+          bigramAccuracyMap[bigram] = { correct: 0, total: 0, distance: getKeyDistance(prev.expected, curr.expected) };
+        }
+        bigramAccuracyMap[bigram].total++;
+        // Bigram is correct if BOTH characters were typed correctly
+        if (prev.correct && curr.correct) {
+          bigramAccuracyMap[bigram].correct++;
+        }
+      }
+    }
 
     const avgDistance =
       distances.length > 0
@@ -2145,21 +2288,28 @@ function App() {
     // Per-key statistics for heatmap
     const keyStats = {};
     data.forEach((d) => {
-      if (d.expected && d.interval && d.correct) {
+      if (d.expected && d.interval) {
         const key = d.expected.toLowerCase();
         if (!keyStats[key]) {
-          keyStats[key] = { times: [], count: 0 };
+          keyStats[key] = { times: [], count: 0, correct: 0, errors: 0 };
         }
-        keyStats[key].times.push(d.interval);
         keyStats[key].count++;
+        if (d.correct) {
+          keyStats[key].times.push(d.interval);
+          keyStats[key].correct++;
+        } else {
+          keyStats[key].errors++;
+        }
       }
     });
 
-    // Calculate averages per key
+    // Calculate averages and accuracy per key
     Object.keys(keyStats).forEach((key) => {
       const times = keyStats[key].times;
       keyStats[key].avgInterval =
         times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+      keyStats[key].accuracy = 
+        keyStats[key].count > 0 ? keyStats[key].correct / keyStats[key].count : 1;
     });
 
     // Finger statistics
@@ -2237,18 +2387,34 @@ function App() {
       bigramMap[bigram].times.push(interval);
     });
 
-    const bigramAvgs = Object.entries(bigramMap).map(([bigram, data]) => ({
-      bigram,
-      avg: data.times.reduce((a, b) => a + b, 0) / data.times.length,
-      count: data.times.length,
-      distance: data.distance,
-    }));
+    const bigramAvgs = Object.entries(bigramMap).map(([bigram, data]) => {
+      const lowerBigram = bigram.toLowerCase();
+      const accuracyData = bigramAccuracyMap[lowerBigram];
+      return {
+        bigram,
+        avg: data.times.reduce((a, b) => a + b, 0) / data.times.length,
+        count: data.times.length,
+        distance: data.distance,
+        accuracy: accuracyData ? accuracyData.correct / accuracyData.total : 1,
+        errors: accuracyData ? accuracyData.total - accuracyData.correct : 0,
+      };
+    });
 
     const slowestBigrams = [...bigramAvgs]
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 5);
     const fastestBigrams = [...bigramAvgs]
       .sort((a, b) => a.avg - b.avg)
+      .slice(0, 5);
+    
+    // Accuracy-sorted bigrams for accuracy mode
+    const mostAccurateBigrams = [...bigramAvgs]
+      .filter(b => b.count >= 2)
+      .sort((a, b) => b.accuracy - a.accuracy)
+      .slice(0, 5);
+    const leastAccurateBigrams = [...bigramAvgs]
+      .filter(b => b.count >= 2 && b.errors > 0)
+      .sort((a, b) => a.accuracy - b.accuracy)
       .slice(0, 5);
 
     // Impressive bigrams: fast relative to distance
@@ -2287,6 +2453,8 @@ function App() {
       consistency,
       slowestBigrams,
       fastestBigrams,
+      mostAccurateBigrams,
+      leastAccurateBigrams,
       impressiveBigrams,
       totalTime: Math.round((totalTime / 1000) * 10) / 10,
       charCount,
@@ -2988,11 +3156,11 @@ function App() {
                     </button>
                     <button
                       className={`mini-toggle ${
-                        heatmapMode === "frequency" ? "active" : ""
+                        heatmapMode === "accuracy" ? "active" : ""
                       }`}
-                      onClick={() => setHeatmapMode("frequency")}
+                      onClick={() => setHeatmapMode("accuracy")}
                     >
-                      Frequency
+                      Accuracy
                     </button>
                   </div>
                 </div>
@@ -3000,12 +3168,14 @@ function App() {
 
                 <div className="keyboard-flows">
                   <KeyboardFlowMap
-                    topBigrams={stats.fastestBigrams}
+                    topBigrams={heatmapMode === "accuracy" ? stats.mostAccurateBigrams : stats.fastestBigrams}
                     flowType="fast"
+                    mode={heatmapMode}
                   />
                   <KeyboardFlowMap
-                    topBigrams={stats.slowestBigrams}
+                    topBigrams={heatmapMode === "accuracy" ? stats.leastAccurateBigrams : stats.slowestBigrams}
                     flowType="slow"
+                    mode={heatmapMode}
                   />
                 </div>
               </div>
@@ -3627,7 +3797,7 @@ function App() {
                     <div className="bigram-list">
                       {cumulativeStats.slowestBigrams.map(
                         ({ bigram, avg }, i) => (
-                          <span key={i} className="bigram">
+                          <span key={i} className="bigram slow">
                             <code>{formatBigram(bigram)}</code>
                             <span className="bigram-meta">
                               <span className="bigram-time">
@@ -3687,11 +3857,11 @@ function App() {
                           </button>
                           <button
                             className={`mini-toggle ${
-                              heatmapMode === "frequency" ? "active" : ""
+                              heatmapMode === "accuracy" ? "active" : ""
                             }`}
-                            onClick={() => setHeatmapMode("frequency")}
+                            onClick={() => setHeatmapMode("accuracy")}
                           >
-                            Frequency
+                            Accuracy
                           </button>
                         </div>
                       </div>
@@ -3702,12 +3872,14 @@ function App() {
 
                       <div className="keyboard-flows">
                         <KeyboardFlowMap
-                          topBigrams={cumulativeStats.fastestBigrams}
+                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.mostAccurateBigrams : cumulativeStats.fastestBigrams}
                           flowType="fast"
+                          mode={heatmapMode}
                         />
                         <KeyboardFlowMap
-                          topBigrams={cumulativeStats.slowestBigrams}
+                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.leastAccurateBigrams : cumulativeStats.slowestBigrams}
                           flowType="slow"
+                          mode={heatmapMode}
                         />
                       </div>
                     </div>
