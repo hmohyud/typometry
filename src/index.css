@@ -616,7 +616,6 @@ h1 {
   border-radius: 8px;
   padding: 1rem;
   text-align: center;
-  cursor: help;
   transition: background 0.15s ease;
 }
 
@@ -662,7 +661,6 @@ h1 {
   align-items: center;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--bg-tertiary);
-  cursor: help;
 }
 
 .detail-row:hover {
@@ -822,6 +820,107 @@ footer {
   height: 100%;
   background: rgba(232, 92, 92, 0.3);
   transition: width 0.05s linear;
+}
+
+/* Custom Tooltips */
+.tooltip-trigger,
+.tooltip-wrapper {
+  cursor: help;
+}
+
+.tooltip-wrapper {
+  display: contents;
+}
+
+.behavioral-grid .tooltip-wrapper,
+.behavioral-details .tooltip-wrapper {
+  display: block;
+}
+
+.stat-grid .tooltip-wrapper {
+  display: block;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: 280px;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+  border: 1px solid var(--bg-tertiary);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+  animation: tooltipFade 0.15s ease;
+}
+
+@keyframes tooltipFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tooltip-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tooltip-text,
+.tooltip p {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tooltip-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.tooltip-value {
+  font-size: 0.85rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tooltip-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.tooltip-list li {
+  margin: 0.2rem 0;
+}
+
+.tooltip-divider {
+  height: 1px;
+  background: var(--bg-tertiary);
+  margin: 0.25rem 0;
+}
+
+.tooltip-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* Responsive */

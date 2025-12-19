@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import sentences from './sentences.json'
 import { getKeyDistance } from './keyboard'
 import { KeyboardHeatmap, KeyboardFlowMap } from './KeyboardViz'
+import { Tooltip, TipTitle, TipText, TipHint } from './Tooltip'
 
 // Flatten all paragraphs into one pool with indices
 const ALL_PARAGRAPHS = Object.values(sentences).flat()
@@ -12,54 +13,266 @@ const STORAGE_KEYS = {
   HISTORY: 'typometry_history',
 }
 
-// Tooltip descriptions for stats
-const TOOLTIPS = {
-  profileStrength: "How strongly your typing matches this archetype. Based on flow consistency, rhythm, accuracy, and error recovery.",
-  correctionStyle: {
-    label: "How you handle mistakes",
-    perfectionist: "You fix errors immediately, never letting mistakes slip by",
-    quickCorrector: "You catch errors quickly, usually within a character or two",
-    steady: "Balanced approach - you notice errors but don't obsess over instant fixes",
-    flowTyper: "You prioritize momentum, fixing errors in batches",
-    bulldozer: "You power through mistakes, correcting them later or not at all"
-  },
-  flowState: "Percentage of keystrokes within ±30% of your average speed. Higher = more consistent rhythm, you're 'in the zone'.",
-  maxBurst: "Longest streak of consecutive fast keystrokes (faster than 80% of your average). Shows your peak performance potential.",
-  speedProfile: {
-    label: "How consistent your typing speed is over time",
-    metronome: "Extremely consistent timing, like a human metronome",
-    consistent: "Steady pace with minimal variation",
-    variable: "Natural variation in speed, adapting to content",
-    erratic: "Highly variable timing, possibly indicating unfamiliar content or fatigue"
-  },
-  handBalance: "Compares typing speed between left-hand keys (QWERTASDFGZXCVB) and right-hand keys. Shows which hand is faster.",
-  homeRow: "Speed difference on home row keys (ASDFGHJKL) vs your overall average. Positive = faster on home row.",
-  numberRow: "Speed difference on number row (1234567890) vs your overall average. Positive = slower on numbers.",
-  endurance: {
-    label: "How your speed changes from start to finish",
-    warmingUp: "You start slow and speed up significantly as you go",
-    accelerating: "You gain speed as you settle into rhythm",
-    steady: "Consistent speed throughout",
-    slowing: "Slight decrease in speed toward the end",
-    fatigued: "Notable slowdown as you progress"
-  },
-  capitalPenalty: "How much slower you type capital letters compared to lowercase. Includes Shift key coordination time.",
-  punctuationPenalty: "How much slower you type punctuation marks compared to letters.",
-  errorRecovery: "How much your speed drops in the 3 keystrokes after making an error. Shows how errors affect your flow.",
-  hesitations: "Pauses longer than 500ms. Could indicate thinking, difficult sequences, or distractions.",
-  errorDistribution: {
-    label: "How your errors are distributed",
-    clustered: "Errors tend to come in groups - one mistake leads to more",
-    spreadOut: "Errors are evenly distributed throughout",
-    random: "No particular pattern to when errors occur"
-  },
-  backspaceBehavior: {
-    label: "How you use backspace relative to errors made",
-    efficient: "About 1 backspace per error - precise corrections",
-    cautious: "1.5+ backspaces per error - you double-check corrections",
-    overCorrector: "2+ backspaces per error - you may over-correct or re-type sections",
-    incompleteFixes: "Less than 1 backspace per error - some errors left uncorrected"
-  }
+// Tooltip content for stats
+const TIPS = {
+  profileStrength: (
+    <>
+      <TipTitle>Profile Strength</TipTitle>
+      <TipText>How strongly your typing matches this archetype, based on:</TipText>
+      <TipText>• Flow consistency (30%)</TipText>
+      <TipText>• Rhythm regularity (20%)</TipText>
+      <TipText>• Accuracy (30%)</TipText>
+      <TipText>• Error recovery (20%)</TipText>
+      <TipHint>Higher % = more consistent typing pattern</TipHint>
+    </>
+  ),
+  correctionStyle: (label) => ({
+    perfectionist: (
+      <>
+        <TipTitle>Correction Style: Perfectionist</TipTitle>
+        <TipText>You fix errors immediately, never letting mistakes slip by. Your backspace finger is always ready.</TipText>
+        <TipHint>~0 characters typed past errors</TipHint>
+      </>
+    ),
+    'quick corrector': (
+      <>
+        <TipTitle>Correction Style: Quick Corrector</TipTitle>
+        <TipText>You catch errors quickly, usually within a character or two. Good balance of speed and accuracy.</TipText>
+        <TipHint>~1-2 characters typed past errors</TipHint>
+      </>
+    ),
+    steady: (
+      <>
+        <TipTitle>Correction Style: Steady</TipTitle>
+        <TipText>Balanced approach—you notice errors but don't obsess over instant fixes. You correct when it feels natural.</TipText>
+        <TipHint>~2-3 characters typed past errors</TipHint>
+      </>
+    ),
+    'flow typer': (
+      <>
+        <TipTitle>Correction Style: Flow Typer</TipTitle>
+        <TipText>You prioritize momentum, fixing errors in batches rather than immediately. Flow state matters more than perfection.</TipText>
+        <TipHint>~3-5 characters typed past errors</TipHint>
+      </>
+    ),
+    bulldozer: (
+      <>
+        <TipTitle>Correction Style: Bulldozer</TipTitle>
+        <TipText>You power through mistakes, correcting them later (or not at all). Speed is king.</TipText>
+        <TipHint>5+ characters typed past errors</TipHint>
+      </>
+    ),
+  }[label] || (
+    <>
+      <TipTitle>Correction Style</TipTitle>
+      <TipText>How you handle mistakes—from instant fixes to powering through.</TipText>
+    </>
+  )),
+  flowState: (
+    <>
+      <TipTitle>Flow State</TipTitle>
+      <TipText>Percentage of keystrokes within ±30% of your average speed.</TipText>
+      <TipText>Higher = more consistent rhythm, you're "in the zone".</TipText>
+      <TipHint>70%+ is excellent flow</TipHint>
+    </>
+  ),
+  maxBurst: (
+    <>
+      <TipTitle>Max Burst</TipTitle>
+      <TipText>Longest streak of consecutive fast keystrokes (faster than 80% of your average).</TipText>
+      <TipText>Shows your peak performance potential when you're really cooking.</TipText>
+      <TipHint>Bursts often happen on familiar words</TipHint>
+    </>
+  ),
+  speedProfile: (label) => ({
+    metronome: (
+      <>
+        <TipTitle>Speed Profile: Metronome</TipTitle>
+        <TipText>Extremely consistent timing, like a human metronome. Your keystrokes are remarkably regular.</TipText>
+        <TipHint>Variance under 30%</TipHint>
+      </>
+    ),
+    consistent: (
+      <>
+        <TipTitle>Speed Profile: Consistent</TipTitle>
+        <TipText>Steady pace with minimal variation. You maintain good rhythm throughout.</TipText>
+        <TipHint>Variance 30-50%</TipHint>
+      </>
+    ),
+    variable: (
+      <>
+        <TipTitle>Speed Profile: Variable</TipTitle>
+        <TipText>Natural variation in speed, adapting to content. You speed up on easy parts and slow down on hard ones.</TipText>
+        <TipHint>Variance 50-70%</TipHint>
+      </>
+    ),
+    erratic: (
+      <>
+        <TipTitle>Speed Profile: Erratic</TipTitle>
+        <TipText>Highly variable timing—could indicate unfamiliar content, thinking pauses, or natural typing style.</TipText>
+        <TipHint>Variance over 70%</TipHint>
+      </>
+    ),
+  }[label] || (
+    <>
+      <TipTitle>Speed Profile</TipTitle>
+      <TipText>How consistent your typing speed is over time.</TipText>
+    </>
+  )),
+  handBalance: (
+    <>
+      <TipTitle>Hand Balance</TipTitle>
+      <TipText>Compares typing speed between left-hand keys (QWERTASDFGZXCVB) and right-hand keys.</TipText>
+      <TipText>Shows which hand is faster on average.</TipText>
+      <TipHint>Most people have a slight dominant hand advantage</TipHint>
+    </>
+  ),
+  homeRow: (
+    <>
+      <TipTitle>Home Row Speed</TipTitle>
+      <TipText>Speed difference on home row keys (ASDFGHJKL;) vs your overall average.</TipText>
+      <TipText>Positive = faster on home row (good form). Negative = reaching might be faster for you.</TipText>
+      <TipHint>Touch typists usually show +10-20% here</TipHint>
+    </>
+  ),
+  numberRow: (
+    <>
+      <TipTitle>Number Row Speed</TipTitle>
+      <TipText>Speed difference on number row (1234567890) vs your overall average.</TipText>
+      <TipText>Most people are slower on numbers due to the reach.</TipText>
+      <TipHint>+20-40% slower is typical</TipHint>
+    </>
+  ),
+  endurance: (label) => ({
+    'warming up': (
+      <>
+        <TipTitle>Endurance: Warming Up</TipTitle>
+        <TipText>You start slow and speed up significantly as you go. Your fingers need time to get in the groove.</TipText>
+        <TipHint>10%+ speed increase from start to finish</TipHint>
+      </>
+    ),
+    accelerating: (
+      <>
+        <TipTitle>Endurance: Accelerating</TipTitle>
+        <TipText>You gain speed as you settle into rhythm. Slight warm-up effect.</TipText>
+        <TipHint>5-10% speed increase</TipHint>
+      </>
+    ),
+    steady: (
+      <>
+        <TipTitle>Endurance: Steady</TipTitle>
+        <TipText>Consistent speed throughout—you maintain the same pace from start to finish.</TipText>
+        <TipHint>Less than ±5% change</TipHint>
+      </>
+    ),
+    slowing: (
+      <>
+        <TipTitle>Endurance: Slowing</TipTitle>
+        <TipText>Slight decrease in speed toward the end. Minor fatigue or attention drift.</TipText>
+        <TipHint>5-15% slowdown</TipHint>
+      </>
+    ),
+    fatigued: (
+      <>
+        <TipTitle>Endurance: Fatigued</TipTitle>
+        <TipText>Notable slowdown as you progress. Mental or physical fatigue setting in.</TipText>
+        <TipHint>15%+ slowdown</TipHint>
+      </>
+    ),
+  }[label] || (
+    <>
+      <TipTitle>Endurance</TipTitle>
+      <TipText>How your speed changes from start to finish.</TipText>
+    </>
+  )),
+  capitalPenalty: (
+    <>
+      <TipTitle>Capital Letter Penalty</TipTitle>
+      <TipText>How much slower you type capital letters compared to lowercase.</TipText>
+      <TipText>Includes the time to coordinate the Shift key.</TipText>
+      <TipHint>10-30% slower is typical</TipHint>
+    </>
+  ),
+  punctuationPenalty: (
+    <>
+      <TipTitle>Punctuation Penalty</TipTitle>
+      <TipText>How much slower you type punctuation marks compared to letters.</TipText>
+      <TipText>Many punctuation keys require Shift or are in awkward positions.</TipText>
+      <TipHint>20-50% slower is typical</TipHint>
+    </>
+  ),
+  errorRecovery: (
+    <>
+      <TipTitle>Error Recovery</TipTitle>
+      <TipText>How much your speed drops in the 3 keystrokes after making an error.</TipText>
+      <TipText>Shows how much errors disrupt your flow.</TipText>
+      <TipHint>Under 15% = errors don't phase you</TipHint>
+    </>
+  ),
+  hesitations: (
+    <>
+      <TipTitle>Hesitations</TipTitle>
+      <TipText>Pauses longer than 500ms between keystrokes.</TipText>
+      <TipText>Could indicate thinking, difficult sequences, unfamiliar words, or distractions.</TipText>
+      <TipHint>Some hesitation is normal, especially on hard words</TipHint>
+    </>
+  ),
+  errorDistribution: (
+    <>
+      <TipTitle>Error Distribution</TipTitle>
+      <TipText>How your errors are spread throughout the text.</TipText>
+      <TipText>• Clustered: errors come in groups—one mistake leads to more</TipText>
+      <TipText>• Spread out: errors evenly distributed</TipText>
+      <TipText>• Random: no pattern to when errors occur</TipText>
+    </>
+  ),
+  backspaceBehavior: (label) => ({
+    efficient: (
+      <>
+        <TipTitle>Backspace: Efficient</TipTitle>
+        <TipText>About 1 backspace per error—precise corrections. You hit backspace exactly as many times as needed.</TipText>
+      </>
+    ),
+    cautious: (
+      <>
+        <TipTitle>Backspace: Cautious</TipTitle>
+        <TipText>1.5+ backspaces per error—you double-check your corrections or delete a bit extra to be safe.</TipText>
+      </>
+    ),
+    'over-corrector': (
+      <>
+        <TipTitle>Backspace: Over-Corrector</TipTitle>
+        <TipText>2+ backspaces per error—you may over-correct, re-type sections, or use backspace preemptively.</TipText>
+      </>
+    ),
+    'incomplete fixes': (
+      <>
+        <TipTitle>Backspace: Incomplete Fixes</TipTitle>
+        <TipText>Less than 1 backspace per error—some errors left uncorrected. Speed over perfection.</TipText>
+      </>
+    ),
+  }[label] || (
+    <>
+      <TipTitle>Backspace Behavior</TipTitle>
+      <TipText>How you use backspace relative to errors made.</TipText>
+    </>
+  )),
+  avgTravel: (
+    <>
+      <TipTitle>Average Travel Distance</TipTitle>
+      <TipText>Average physical distance between consecutive keys on a QWERTY keyboard.</TipText>
+      <TipText>Measured in key-widths (1.0 = adjacent keys).</TipText>
+      <TipHint>Lower = more efficient finger movement</TipHint>
+    </>
+  ),
+  rhythmScore: (
+    <>
+      <TipTitle>Rhythm Score</TipTitle>
+      <TipText>How regular your keystroke timing is—like measuring if you're typing to a beat.</TipText>
+      <TipText>Based on how similar each interval is to the previous one.</TipText>
+      <TipHint>70%+ = very rhythmic typing</TipHint>
+    </>
+  ),
 }
 
 // Load/save helpers
@@ -1241,10 +1454,12 @@ function App() {
                   <span className="stat-value">{stats.avgWordInterval}ms</span>
                   <span className="stat-label">avg word time</span>
                 </div>
-                <div className="stat small" title="Average physical distance between consecutive keys on the keyboard">
-                  <span className="stat-value">{stats.avgDistance}</span>
-                  <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
-                </div>
+                <Tooltip content={TIPS.avgTravel}>
+                  <div className="stat small">
+                    <span className="stat-value">{stats.avgDistance}</span>
+                    <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
+                  </div>
+                </Tooltip>
                 <div className="stat small">
                   <span className="stat-value">{stats.errorCount}</span>
                   <span className="stat-label">errors</span>
@@ -1426,159 +1641,189 @@ function App() {
               <div className="archetype-card">
                 <span className="archetype-name">{stats.behavioral.archetype}</span>
                 <span className="archetype-desc">{stats.behavioral.archetypeDesc}</span>
-                <div className="profile-strength" title="How strongly your typing matches this archetype. Based on flow consistency, rhythm, accuracy, and error recovery.">
-                  <span className="strength-label">profile strength</span>
-                  <div className="strength-bar">
-                    <div 
-                      className="strength-fill" 
-                      style={{ width: `${stats.behavioral.confidenceScore}%` }}
-                    />
+                <Tooltip content={TIPS.profileStrength}>
+                  <div className="profile-strength">
+                    <span className="strength-label">profile strength</span>
+                    <div className="strength-bar">
+                      <div 
+                        className="strength-fill" 
+                        style={{ width: `${stats.behavioral.confidenceScore}%` }}
+                      />
+                    </div>
+                    <span className="strength-value">{stats.behavioral.confidenceScore}%</span>
                   </div>
-                  <span className="strength-value">{stats.behavioral.confidenceScore}%</span>
-                </div>
+                </Tooltip>
               </div>
               
               <h3 className="behavioral-header">Typing Profile</h3>
               
               <div className="behavioral-grid">
-                <div className="behavioral-card" title={`${TOOLTIPS.correctionStyle.label}. ${TOOLTIPS.correctionStyle[stats.behavioral.momentumLabel.replace(' ', '')] || ''}`}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.momentumLabel}</span>
-                    <span className="behavioral-label">correction style</span>
+                <Tooltip content={TIPS.correctionStyle(stats.behavioral.momentumLabel)}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.momentumLabel}</span>
+                      <span className="behavioral-label">correction style</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {stats.behavioral.momentum > 0 
+                        ? `~${stats.behavioral.momentum} chars past errors before fixing`
+                        : 'Instant corrections'}
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {stats.behavioral.momentum > 0 
-                      ? `~${stats.behavioral.momentum} chars past errors before fixing`
-                      : 'Instant corrections'}
-                  </p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={TOOLTIPS.flowState}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.flowRatio}%</span>
-                    <span className="behavioral-label">flow state</span>
+                <Tooltip content={TIPS.flowState}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.flowRatio}%</span>
+                      <span className="behavioral-label">flow state</span>
+                    </div>
+                    <p className="behavioral-detail">keystrokes in rhythm zone</p>
                   </div>
-                  <p className="behavioral-detail">keystrokes in rhythm zone</p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={TOOLTIPS.maxBurst}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.maxBurst}</span>
-                    <span className="behavioral-label">max burst</span>
+                <Tooltip content={TIPS.maxBurst}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.maxBurst}</span>
+                      <span className="behavioral-label">max burst</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {stats.behavioral.burstCount} bursts total
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {stats.behavioral.burstCount} bursts total
-                  </p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={`${TOOLTIPS.speedProfile.label}. ${TOOLTIPS.speedProfile[stats.behavioral.speedProfile] || ''}`}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.speedProfile}</span>
-                    <span className="behavioral-label">speed profile</span>
+                <Tooltip content={TIPS.speedProfile(stats.behavioral.speedProfile)}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.speedProfile}</span>
+                      <span className="behavioral-label">speed profile</span>
+                    </div>
+                    <p className="behavioral-detail">{stats.behavioral.rhythmScore}% rhythm score</p>
                   </div>
-                  <p className="behavioral-detail">{stats.behavioral.rhythmScore}% rhythm score</p>
-                </div>
+                </Tooltip>
               </div>
               
               <div className="behavioral-grid">
-                <div className="behavioral-card" title={TOOLTIPS.handBalance}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.dominantHand}</span>
-                    <span className="behavioral-label">hand balance</span>
+                <Tooltip content={TIPS.handBalance}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.dominantHand}</span>
+                      <span className="behavioral-label">hand balance</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {Math.abs(stats.behavioral.handBalance)}% {stats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {Math.abs(stats.behavioral.handBalance)}% {stats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
-                  </p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={TOOLTIPS.homeRow}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">
-                      {stats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{stats.behavioral.homeRowAdvantage}%
-                    </span>
-                    <span className="behavioral-label">home row</span>
+                <Tooltip content={TIPS.homeRow}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">
+                        {stats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{stats.behavioral.homeRowAdvantage}%
+                      </span>
+                      <span className="behavioral-label">home row</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {stats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {stats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
-                  </p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={TOOLTIPS.numberRow}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">
-                      {stats.behavioral.numberRowPenalty > 0 ? '+' : ''}{stats.behavioral.numberRowPenalty}%
-                    </span>
-                    <span className="behavioral-label">number row</span>
+                <Tooltip content={TIPS.numberRow}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">
+                        {stats.behavioral.numberRowPenalty > 0 ? '+' : ''}{stats.behavioral.numberRowPenalty}%
+                      </span>
+                      <span className="behavioral-label">number row</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {stats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {stats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
-                  </p>
-                </div>
+                </Tooltip>
                 
-                <div className="behavioral-card" title={`${TOOLTIPS.endurance.label}. ${TOOLTIPS.endurance[stats.behavioral.fatigueLabel.replace(' ', '')] || ''}`}>
-                  <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.fatigueLabel}</span>
-                    <span className="behavioral-label">endurance</span>
+                <Tooltip content={TIPS.endurance(stats.behavioral.fatigueLabel)}>
+                  <div className="behavioral-card">
+                    <div className="behavioral-main">
+                      <span className="behavioral-value">{stats.behavioral.fatigueLabel}</span>
+                      <span className="behavioral-label">endurance</span>
+                    </div>
+                    <p className="behavioral-detail">
+                      {stats.behavioral.fatiguePercent > 0 ? '+' : ''}{stats.behavioral.fatiguePercent}% speed change
+                    </p>
                   </div>
-                  <p className="behavioral-detail">
-                    {stats.behavioral.fatiguePercent > 0 ? '+' : ''}{stats.behavioral.fatiguePercent}% speed change
-                  </p>
-                </div>
+                </Tooltip>
               </div>
               
               <div className="behavioral-details">
-                <div className="detail-row" title={TOOLTIPS.capitalPenalty}>
-                  <span className="detail-label">capital letter penalty</span>
-                  <span className="detail-value">
-                    <span className={stats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
-                      {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
+                <Tooltip content={TIPS.capitalPenalty}>
+                  <div className="detail-row">
+                    <span className="detail-label">capital letter penalty</span>
+                    <span className="detail-value">
+                      <span className={stats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                        {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
+                      </span>
+                      <span className="detail-note">slower on capitals</span>
                     </span>
-                    <span className="detail-note">slower on capitals</span>
-                  </span>
-                </div>
+                  </div>
+                </Tooltip>
                 
-                <div className="detail-row" title={TOOLTIPS.punctuationPenalty}>
-                  <span className="detail-label">punctuation penalty</span>
-                  <span className="detail-value">
-                    <span className={stats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
-                      {stats.behavioral.punctuationPenalty > 0 ? '+' : ''}{stats.behavioral.punctuationPenalty}%
+                <Tooltip content={TIPS.punctuationPenalty}>
+                  <div className="detail-row">
+                    <span className="detail-label">punctuation penalty</span>
+                    <span className="detail-value">
+                      <span className={stats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                        {stats.behavioral.punctuationPenalty > 0 ? '+' : ''}{stats.behavioral.punctuationPenalty}%
+                      </span>
+                      <span className="detail-note">slower on symbols</span>
                     </span>
-                    <span className="detail-note">slower on symbols</span>
-                  </span>
-                </div>
+                  </div>
+                </Tooltip>
                 
-                <div className="detail-row" title={TOOLTIPS.errorRecovery}>
-                  <span className="detail-label">error recovery</span>
-                  <span className="detail-value">
-                    <span className={stats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
-                      {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
+                <Tooltip content={TIPS.errorRecovery}>
+                  <div className="detail-row">
+                    <span className="detail-label">error recovery</span>
+                    <span className="detail-value">
+                      <span className={stats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                        {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
+                      </span>
+                      <span className="detail-note">slower after mistakes</span>
                     </span>
-                    <span className="detail-note">slower after mistakes</span>
-                  </span>
-                </div>
+                  </div>
+                </Tooltip>
                 
-                <div className="detail-row" title={TOOLTIPS.hesitations}>
-                  <span className="detail-label">hesitations</span>
-                  <span className="detail-value">
-                    {stats.behavioral.hesitationCount}
-                    {stats.behavioral.hesitationCount > 0 && (
-                      <span className="detail-note">pauses &gt;500ms (avg {stats.behavioral.avgHesitation}ms)</span>
-                    )}
-                  </span>
-                </div>
+                <Tooltip content={TIPS.hesitations}>
+                  <div className="detail-row">
+                    <span className="detail-label">hesitations</span>
+                    <span className="detail-value">
+                      {stats.behavioral.hesitationCount}
+                      {stats.behavioral.hesitationCount > 0 && (
+                        <span className="detail-note">pauses &gt;500ms (avg {stats.behavioral.avgHesitation}ms)</span>
+                      )}
+                    </span>
+                  </div>
+                </Tooltip>
                 
-                <div className="detail-row" title={TOOLTIPS.errorDistribution.label}>
-                  <span className="detail-label">error distribution</span>
-                  <span className="detail-value">{stats.behavioral.errorPattern}</span>
-                </div>
+                <Tooltip content={TIPS.errorDistribution}>
+                  <div className="detail-row">
+                    <span className="detail-label">error distribution</span>
+                    <span className="detail-value">{stats.behavioral.errorPattern}</span>
+                  </div>
+                </Tooltip>
                 
-                <div className="detail-row" title={`${TOOLTIPS.backspaceBehavior.label}. ${TOOLTIPS.backspaceBehavior[stats.behavioral.backspaceLabel.replace(' ', '').replace('-', '')] || ''}`}>
-                  <span className="detail-label">backspace behavior</span>
-                  <span className="detail-value">
-                    {stats.behavioral.backspaceLabel}
-                    <span className="detail-note">{stats.behavioral.backspaceEfficiency}× per error</span>
-                  </span>
-                </div>
+                <Tooltip content={TIPS.backspaceBehavior(stats.behavioral.backspaceLabel)}>
+                  <div className="detail-row">
+                    <span className="detail-label">backspace behavior</span>
+                    <span className="detail-value">
+                      {stats.behavioral.backspaceLabel}
+                      <span className="detail-note">{stats.behavioral.backspaceEfficiency}× per error</span>
+                    </span>
+                  </div>
+                </Tooltip>
               </div>
             </div>
           )}
@@ -1615,10 +1860,12 @@ function App() {
                     <span className="stat-value">{cumulativeStats.avgWordInterval}ms</span>
                     <span className="stat-label">avg word time</span>
                   </div>
-                  <div className="stat small" title="Average physical distance between consecutive keys">
-                    <span className="stat-value">{cumulativeStats.avgDistance}</span>
-                    <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
-                  </div>
+                  <Tooltip content={TIPS.avgTravel}>
+                    <div className="stat small">
+                      <span className="stat-value">{cumulativeStats.avgDistance}</span>
+                      <span className="stat-label">avg travel <span className="label-hint">(keys apart)</span></span>
+                    </div>
+                  </Tooltip>
                   <div className="stat small">
                     <span className="stat-value">{cumulativeStats.sessions}</span>
                     <span className="stat-label">sessions</span>
@@ -1741,152 +1988,180 @@ function App() {
                     <div className="archetype-card">
                       <span className="archetype-name">{cumulativeStats.behavioral.archetype}</span>
                       <span className="archetype-desc">{cumulativeStats.behavioral.archetypeDesc}</span>
-                      <div className="profile-strength" title="How strongly your typing matches this archetype across all sessions.">
-                        <span className="strength-label">profile strength</span>
-                        <div className="strength-bar">
-                          <div 
-                            className="strength-fill" 
-                            style={{ width: `${cumulativeStats.behavioral.confidenceScore}%` }}
-                          />
+                      <Tooltip content={TIPS.profileStrength}>
+                        <div className="profile-strength">
+                          <span className="strength-label">profile strength</span>
+                          <div className="strength-bar">
+                            <div 
+                              className="strength-fill" 
+                              style={{ width: `${cumulativeStats.behavioral.confidenceScore}%` }}
+                            />
+                          </div>
+                          <span className="strength-value">{cumulativeStats.behavioral.confidenceScore}%</span>
                         </div>
-                        <span className="strength-value">{cumulativeStats.behavioral.confidenceScore}%</span>
-                      </div>
+                      </Tooltip>
                     </div>
                     
                     <h3 className="behavioral-header">Typing Profile (All Time)</h3>
                     
                     <div className="behavioral-grid">
-                      <div className="behavioral-card" title={TOOLTIPS.correctionStyle.label}>
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.momentumLabel}</span>
-                          <span className="behavioral-label">correction style</span>
+                      <Tooltip content={TIPS.correctionStyle(cumulativeStats.behavioral.momentumLabel)}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.momentumLabel}</span>
+                            <span className="behavioral-label">correction style</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.momentum > 0 
+                              ? `~${cumulativeStats.behavioral.momentum} chars past errors`
+                              : 'Instant corrections'}
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {cumulativeStats.behavioral.momentum > 0 
-                            ? `~${cumulativeStats.behavioral.momentum} chars past errors`
-                            : 'Instant corrections'}
-                        </p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card" title={TOOLTIPS.flowState}>
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.flowRatio}%</span>
-                          <span className="behavioral-label">flow state</span>
+                      <Tooltip content={TIPS.flowState}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.flowRatio}%</span>
+                            <span className="behavioral-label">flow state</span>
+                          </div>
+                          <p className="behavioral-detail">keystrokes in rhythm zone</p>
                         </div>
-                        <p className="behavioral-detail">keystrokes in rhythm zone</p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.maxBurst}</span>
-                          <span className="behavioral-label">best burst</span>
+                      <Tooltip content={TIPS.maxBurst}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.maxBurst}</span>
+                            <span className="behavioral-label">best burst</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.totalBursts} total bursts
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {cumulativeStats.behavioral.totalBursts} total bursts
-                        </p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.speedProfile}</span>
-                          <span className="behavioral-label">speed profile</span>
+                      <Tooltip content={TIPS.speedProfile(cumulativeStats.behavioral.speedProfile)}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.speedProfile}</span>
+                            <span className="behavioral-label">speed profile</span>
+                          </div>
+                          <p className="behavioral-detail">{cumulativeStats.behavioral.rhythmScore}% rhythm score</p>
                         </div>
-                        <p className="behavioral-detail">{cumulativeStats.behavioral.rhythmScore}% rhythm score</p>
-                      </div>
+                      </Tooltip>
                     </div>
                     
                     <div className="behavioral-grid">
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.dominantHand}</span>
-                          <span className="behavioral-label">hand balance</span>
+                      <Tooltip content={TIPS.handBalance}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.dominantHand}</span>
+                            <span className="behavioral-label">hand balance</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {Math.abs(cumulativeStats.behavioral.handBalance)}% {cumulativeStats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {Math.abs(cumulativeStats.behavioral.handBalance)}% {cumulativeStats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
-                        </p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">
-                            {cumulativeStats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{cumulativeStats.behavioral.homeRowAdvantage}%
-                          </span>
-                          <span className="behavioral-label">home row</span>
+                      <Tooltip content={TIPS.homeRow}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {cumulativeStats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{cumulativeStats.behavioral.homeRowAdvantage}%
+                            </span>
+                            <span className="behavioral-label">home row</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {cumulativeStats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
-                        </p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">
-                            {cumulativeStats.behavioral.numberRowPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.numberRowPenalty}%
-                          </span>
-                          <span className="behavioral-label">number row</span>
+                      <Tooltip content={TIPS.numberRow}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {cumulativeStats.behavioral.numberRowPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.numberRowPenalty}%
+                            </span>
+                            <span className="behavioral-label">number row</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {cumulativeStats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
-                        </p>
-                      </div>
+                      </Tooltip>
                       
-                      <div className="behavioral-card">
-                        <div className="behavioral-main">
-                          <span className="behavioral-value">{cumulativeStats.behavioral.fatigueLabel}</span>
-                          <span className="behavioral-label">endurance</span>
+                      <Tooltip content={TIPS.endurance(cumulativeStats.behavioral.fatigueLabel)}>
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">{cumulativeStats.behavioral.fatigueLabel}</span>
+                            <span className="behavioral-label">endurance</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.fatiguePercent > 0 ? '+' : ''}{cumulativeStats.behavioral.fatiguePercent}% avg change
+                          </p>
                         </div>
-                        <p className="behavioral-detail">
-                          {cumulativeStats.behavioral.fatiguePercent > 0 ? '+' : ''}{cumulativeStats.behavioral.fatiguePercent}% avg change
-                        </p>
-                      </div>
+                      </Tooltip>
                     </div>
                     
                     <div className="behavioral-details">
-                      <div className="detail-row">
-                        <span className="detail-label">capital letter penalty</span>
-                        <span className="detail-value">
-                          <span className={cumulativeStats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
-                            {cumulativeStats.behavioral.capitalPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.capitalPenalty}%
+                      <Tooltip content={TIPS.capitalPenalty}>
+                        <div className="detail-row">
+                          <span className="detail-label">capital letter penalty</span>
+                          <span className="detail-value">
+                            <span className={cumulativeStats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                              {cumulativeStats.behavioral.capitalPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.capitalPenalty}%
+                            </span>
+                            <span className="detail-note">slower on capitals</span>
                           </span>
-                          <span className="detail-note">slower on capitals</span>
-                        </span>
-                      </div>
+                        </div>
+                      </Tooltip>
                       
-                      <div className="detail-row">
-                        <span className="detail-label">punctuation penalty</span>
-                        <span className="detail-value">
-                          <span className={cumulativeStats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
-                            {cumulativeStats.behavioral.punctuationPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.punctuationPenalty}%
+                      <Tooltip content={TIPS.punctuationPenalty}>
+                        <div className="detail-row">
+                          <span className="detail-label">punctuation penalty</span>
+                          <span className="detail-value">
+                            <span className={cumulativeStats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                              {cumulativeStats.behavioral.punctuationPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.punctuationPenalty}%
+                            </span>
+                            <span className="detail-note">slower on symbols</span>
                           </span>
-                          <span className="detail-note">slower on symbols</span>
-                        </span>
-                      </div>
+                        </div>
+                      </Tooltip>
                       
-                      <div className="detail-row">
-                        <span className="detail-label">error recovery</span>
-                        <span className="detail-value">
-                          <span className={cumulativeStats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
-                            {cumulativeStats.behavioral.recoveryPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.recoveryPenalty}%
+                      <Tooltip content={TIPS.errorRecovery}>
+                        <div className="detail-row">
+                          <span className="detail-label">error recovery</span>
+                          <span className="detail-value">
+                            <span className={cumulativeStats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                              {cumulativeStats.behavioral.recoveryPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.recoveryPenalty}%
+                            </span>
+                            <span className="detail-note">slower after mistakes</span>
                           </span>
-                          <span className="detail-note">slower after mistakes</span>
-                        </span>
-                      </div>
+                        </div>
+                      </Tooltip>
                       
-                      <div className="detail-row">
-                        <span className="detail-label">total hesitations</span>
-                        <span className="detail-value">
-                          {cumulativeStats.behavioral.totalHesitations}
-                          <span className="detail-note">pauses &gt;500ms</span>
-                        </span>
-                      </div>
+                      <Tooltip content={TIPS.hesitations}>
+                        <div className="detail-row">
+                          <span className="detail-label">total hesitations</span>
+                          <span className="detail-value">
+                            {cumulativeStats.behavioral.totalHesitations}
+                            <span className="detail-note">pauses &gt;500ms</span>
+                          </span>
+                        </div>
+                      </Tooltip>
                       
-                      <div className="detail-row">
-                        <span className="detail-label">backspace behavior</span>
-                        <span className="detail-value">
-                          {cumulativeStats.behavioral.backspaceLabel}
-                          <span className="detail-note">{cumulativeStats.behavioral.backspaceEfficiency}× per error avg</span>
-                        </span>
-                      </div>
+                      <Tooltip content={TIPS.backspaceBehavior(cumulativeStats.behavioral.backspaceLabel)}>
+                        <div className="detail-row">
+                          <span className="detail-label">backspace behavior</span>
+                          <span className="detail-value">
+                            {cumulativeStats.behavioral.backspaceLabel}
+                            <span className="detail-note">{cumulativeStats.behavioral.backspaceEfficiency}× per error avg</span>
+                          </span>
+                        </div>
+                      </Tooltip>
                     </div>
                   </div>
                 )}
