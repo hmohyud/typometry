@@ -202,6 +202,125 @@ function App() {
     const wpm = minutes > 0 ? Math.round((totalChars / 5) / minutes) : 0
     const accuracy = totalChars > 0 ? Math.round(((totalChars - totalErrors) / totalChars) * 100) : 0
     
+    // Aggregate counts
+    const counts = {
+      words: history.reduce((sum, h) => sum + (h.counts?.words || 0), 0),
+      correctWords: history.reduce((sum, h) => sum + (h.counts?.correctWords || 0), 0),
+      letters: history.reduce((sum, h) => sum + (h.counts?.letters || 0), 0),
+      correctLetters: history.reduce((sum, h) => sum + (h.counts?.correctLetters || 0), 0),
+      numbers: history.reduce((sum, h) => sum + (h.counts?.numbers || 0), 0),
+      correctNumbers: history.reduce((sum, h) => sum + (h.counts?.correctNumbers || 0), 0),
+      punctuation: history.reduce((sum, h) => sum + (h.counts?.punctuation || 0), 0),
+      correctPunctuation: history.reduce((sum, h) => sum + (h.counts?.correctPunctuation || 0), 0),
+      capitals: history.reduce((sum, h) => sum + (h.counts?.capitals || 0), 0),
+      correctCapitals: history.reduce((sum, h) => sum + (h.counts?.correctCapitals || 0), 0),
+      spaces: history.reduce((sum, h) => sum + (h.counts?.spaces || 0), 0),
+      correctSpaces: history.reduce((sum, h) => sum + (h.counts?.correctSpaces || 0), 0),
+    }
+    
+    // Aggregate behavioral stats (weighted averages by char count)
+    const behavioralHistory = history.filter(h => h.behavioral)
+    const totalBehavioralChars = behavioralHistory.reduce((sum, h) => sum + h.charCount, 0)
+    
+    const weightedAvg = (key) => {
+      if (totalBehavioralChars === 0) return 0
+      return behavioralHistory.reduce((sum, h) => 
+        sum + ((h.behavioral?.[key] || 0) * h.charCount), 0
+      ) / totalBehavioralChars
+    }
+    
+    const avgMomentum = weightedAvg('momentum')
+    const avgFlowRatio = Math.round(weightedAvg('flowRatio'))
+    const avgRhythmScore = Math.round(weightedAvg('rhythmScore'))
+    const avgFatiguePercent = Math.round(weightedAvg('fatiguePercent'))
+    const avgRecoveryPenalty = Math.round(weightedAvg('recoveryPenalty'))
+    const avgCapitalPenalty = Math.round(weightedAvg('capitalPenalty'))
+    const avgPunctuationPenalty = Math.round(weightedAvg('punctuationPenalty'))
+    const avgHandBalance = Math.round(weightedAvg('handBalance'))
+    const avgHomeRowAdvantage = Math.round(weightedAvg('homeRowAdvantage'))
+    const avgNumberRowPenalty = Math.round(weightedAvg('numberRowPenalty'))
+    const avgBackspaceEfficiency = Math.round(weightedAvg('backspaceEfficiency') * 10) / 10
+    
+    const totalBursts = behavioralHistory.reduce((sum, h) => sum + (h.behavioral?.burstCount || 0), 0)
+    const maxBurstEver = Math.max(...behavioralHistory.map(h => h.behavioral?.maxBurst || 0), 0)
+    const totalHesitations = behavioralHistory.reduce((sum, h) => sum + (h.behavioral?.hesitationCount || 0), 0)
+    
+    // Determine overall archetype from most common or weighted
+    let momentumLabel = 'balanced'
+    if (avgMomentum < 0.5) momentumLabel = 'perfectionist'
+    else if (avgMomentum < 1.5) momentumLabel = 'quick corrector'
+    else if (avgMomentum < 3) momentumLabel = 'steady'
+    else if (avgMomentum < 5) momentumLabel = 'flow typer'
+    else momentumLabel = 'bulldozer'
+    
+    let fatigueLabel = 'steady'
+    if (avgFatiguePercent < -10) fatigueLabel = 'warming up'
+    else if (avgFatiguePercent < -5) fatigueLabel = 'accelerating'
+    else if (avgFatiguePercent > 15) fatigueLabel = 'fatigued'
+    else if (avgFatiguePercent > 8) fatigueLabel = 'slowing'
+    
+    let dominantHand = 'balanced'
+    if (avgHandBalance > 15) dominantHand = 'left faster'
+    else if (avgHandBalance < -15) dominantHand = 'right faster'
+    
+    let speedProfile = 'steady'
+    const avgConsistency = history.reduce((sum, h) => sum + (h.consistency || 0), 0) / history.length
+    if (avgConsistency > 80) speedProfile = 'metronome'
+    else if (avgConsistency > 65) speedProfile = 'consistent'
+    else if (avgConsistency > 50) speedProfile = 'variable'
+    else speedProfile = 'erratic'
+    
+    let backspaceLabel = 'efficient'
+    if (avgBackspaceEfficiency > 2) backspaceLabel = 'over-corrector'
+    else if (avgBackspaceEfficiency > 1.5) backspaceLabel = 'cautious'
+    else if (avgBackspaceEfficiency < 1 && totalErrors > 0) backspaceLabel = 'incomplete fixes'
+    
+    // Generate overall archetype
+    let archetype = 'The Typist'
+    let archetypeDesc = ''
+    
+    if (avgRhythmScore > 70 && avgConsistency > 70) {
+      archetype = 'The Metronome'
+      archetypeDesc = 'Steady, rhythmic, predictable timing'
+    } else if (avgMomentum < 1 && accuracy > 95) {
+      archetype = 'The Surgeon'
+      archetypeDesc = 'Precise, careful, catches every error instantly'
+    } else if (avgMomentum > 4 && wpm > 60) {
+      archetype = 'The Steamroller'
+      archetypeDesc = 'Powers through mistakes, prioritizes speed'
+    } else if (maxBurstEver > 15 && avgFlowRatio > 60) {
+      archetype = 'The Sprinter'
+      archetypeDesc = 'Explosive bursts of speed, then regroups'
+    } else if (avgFatiguePercent < -10) {
+      archetype = 'The Slow Starter'
+      archetypeDesc = 'Warms up over time, finishes strong'
+    } else if (avgFatiguePercent > 15) {
+      archetype = 'The Fader'
+      archetypeDesc = 'Strong start, loses steam as they go'
+    } else if (avgFlowRatio > 70 && avgConsistency > 60) {
+      archetype = 'The Flow State'
+      archetypeDesc = 'Locked in, consistent rhythm, in the zone'
+    } else if (avgRecoveryPenalty > 30) {
+      archetype = 'The Rattled'
+      archetypeDesc = 'Errors throw off their groove'
+    } else if (avgRecoveryPenalty < 10 && totalErrors > 0) {
+      archetype = 'The Unfazed'
+      archetypeDesc = 'Errors don\'t break their stride'
+    } else if (wpm > 80) {
+      archetype = 'The Speedster'
+      archetypeDesc = 'Raw speed is the name of the game'
+    } else if (accuracy > 98) {
+      archetype = 'The Perfectionist'
+      archetypeDesc = 'Accuracy above all else'
+    }
+    
+    const confidenceScore = Math.round(
+      (avgFlowRatio * 0.3) + 
+      (avgRhythmScore * 0.2) + 
+      (accuracy * 0.3) + 
+      ((100 - Math.min(avgRecoveryPenalty, 100)) * 0.2)
+    )
+    
     // Aggregate bigrams across all sessions
     const bigramMap = {}
     history.forEach(h => {
@@ -246,6 +365,31 @@ function App() {
       slowestBigrams,
       fastestBigrams,
       impressiveBigrams,
+      counts,
+      behavioral: {
+        momentum: Math.round(avgMomentum * 10) / 10,
+        momentumLabel,
+        flowRatio: avgFlowRatio,
+        rhythmScore: avgRhythmScore,
+        fatiguePercent: avgFatiguePercent,
+        fatigueLabel,
+        maxBurst: maxBurstEver,
+        totalBursts,
+        totalHesitations,
+        recoveryPenalty: avgRecoveryPenalty,
+        capitalPenalty: avgCapitalPenalty,
+        punctuationPenalty: avgPunctuationPenalty,
+        handBalance: avgHandBalance,
+        dominantHand,
+        homeRowAdvantage: avgHomeRowAdvantage,
+        numberRowPenalty: avgNumberRowPenalty,
+        backspaceEfficiency: avgBackspaceEfficiency,
+        backspaceLabel,
+        speedProfile,
+        archetype,
+        archetypeDesc,
+        confidenceScore,
+      }
     }
   }
 
@@ -716,6 +860,28 @@ function App() {
       distances,
       avgDistance: Math.round(avgDistance * 100) / 100,
       bigrams: bigramAvgs,
+      // Counts
+      counts: {
+        words: wordIntervals.length + 1,
+        correctWords: data.filter((d, i) => {
+          // A word is correct if all chars up to the next space are correct
+          if (d.expected !== ' ') return false
+          let wordStart = i - 1
+          while (wordStart >= 0 && data[wordStart].expected !== ' ') wordStart--
+          wordStart++
+          return data.slice(wordStart, i).every(k => k.correct)
+        }).length + (data.length > 0 && data[data.length - 1].correct ? 1 : 0),
+        letters: data.filter(d => d.expected && /[a-zA-Z]/.test(d.expected)).length,
+        correctLetters: data.filter(d => d.correct && d.expected && /[a-zA-Z]/.test(d.expected)).length,
+        numbers: data.filter(d => d.expected && /[0-9]/.test(d.expected)).length,
+        correctNumbers: data.filter(d => d.correct && d.expected && /[0-9]/.test(d.expected)).length,
+        punctuation: data.filter(d => d.expected && /[.,;:!?'"()\-]/.test(d.expected)).length,
+        correctPunctuation: data.filter(d => d.correct && d.expected && /[.,;:!?'"()\-]/.test(d.expected)).length,
+        capitals: data.filter(d => d.expected && d.expected === d.expected.toUpperCase() && d.expected !== d.expected.toLowerCase()).length,
+        correctCapitals: data.filter(d => d.correct && d.expected && d.expected === d.expected.toUpperCase() && d.expected !== d.expected.toLowerCase()).length,
+        spaces: data.filter(d => d.expected === ' ').length,
+        correctSpaces: data.filter(d => d.correct && d.expected === ' ').length,
+      },
       // Behavioral stats
       behavioral: {
         momentum: Math.round(avgMomentum * 10) / 10,
@@ -831,10 +997,30 @@ function App() {
         charCount: finalStats.charCount,
         errorCount: finalStats.errorCount,
         totalTime,
+        wpm: finalStats.wpm,
+        accuracy: finalStats.accuracy,
+        consistency: finalStats.consistency,
         intervals: finalStats.intervals,
         wordIntervals: finalStats.wordIntervals,
         distances: finalStats.distances,
         bigrams: finalStats.bigrams,
+        counts: finalStats.counts,
+        behavioral: {
+          momentum: finalStats.behavioral.momentum,
+          flowRatio: finalStats.behavioral.flowRatio,
+          maxBurst: finalStats.behavioral.maxBurst,
+          burstCount: finalStats.behavioral.burstCount,
+          rhythmScore: finalStats.behavioral.rhythmScore,
+          fatiguePercent: finalStats.behavioral.fatiguePercent,
+          hesitationCount: finalStats.behavioral.hesitationCount,
+          recoveryPenalty: finalStats.behavioral.recoveryPenalty,
+          capitalPenalty: finalStats.behavioral.capitalPenalty,
+          punctuationPenalty: finalStats.behavioral.punctuationPenalty,
+          handBalance: finalStats.behavioral.handBalance,
+          homeRowAdvantage: finalStats.behavioral.homeRowAdvantage,
+          numberRowPenalty: finalStats.behavioral.numberRowPenalty,
+          backspaceEfficiency: finalStats.behavioral.backspaceEfficiency,
+        }
       }
       const newHistory = [...history, historyEntry]
       saveToStorage(STORAGE_KEYS.HISTORY, newHistory)
@@ -992,6 +1178,69 @@ function App() {
                   <span className="stat-label">errors</span>
                 </div>
               </div>
+              
+              {/* Character Counts */}
+              {stats.counts && (
+                <div className="counts-section">
+                  <h3 className="counts-header">Character Breakdown</h3>
+                  <div className="counts-grid">
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctWords || 0}</span>
+                      <span className="count-label">words</span>
+                      <span className="count-accuracy">
+                        {stats.counts.words > 0 
+                          ? Math.round((stats.counts.correctWords / stats.counts.words) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctLetters || 0}</span>
+                      <span className="count-label">letters</span>
+                      <span className="count-accuracy">
+                        {stats.counts.letters > 0 
+                          ? Math.round((stats.counts.correctLetters / stats.counts.letters) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctNumbers || 0}</span>
+                      <span className="count-label">numbers</span>
+                      <span className="count-accuracy">
+                        {stats.counts.numbers > 0 
+                          ? Math.round((stats.counts.correctNumbers / stats.counts.numbers) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctPunctuation || 0}</span>
+                      <span className="count-label">punctuation</span>
+                      <span className="count-accuracy">
+                        {stats.counts.punctuation > 0 
+                          ? Math.round((stats.counts.correctPunctuation / stats.counts.punctuation) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctCapitals || 0}</span>
+                      <span className="count-label">capitals</span>
+                      <span className="count-accuracy">
+                        {stats.counts.capitals > 0 
+                          ? Math.round((stats.counts.correctCapitals / stats.counts.capitals) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                    <div className="count-item">
+                      <span className="count-value">{stats.counts.correctSpaces || 0}</span>
+                      <span className="count-label">spaces</span>
+                      <span className="count-accuracy">
+                        {stats.counts.spaces > 0 
+                          ? Math.round((stats.counts.correctSpaces / stats.counts.spaces) * 100) 
+                          : 0}% ✓
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Keyboard Visualizations */}
               <div className="keyboard-section">
@@ -1273,11 +1522,11 @@ function App() {
                     <span className="stat-label">accuracy</span>
                   </div>
                   <div className="stat">
-                    <span className="stat-value">{cumulativeStats.totalChars}</span>
+                    <span className="stat-value">{cumulativeStats.totalChars.toLocaleString()}</span>
                     <span className="stat-label">total chars</span>
                   </div>
                   <div className="stat">
-                    <span className="stat-value">{cumulativeStats.totalTime}s</span>
+                    <span className="stat-value">{Math.round(cumulativeStats.totalTime / 60)}m</span>
                     <span className="stat-label">total time</span>
                   </div>
                 </div>
@@ -1300,6 +1549,69 @@ function App() {
                     <span className="stat-label">sessions</span>
                   </div>
                 </div>
+                
+                {/* Counts breakdown */}
+                {cumulativeStats.counts && (
+                  <div className="counts-section">
+                    <h3 className="counts-header">Character Breakdown</h3>
+                    <div className="counts-grid">
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctWords || 0}</span>
+                        <span className="count-label">words</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.words > 0 
+                            ? Math.round((cumulativeStats.counts.correctWords / cumulativeStats.counts.words) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctLetters || 0}</span>
+                        <span className="count-label">letters</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.letters > 0 
+                            ? Math.round((cumulativeStats.counts.correctLetters / cumulativeStats.counts.letters) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctNumbers || 0}</span>
+                        <span className="count-label">numbers</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.numbers > 0 
+                            ? Math.round((cumulativeStats.counts.correctNumbers / cumulativeStats.counts.numbers) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctPunctuation || 0}</span>
+                        <span className="count-label">punctuation</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.punctuation > 0 
+                            ? Math.round((cumulativeStats.counts.correctPunctuation / cumulativeStats.counts.punctuation) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctCapitals || 0}</span>
+                        <span className="count-label">capitals</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.capitals > 0 
+                            ? Math.round((cumulativeStats.counts.correctCapitals / cumulativeStats.counts.capitals) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                      <div className="count-item">
+                        <span className="count-value">{cumulativeStats.counts.correctSpaces || 0}</span>
+                        <span className="count-label">spaces</span>
+                        <span className="count-accuracy">
+                          {cumulativeStats.counts.spaces > 0 
+                            ? Math.round((cumulativeStats.counts.correctSpaces / cumulativeStats.counts.spaces) * 100) 
+                            : 0}% correct
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="bigrams-container">
                   <div className="bigrams">
@@ -1339,10 +1651,164 @@ function App() {
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">{Math.round(avg)}ms</span>
-                            <span className="bigram-distance" title="Keys apart on keyboard">{distance.toFixed(1)} keys</span>
+                            <span className="bigram-distance" title="Keys apart on keyboard">{distance.toFixed(1)} apart</span>
                           </span>
                         </span>
                       ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Behavioral Insights for All Time */}
+                {cumulativeStats.behavioral && (
+                  <div className="behavioral-section">
+                    {/* Archetype Header */}
+                    <div className="archetype-card">
+                      <span className="archetype-name">{cumulativeStats.behavioral.archetype}</span>
+                      <span className="archetype-desc">{cumulativeStats.behavioral.archetypeDesc}</span>
+                      <div className="confidence-bar">
+                        <div 
+                          className="confidence-fill" 
+                          style={{ width: `${cumulativeStats.behavioral.confidenceScore}%` }}
+                        />
+                        <span className="confidence-label">{cumulativeStats.behavioral.confidenceScore}% confidence</span>
+                      </div>
+                    </div>
+                    
+                    <h3 className="behavioral-header">Typing Profile (All Time)</h3>
+                    
+                    <div className="behavioral-grid">
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.momentumLabel}</span>
+                          <span className="behavioral-label">correction style</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {cumulativeStats.behavioral.momentum > 0 
+                            ? `~${cumulativeStats.behavioral.momentum} chars past errors`
+                            : 'Instant corrections'}
+                        </p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.flowRatio}%</span>
+                          <span className="behavioral-label">flow state</span>
+                        </div>
+                        <p className="behavioral-detail">keystrokes in rhythm zone</p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.maxBurst}</span>
+                          <span className="behavioral-label">best burst</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {cumulativeStats.behavioral.totalBursts} total bursts
+                        </p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.speedProfile}</span>
+                          <span className="behavioral-label">speed profile</span>
+                        </div>
+                        <p className="behavioral-detail">{cumulativeStats.behavioral.rhythmScore}% rhythm score</p>
+                      </div>
+                    </div>
+                    
+                    <div className="behavioral-grid">
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.dominantHand}</span>
+                          <span className="behavioral-label">hand balance</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {Math.abs(cumulativeStats.behavioral.handBalance)}% {cumulativeStats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
+                        </p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">
+                            {cumulativeStats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{cumulativeStats.behavioral.homeRowAdvantage}%
+                          </span>
+                          <span className="behavioral-label">home row</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {cumulativeStats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
+                        </p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">
+                            {cumulativeStats.behavioral.numberRowPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.numberRowPenalty}%
+                          </span>
+                          <span className="behavioral-label">number row</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {cumulativeStats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
+                        </p>
+                      </div>
+                      
+                      <div className="behavioral-card">
+                        <div className="behavioral-main">
+                          <span className="behavioral-value">{cumulativeStats.behavioral.fatigueLabel}</span>
+                          <span className="behavioral-label">endurance</span>
+                        </div>
+                        <p className="behavioral-detail">
+                          {cumulativeStats.behavioral.fatiguePercent > 0 ? '+' : ''}{cumulativeStats.behavioral.fatiguePercent}% avg change
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="behavioral-details">
+                      <div className="detail-row">
+                        <span className="detail-label">capital letter penalty</span>
+                        <span className="detail-value">
+                          <span className={cumulativeStats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                            {cumulativeStats.behavioral.capitalPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.capitalPenalty}%
+                          </span>
+                          <span className="detail-note">slower on capitals</span>
+                        </span>
+                      </div>
+                      
+                      <div className="detail-row">
+                        <span className="detail-label">punctuation penalty</span>
+                        <span className="detail-value">
+                          <span className={cumulativeStats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                            {cumulativeStats.behavioral.punctuationPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.punctuationPenalty}%
+                          </span>
+                          <span className="detail-note">slower on symbols</span>
+                        </span>
+                      </div>
+                      
+                      <div className="detail-row">
+                        <span className="detail-label">error recovery</span>
+                        <span className="detail-value">
+                          <span className={cumulativeStats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                            {cumulativeStats.behavioral.recoveryPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.recoveryPenalty}%
+                          </span>
+                          <span className="detail-note">slower after mistakes</span>
+                        </span>
+                      </div>
+                      
+                      <div className="detail-row">
+                        <span className="detail-label">total hesitations</span>
+                        <span className="detail-value">
+                          {cumulativeStats.behavioral.totalHesitations}
+                          <span className="detail-note">pauses &gt;500ms</span>
+                        </span>
+                      </div>
+                      
+                      <div className="detail-row">
+                        <span className="detail-label">backspace behavior</span>
+                        <span className="detail-value">
+                          {cumulativeStats.behavioral.backspaceLabel}
+                          <span className="detail-note">{cumulativeStats.behavioral.backspaceEfficiency}× per error avg</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
