@@ -1097,19 +1097,25 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   const maxTime = Math.max(...avgTimes);
   
   // Circle geometry - 9 nodes evenly spaced (40 degrees apart)
-  const cx = 200, cy = 200, radius = 160;
+  const cx = 200, cy = 200;
+  const chordRadius = 130; // Where chords connect
+  const nodeRadius = 160;  // Where hands are displayed (further out)
   const nodeSize = 55; // Size of mini hand SVG
   const thumbNodeWidth = 95; // Wider for two hands
   
-  // Calculate node positions - evenly distributed, starting from top
+  // Calculate node positions - evenly distributed, thumb at top
   const nodePositions = {};
   fingers.forEach((finger, i) => {
     // Start from top (-90 degrees) and go clockwise
     // 360 / 9 = 40 degrees apart
     const angle = (-90 + i * 40) * Math.PI / 180;
     nodePositions[finger] = {
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
+      // Position for displaying the hand node (outer)
+      x: cx + nodeRadius * Math.cos(angle),
+      y: cy + nodeRadius * Math.sin(angle),
+      // Position for chord connections (inner)
+      chordX: cx + chordRadius * Math.cos(angle),
+      chordY: cy + chordRadius * Math.sin(angle),
       angle: angle * 180 / Math.PI
     };
   });
@@ -1168,17 +1174,11 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
             const isHovered = hoveredChord && hoveredChord.from === t.from && hoveredChord.to === t.to;
             const isConnected = hoveredNode && (t.from === hoveredNode || t.to === hoveredNode);
             
-            // Calculate direction and offset endpoints to avoid overlapping hands
-            const dx = to.x - from.x;
-            const dy = to.y - from.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const offsetAmount = 30; // Offset from node center
-            
-            // Offset start and end points
-            const startX = from.x + (dx / dist) * offsetAmount;
-            const startY = from.y + (dy / dist) * offsetAmount;
-            const endX = to.x - (dx / dist) * offsetAmount;
-            const endY = to.y - (dy / dist) * offsetAmount;
+            // Use the chord connection points (inner position)
+            const startX = from.chordX;
+            const startY = from.chordY;
+            const endX = to.chordX;
+            const endY = to.chordY;
             
             // Curved path toward center
             const midX = (startX + endX) / 2;
