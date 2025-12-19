@@ -130,8 +130,13 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
 }
 
 export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
-  const totalWidth = 14 * (KEY_WIDTH + KEY_GAP)
-  const totalHeight = 5 * (KEY_HEIGHT + KEY_GAP)
+  // Original dimensions (will be scaled via viewBox and CSS)
+  const fullWidth = 14 * (KEY_WIDTH + KEY_GAP)
+  const fullHeight = 5 * (KEY_HEIGHT + KEY_GAP)
+  
+  // Display dimensions (smaller for side-by-side)
+  const displayWidth = fullWidth * 0.65
+  const displayHeight = fullHeight * 0.65
 
   const arrows = useMemo(() => {
     if (!topBigrams || topBigrams.length === 0) return []
@@ -179,8 +184,8 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow' }) => {
   const color = flowType === 'slow' ? 'var(--incorrect)' : 'var(--fast)'
 
   return (
-    <div className="keyboard-viz">
-      <svg width={totalWidth} height={totalHeight} viewBox={`0 0 ${totalWidth} ${totalHeight}`}>
+    <div className="keyboard-viz flow-viz">
+      <svg width={displayWidth} height={displayHeight} viewBox={`0 0 ${fullWidth} ${fullHeight}`} preserveAspectRatio="xMidYMid meet">
         {/* Draw keys first */}
         {KEYBOARD_ROWS.map((row, rowIndex) => {
           let x = ROW_OFFSETS[rowIndex] * (KEY_WIDTH + KEY_GAP)

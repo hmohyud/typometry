@@ -456,6 +456,125 @@ function App() {
         : 0
     }
     
+    // --- Hand balance (left vs right side of keyboard) ---
+    const leftKeys = 'qwertasdfgzxcvb`12345'
+    const rightKeys = 'yuiophjklnm67890-=[];\'\\,./'
+    let leftTotal = 0, leftCount = 0, rightTotal = 0, rightCount = 0
+    
+    data.forEach(d => {
+      if (d.correct && d.interval && d.expected) {
+        const key = d.expected.toLowerCase()
+        if (leftKeys.includes(key)) {
+          leftTotal += d.interval
+          leftCount++
+        } else if (rightKeys.includes(key)) {
+          rightTotal += d.interval
+          rightCount++
+        }
+      }
+    })
+    
+    const leftAvg = leftCount > 0 ? leftTotal / leftCount : avgInterval
+    const rightAvg = rightCount > 0 ? rightTotal / rightCount : avgInterval
+    const handBalance = leftAvg > 0 && rightAvg > 0
+      ? Math.round((rightAvg / leftAvg) * 100 - 100)
+      : 0
+    
+    let dominantHand = 'balanced'
+    if (handBalance > 15) dominantHand = 'left faster'
+    else if (handBalance < -15) dominantHand = 'right faster'
+    
+    // --- Home row affinity ---
+    const homeRow = 'asdfghjkl;\''
+    let homeTotal = 0, homeCount = 0
+    data.forEach(d => {
+      if (d.correct && d.interval && d.expected) {
+        if (homeRow.includes(d.expected.toLowerCase())) {
+          homeTotal += d.interval
+          homeCount++
+        }
+      }
+    })
+    const homeRowAvg = homeCount > 0 ? homeTotal / homeCount : avgInterval
+    const homeRowAdvantage = avgInterval > 0 
+      ? Math.round((1 - homeRowAvg / avgInterval) * 100)
+      : 0
+    
+    // --- Number row comfort ---
+    const numberRow = '1234567890'
+    let numTotal = 0, numCount = 0
+    data.forEach(d => {
+      if (d.correct && d.interval && d.expected) {
+        if (numberRow.includes(d.expected)) {
+          numTotal += d.interval
+          numCount++
+        }
+      }
+    })
+    const numberRowAvg = numCount > 0 ? numTotal / numCount : avgInterval
+    const numberRowPenalty = avgInterval > 0 
+      ? Math.round((numberRowAvg / avgInterval - 1) * 100)
+      : 0
+    
+    // --- Speed variance analysis ---
+    const speedVariance = stdDev / avgInterval
+    let speedProfile = 'steady'
+    if (speedVariance < 0.3) speedProfile = 'metronome'
+    else if (speedVariance < 0.5) speedProfile = 'consistent'
+    else if (speedVariance < 0.7) speedProfile = 'variable'
+    else speedProfile = 'erratic'
+    
+    // --- Generate typing archetype ---
+    let archetype = 'The Typist'
+    let archetypeDesc = ''
+    
+    // Determine primary archetype based on key characteristics
+    if (rhythmScore > 70 && consistency > 70) {
+      archetype = 'The Metronome'
+      archetypeDesc = 'Steady, rhythmic, predictable timing'
+    } else if (avgMomentum < 1 && accuracy > 95) {
+      archetype = 'The Surgeon'
+      archetypeDesc = 'Precise, careful, catches every error instantly'
+    } else if (avgMomentum > 4 && wpm > 60) {
+      archetype = 'The Steamroller'
+      archetypeDesc = 'Powers through mistakes, prioritizes speed'
+    } else if (maxBurst > 15 && flowRatio > 60) {
+      archetype = 'The Sprinter'
+      archetypeDesc = 'Explosive bursts of speed, then regroups'
+    } else if (fatiguePercent < -10) {
+      archetype = 'The Slow Starter'
+      archetypeDesc = 'Warms up over time, finishes strong'
+    } else if (fatiguePercent > 15) {
+      archetype = 'The Fader'
+      archetypeDesc = 'Strong start, loses steam as they go'
+    } else if (hesitationCount > charCount / 50) {
+      archetype = 'The Thinker'
+      archetypeDesc = 'Pauses to consider, deliberate approach'
+    } else if (flowRatio > 70 && consistency > 60) {
+      archetype = 'The Flow State'
+      archetypeDesc = 'Locked in, consistent rhythm, in the zone'
+    } else if (recoveryPenalty > 30) {
+      archetype = 'The Rattled'
+      archetypeDesc = 'Errors throw off their groove'
+    } else if (recoveryPenalty < 10 && errorCount > 0) {
+      archetype = 'The Unfazed'
+      archetypeDesc = 'Errors don\'t break their stride'
+    } else if (wpm > 80) {
+      archetype = 'The Speedster'
+      archetypeDesc = 'Raw speed is the name of the game'
+    } else if (accuracy > 98) {
+      archetype = 'The Perfectionist'
+      archetypeDesc = 'Accuracy above all else'
+    }
+    
+    // --- Confidence score (composite metric) ---
+    const confidenceScore = Math.round(
+      (flowRatio * 0.3) + 
+      (rhythmScore * 0.2) + 
+      (accuracy * 0.3) + 
+      ((100 - Math.min(recoveryPenalty, 100)) * 0.2)
+    )
+    
     // ============ END BEHAVIORAL STATS ============
     
     // Word intervals (time from space to space)
@@ -616,6 +735,16 @@ function App() {
         backspaceEfficiency,
         backspaceLabel,
         rhythmScore,
+        // New stats
+        handBalance,
+        dominantHand,
+        homeRowAdvantage,
+        numberRowPenalty,
+        speedProfile,
+        archetype,
+        archetypeDesc,
+        confidenceScore,
+        burstCount: bursts.length,
       },
       keyStats,
     }
@@ -762,7 +891,7 @@ function App() {
     >
       <header>
         <h1>typometry</h1>
-        <p className="tagline">your typing, measured</p>
+        <p className="tagline">absurdly detailed stats about how you type</p>
         <p className="progress">{completedCount} / {totalParagraphs} paragraphs completed</p>
       </header>
 
@@ -892,13 +1021,6 @@ function App() {
               </div>
               
               <div className="graphs-section">
-            <div className="stat small">
-              <span className="stat-value">{stats.errorCount}</span>
-              <span className="stat-label">errors</span>
-            </div>
-          </div>
-          
-          <div className="graphs-section">
             <div className="graph-card">
               <p className="graph-label">speed over time</p>
               <Sparkline data={stats.speedOverTime} width={280} height={50} />
@@ -937,7 +1059,7 @@ function App() {
                     <code>{formatBigram(bigram)}</code>
                     <span className="bigram-meta">
                       <span className="bigram-time">{Math.round(avg)}ms</span>
-                      {distance && <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} apart</span>}
+                      {distance && <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} keys apart</span>}
                     </span>
                   </span>
                 ))}
@@ -951,7 +1073,7 @@ function App() {
                     <code>{formatBigram(bigram)}</code>
                     <span className="bigram-meta">
                       <span className="bigram-time">{Math.round(avg)}ms</span>
-                      {distance && <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} apart</span>}
+                      {distance && <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} keys apart</span>}
                     </span>
                   </span>
                 ))}
@@ -968,7 +1090,7 @@ function App() {
                     <code>{formatBigram(bigram)}</code>
                     <span className="bigram-meta">
                       <span className="bigram-time">{Math.round(avg)}ms</span>
-                      <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} apart</span>
+                      <span className="bigram-distance" title="Physical distance on keyboard">{distance.toFixed(1)} keys apart</span>
                     </span>
                   </span>
                 ))}
@@ -979,7 +1101,20 @@ function App() {
           {/* Behavioral Insights */}
           {stats.behavioral && (
             <div className="behavioral-section">
-              <h3 className="behavioral-header">Typing Personality</h3>
+              {/* Archetype Header */}
+              <div className="archetype-card">
+                <span className="archetype-name">{stats.behavioral.archetype}</span>
+                <span className="archetype-desc">{stats.behavioral.archetypeDesc}</span>
+                <div className="confidence-bar">
+                  <div 
+                    className="confidence-fill" 
+                    style={{ width: `${stats.behavioral.confidenceScore}%` }}
+                  />
+                  <span className="confidence-label">{stats.behavioral.confidenceScore}% confidence</span>
+                </div>
+              </div>
+              
+              <h3 className="behavioral-header">Typing Profile</h3>
               
               <div className="behavioral-grid">
                 <div className="behavioral-card">
@@ -999,7 +1134,7 @@ function App() {
                     <span className="behavioral-value">{stats.behavioral.flowRatio}%</span>
                     <span className="behavioral-label">flow state</span>
                   </div>
-                  <p className="behavioral-detail">keystrokes in your rhythm zone</p>
+                  <p className="behavioral-detail">keystrokes in rhythm zone</p>
                 </div>
                 
                 <div className="behavioral-card">
@@ -1007,52 +1142,94 @@ function App() {
                     <span className="behavioral-value">{stats.behavioral.maxBurst}</span>
                     <span className="behavioral-label">max burst</span>
                   </div>
-                  <p className="behavioral-detail">longest fast streak</p>
+                  <p className="behavioral-detail">
+                    {stats.behavioral.burstCount} bursts total
+                  </p>
                 </div>
                 
                 <div className="behavioral-card">
                   <div className="behavioral-main">
-                    <span className="behavioral-value">{stats.behavioral.rhythmScore}%</span>
-                    <span className="behavioral-label">rhythm</span>
+                    <span className="behavioral-value">{stats.behavioral.speedProfile}</span>
+                    <span className="behavioral-label">speed profile</span>
                   </div>
-                  <p className="behavioral-detail">keystroke regularity</p>
+                  <p className="behavioral-detail">{stats.behavioral.rhythmScore}% rhythm score</p>
+                </div>
+              </div>
+              
+              <div className="behavioral-grid">
+                <div className="behavioral-card">
+                  <div className="behavioral-main">
+                    <span className="behavioral-value">{stats.behavioral.dominantHand}</span>
+                    <span className="behavioral-label">hand balance</span>
+                  </div>
+                  <p className="behavioral-detail">
+                    {Math.abs(stats.behavioral.handBalance)}% {stats.behavioral.handBalance > 0 ? 'left' : 'right'} advantage
+                  </p>
+                </div>
+                
+                <div className="behavioral-card">
+                  <div className="behavioral-main">
+                    <span className="behavioral-value">
+                      {stats.behavioral.homeRowAdvantage > 0 ? '+' : ''}{stats.behavioral.homeRowAdvantage}%
+                    </span>
+                    <span className="behavioral-label">home row</span>
+                  </div>
+                  <p className="behavioral-detail">
+                    {stats.behavioral.homeRowAdvantage > 0 ? 'faster' : 'slower'} than average
+                  </p>
+                </div>
+                
+                <div className="behavioral-card">
+                  <div className="behavioral-main">
+                    <span className="behavioral-value">
+                      {stats.behavioral.numberRowPenalty > 0 ? '+' : ''}{stats.behavioral.numberRowPenalty}%
+                    </span>
+                    <span className="behavioral-label">number row</span>
+                  </div>
+                  <p className="behavioral-detail">
+                    {stats.behavioral.numberRowPenalty > 0 ? 'slower' : 'faster'} than average
+                  </p>
+                </div>
+                
+                <div className="behavioral-card">
+                  <div className="behavioral-main">
+                    <span className="behavioral-value">{stats.behavioral.fatigueLabel}</span>
+                    <span className="behavioral-label">endurance</span>
+                  </div>
+                  <p className="behavioral-detail">
+                    {stats.behavioral.fatiguePercent > 0 ? '+' : ''}{stats.behavioral.fatiguePercent}% speed change
+                  </p>
                 </div>
               </div>
               
               <div className="behavioral-details">
                 <div className="detail-row">
-                  <span className="detail-label">fatigue</span>
+                  <span className="detail-label">capital letter penalty</span>
                   <span className="detail-value">
-                    {stats.behavioral.fatigueLabel}
-                    {stats.behavioral.fatiguePercent !== 0 && (
-                      <span className={`detail-delta ${stats.behavioral.fatiguePercent > 0 ? 'negative' : 'positive'}`}>
-                        {stats.behavioral.fatiguePercent > 0 ? '+' : ''}{stats.behavioral.fatiguePercent}%
-                      </span>
-                    )}
-                  </span>
-                </div>
-                
-                <div className="detail-row">
-                  <span className="detail-label">capital penalty</span>
-                  <span className="detail-value">
-                    {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
-                    <span className="detail-note">slower on caps</span>
+                    <span className={stats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                      {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
+                    </span>
+                    <span className="detail-note">slower on capitals</span>
                   </span>
                 </div>
                 
                 <div className="detail-row">
                   <span className="detail-label">punctuation penalty</span>
                   <span className="detail-value">
-                    {stats.behavioral.punctuationPenalty > 0 ? '+' : ''}{stats.behavioral.punctuationPenalty}%
+                    <span className={stats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                      {stats.behavioral.punctuationPenalty > 0 ? '+' : ''}{stats.behavioral.punctuationPenalty}%
+                    </span>
                     <span className="detail-note">slower on symbols</span>
                   </span>
                 </div>
                 
                 <div className="detail-row">
-                  <span className="detail-label">recovery time</span>
+                  <span className="detail-label">error recovery</span>
                   <span className="detail-value">
-                    {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
-                    <span className="detail-note">slower after errors</span>
+                    <span className={stats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                      {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
+                    </span>
+                    <span className="detail-note">slower after mistakes</span>
                   </span>
                 </div>
                 
@@ -1067,15 +1244,15 @@ function App() {
                 </div>
                 
                 <div className="detail-row">
-                  <span className="detail-label">error pattern</span>
+                  <span className="detail-label">error distribution</span>
                   <span className="detail-value">{stats.behavioral.errorPattern}</span>
                 </div>
                 
                 <div className="detail-row">
-                  <span className="detail-label">backspace style</span>
+                  <span className="detail-label">backspace behavior</span>
                   <span className="detail-value">
                     {stats.behavioral.backspaceLabel}
-                    <span className="detail-note">{stats.behavioral.backspaceEfficiency}x per error</span>
+                    <span className="detail-note">{stats.behavioral.backspaceEfficiency}× per error</span>
                   </span>
                 </div>
               </div>
