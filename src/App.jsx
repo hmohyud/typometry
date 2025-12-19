@@ -261,7 +261,7 @@ const TIPS = {
       <TipTitle>Capital Letter Penalty</TipTitle>
       <TipText>How much slower you type capital letters compared to lowercase.</TipText>
       <TipText>Includes the time to coordinate the Shift key.</TipText>
-      <TipHint>10-30% slower is typical</TipHint>
+      <TipHint>40-80% slower is typical</TipHint>
     </>
   ),
   punctuationPenalty: (
@@ -269,7 +269,7 @@ const TIPS = {
       <TipTitle>Punctuation Penalty</TipTitle>
       <TipText>How much slower you type punctuation marks compared to letters.</TipText>
       <TipText>Many punctuation keys require Shift or are in awkward positions.</TipText>
-      <TipHint>20-50% slower is typical</TipHint>
+      <TipHint>50-100% slower is typical</TipHint>
     </>
   ),
   errorRecovery: (
@@ -277,7 +277,7 @@ const TIPS = {
       <TipTitle>Error Recovery</TipTitle>
       <TipText>How much your speed drops in the 3 keystrokes after making an error.</TipText>
       <TipText>Shows how much errors disrupt your flow.</TipText>
-      <TipHint>Under 15% = errors don't phase you</TipHint>
+      <TipHint>10-30% slowdown is typical</TipHint>
     </>
   ),
   hesitations: (
@@ -1910,7 +1910,7 @@ function App() {
                   <div className="detail-row">
                     <span className="detail-label">capital letter penalty</span>
                     <span className="detail-value">
-                      <span className={stats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                      <span className={stats.behavioral.capitalPenalty > 80 ? 'text-warn' : ''}>
                         {stats.behavioral.capitalPenalty > 0 ? '+' : ''}{stats.behavioral.capitalPenalty}%
                       </span>
                       <span className="detail-note">slower on capitals</span>
@@ -1922,7 +1922,7 @@ function App() {
                   <div className="detail-row">
                     <span className="detail-label">punctuation penalty</span>
                     <span className="detail-value">
-                      <span className={stats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                      <span className={stats.behavioral.punctuationPenalty > 100 ? 'text-warn' : ''}>
                         {stats.behavioral.punctuationPenalty > 0 ? '+' : ''}{stats.behavioral.punctuationPenalty}%
                       </span>
                       <span className="detail-note">slower on symbols</span>
@@ -1934,7 +1934,7 @@ function App() {
                   <div className="detail-row">
                     <span className="detail-label">error recovery</span>
                     <span className="detail-value">
-                      <span className={stats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                      <span className={stats.behavioral.recoveryPenalty > 40 ? 'text-warn' : ''}>
                         {stats.behavioral.recoveryPenalty > 0 ? '+' : ''}{stats.behavioral.recoveryPenalty}%
                       </span>
                       <span className="detail-note">slower after mistakes</span>
@@ -2300,7 +2300,7 @@ function App() {
                         <div className="detail-row">
                           <span className="detail-label">capital letter penalty</span>
                           <span className="detail-value">
-                            <span className={cumulativeStats.behavioral.capitalPenalty > 20 ? 'text-warn' : ''}>
+                            <span className={cumulativeStats.behavioral.capitalPenalty > 80 ? 'text-warn' : ''}>
                               {cumulativeStats.behavioral.capitalPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.capitalPenalty}%
                             </span>
                             <span className="detail-note">slower on capitals</span>
@@ -2312,7 +2312,7 @@ function App() {
                         <div className="detail-row">
                           <span className="detail-label">punctuation penalty</span>
                           <span className="detail-value">
-                            <span className={cumulativeStats.behavioral.punctuationPenalty > 30 ? 'text-warn' : ''}>
+                            <span className={cumulativeStats.behavioral.punctuationPenalty > 100 ? 'text-warn' : ''}>
                               {cumulativeStats.behavioral.punctuationPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.punctuationPenalty}%
                             </span>
                             <span className="detail-note">slower on symbols</span>
@@ -2324,7 +2324,7 @@ function App() {
                         <div className="detail-row">
                           <span className="detail-label">error recovery</span>
                           <span className="detail-value">
-                            <span className={cumulativeStats.behavioral.recoveryPenalty > 25 ? 'text-warn' : ''}>
+                            <span className={cumulativeStats.behavioral.recoveryPenalty > 40 ? 'text-warn' : ''}>
                               {cumulativeStats.behavioral.recoveryPenalty > 0 ? '+' : ''}{cumulativeStats.behavioral.recoveryPenalty}%
                             </span>
                             <span className="detail-note">slower after mistakes</span>
