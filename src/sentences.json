@@ -1,0 +1,81 @@
+{
+  "warmup": [
+    "the quick brown fox jumps over the lazy dog",
+    "pack my box with five dozen liquor jugs",
+    "how vexingly quick daft zebras jump",
+    "the five boxing wizards jump quickly",
+    "sphinx of black quartz judge my vow"
+  ],
+  "common": [
+    "I need to send that email before the meeting starts",
+    "Can you grab coffee on your way back from lunch",
+    "Let me know when you have a chance to review this",
+    "Thanks for getting back to me so quickly",
+    "I'll follow up with them tomorrow morning",
+    "Does Thursday afternoon work for a quick call",
+    "Just wanted to check in on the status of this",
+    "Sounds good to me, let's move forward with that",
+    "I appreciate you taking the time to help with this",
+    "Let me pull up the document and share my screen"
+  ],
+  "code": [
+    "const result = await fetch(url).then(res => res.json())",
+    "function handleClick(event) { event.preventDefault(); }",
+    "if (user && user.isActive) { return user.permissions; }",
+    "const [state, setState] = useState(initialValue);",
+    "export default function App({ children }) { return children; }",
+    "npm install --save-dev typescript @types/node",
+    "git commit -m 'fix: resolve edge case in parser'",
+    "python -m venv .venv && source .venv/bin/activate",
+    "docker run -p 3000:3000 --env-file .env app:latest",
+    "SELECT id, name FROM users WHERE active = true LIMIT 10;"
+  ],
+  "prose": [
+    "The afternoon light slanted through the window, casting long shadows across the floor.",
+    "She paused at the doorway, keys in hand, trying to remember what she had forgotten.",
+    "It wasn't the answer he wanted, but it was the only honest one he could give.",
+    "The city hummed with its usual Friday energy, everyone eager for the weekend.",
+    "He read the message twice, then a third time, still not quite believing it.",
+    "Rain tapped against the glass like impatient fingers demanding attention.",
+    "They had been walking for hours, but the path ahead showed no sign of ending.",
+    "Sometimes the simplest explanation is the right one, even when it hurts.",
+    "The old bookstore smelled of dust and possibility in equal measure.",
+    "She smiled, not because anything was funny, but because there was nothing else to do."
+  ],
+  "technical": [
+    "The algorithm runs in O(n log n) time with O(n) space complexity.",
+    "Memoization trades memory for speed by caching computed results.",
+    "HTTP status code 429 indicates the client has sent too many requests.",
+    "A closure captures variables from its enclosing lexical scope.",
+    "The event loop processes the callback queue after the call stack empties.",
+    "Garbage collection reclaims memory occupied by unreachable objects.",
+    "A race condition occurs when timing affects program correctness.",
+    "The DOM API allows scripts to dynamically access document content.",
+    "WebSockets enable full-duplex communication over a single TCP connection.",
+    "JSON Web Tokens encode claims as a URL-safe string for authentication."
+  ],
+  "numbers": [
+    "The meeting is scheduled for 3:45 PM in room 204.",
+    "Order #48291 shipped on 12/15/2024 via UPS Ground.",
+    "The budget increased by 23% from $150,000 to $184,500.",
+    "Please call (555) 867-5309 between 9 AM and 5 PM.",
+    "Version 2.0.1 was released on 2024-01-17 at 14:32 UTC.",
+    "The password must be 8-16 characters with at least 1 number.",
+    "Flight AA 1847 departs at 6:20 AM from gate B12.",
+    "The dimensions are 1920x1080 pixels at 72 dpi.",
+    "Invoice total: $2,847.50 (includes 8.25% sales tax).",
+    "The server responded in 247ms with a 200 OK status."
+  ],
+  "tricky": [
+    "The queue requires a unique technique to execute.",
+    "She sells seashells by the seashore, surely.",
+    "Specifically, the Pacific species specialize in specifications.",
+    "The sixth sick sheik's sixth sheep's sick.",
+    "Fred fed Ted bread, and Ted fed Fred bread.",
+    "How much wood would a woodchuck chuck if a woodchuck could chuck wood?",
+    "Whether the weather is cold, or whether the weather is hot.",
+    "I saw Susie sitting in a shoeshine shop.",
+    "Eleven benevolent elephants elegantly elevated.",
+    "The rhythm of the algorithm was arithmetically incorrect."
+  ]
+}
