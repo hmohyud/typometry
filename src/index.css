@@ -678,6 +678,16 @@ h1 {
   line-height: 1.3;
 }
 
+/* Not applicable stats - grayed out */
+.stat-na {
+  opacity: 0.4;
+}
+
+.stat-na .behavioral-value,
+.stat-na .detail-value span:first-child {
+  color: var(--text-muted);
+}
+
 .behavioral-details {
   background: var(--bg-secondary);
   border-radius: 8px;

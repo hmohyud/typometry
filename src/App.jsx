@@ -2923,19 +2923,17 @@ function App() {
                     </Tooltip>
 
                     <Tooltip content={TIPS.numberRow}>
-                      <div className="behavioral-card">
+                      <div className={`behavioral-card${stats.counts.numbers < 3 ? ' stat-na' : ''}`}>
                         <div className="behavioral-main">
                           <span className="behavioral-value">
-                            {stats.behavioral.numberRowPenalty > 0 ? "+" : ""}
-                            {stats.behavioral.numberRowPenalty}%
+                            {stats.counts.numbers < 3 ? 'n/a' : `${stats.behavioral.numberRowPenalty > 0 ? "+" : ""}${stats.behavioral.numberRowPenalty}%`}
                           </span>
                           <span className="behavioral-label">number row</span>
                         </div>
                         <p className="behavioral-detail">
-                          {stats.behavioral.numberRowPenalty > 0
+                          {stats.counts.numbers < 3 ? 'no numbers typed' : `${stats.behavioral.numberRowPenalty > 0
                             ? "slower"
-                            : "faster"}{" "}
-                          than average
+                            : "faster"} than average`}
                         </p>
                       </div>
                     </Tooltip>
@@ -2960,65 +2958,64 @@ function App() {
 
                   <div className="behavioral-details">
                     <Tooltip content={TIPS.capitalPenalty}>
-                      <div className="detail-row">
+                      <div className={`detail-row${stats.counts.capitals < 3 ? ' stat-na' : ''}`}>
                         <span className="detail-label">
                           capital letter penalty
                         </span>
                         <span className="detail-value">
                           <span
                             className={
-                              stats.behavioral.capitalPenalty > 150
+                              stats.counts.capitals >= 3 && stats.behavioral.capitalPenalty > 150
                                 ? "text-warn"
                                 : ""
                             }
                           >
-                            {stats.behavioral.capitalPenalty > 0 ? "+" : ""}
-                            {stats.behavioral.capitalPenalty}%
+                            {stats.counts.capitals < 3 ? 'n/a' : `${stats.behavioral.capitalPenalty > 0 ? "+" : ""}${stats.behavioral.capitalPenalty}%`}
                           </span>
                           <span className="detail-note">
-                            slower on capitals
+                            {stats.counts.capitals < 3 ? 'no capitals typed' : 'slower on capitals'}
                           </span>
                         </span>
                       </div>
                     </Tooltip>
 
                     <Tooltip content={TIPS.punctuationPenalty}>
-                      <div className="detail-row">
+                      <div className={`detail-row${stats.counts.punctuation < 3 ? ' stat-na' : ''}`}>
                         <span className="detail-label">
                           punctuation penalty
                         </span>
                         <span className="detail-value">
                           <span
                             className={
-                              stats.behavioral.punctuationPenalty > 100
+                              stats.counts.punctuation >= 3 && stats.behavioral.punctuationPenalty > 100
                                 ? "text-warn"
                                 : ""
                             }
                           >
-                            {stats.behavioral.punctuationPenalty > 0 ? "+" : ""}
-                            {stats.behavioral.punctuationPenalty}%
+                            {stats.counts.punctuation < 3 ? 'n/a' : `${stats.behavioral.punctuationPenalty > 0 ? "+" : ""}${stats.behavioral.punctuationPenalty}%`}
                           </span>
-                          <span className="detail-note">slower on symbols</span>
+                          <span className="detail-note">
+                            {stats.counts.punctuation < 3 ? 'no punctuation typed' : 'slower on symbols'}
+                          </span>
                         </span>
                       </div>
                     </Tooltip>
 
                     <Tooltip content={TIPS.errorRecovery}>
-                      <div className="detail-row">
+                      <div className={`detail-row${stats.errorCount === 0 ? ' stat-na' : ''}`}>
                         <span className="detail-label">error recovery</span>
                         <span className="detail-value">
                           <span
                             className={
-                              stats.behavioral.recoveryPenalty > 90
+                              stats.errorCount > 0 && stats.behavioral.recoveryPenalty > 90
                                 ? "text-warn"
                                 : ""
                             }
                           >
-                            {stats.behavioral.recoveryPenalty > 0 ? "+" : ""}
-                            {stats.behavioral.recoveryPenalty}%
+                            {stats.errorCount === 0 ? 'n/a' : `${stats.behavioral.recoveryPenalty > 0 ? "+" : ""}${stats.behavioral.recoveryPenalty}%`}
                           </span>
                           <span className="detail-note">
-                            slower after mistakes
+                            {stats.errorCount === 0 ? 'no errors made' : 'slower after mistakes'}
                           </span>
                         </span>
                       </div>
@@ -3512,21 +3509,15 @@ function App() {
                       </Tooltip>
 
                       <Tooltip content={TIPS.numberRow}>
-                        <div className="behavioral-card">
+                        <div className={`behavioral-card${(cumulativeStats.counts?.numbers || 0) < 3 ? ' stat-na' : ''}`}>
                           <div className="behavioral-main">
                             <span className="behavioral-value">
-                              {cumulativeStats.behavioral.numberRowPenalty > 0
-                                ? "+"
-                                : ""}
-                              {cumulativeStats.behavioral.numberRowPenalty}%
+                              {(cumulativeStats.counts?.numbers || 0) < 3 ? 'n/a' : `${cumulativeStats.behavioral.numberRowPenalty > 0 ? "+" : ""}${cumulativeStats.behavioral.numberRowPenalty}%`}
                             </span>
                             <span className="behavioral-label">number row</span>
                           </div>
                           <p className="behavioral-detail">
-                            {cumulativeStats.behavioral.numberRowPenalty > 0
-                              ? "slower"
-                              : "faster"}{" "}
-                            than average
+                            {(cumulativeStats.counts?.numbers || 0) < 3 ? 'no numbers typed' : `${cumulativeStats.behavioral.numberRowPenalty > 0 ? "slower" : "faster"} than average`}
                           </p>
                         </div>
                       </Tooltip>
@@ -3556,74 +3547,64 @@ function App() {
 
                     <div className="behavioral-details">
                       <Tooltip content={TIPS.capitalPenalty}>
-                        <div className="detail-row">
+                        <div className={`detail-row${(cumulativeStats.counts?.capitals || 0) < 3 ? ' stat-na' : ''}`}>
                           <span className="detail-label">
                             capital letter penalty
                           </span>
                           <span className="detail-value">
                             <span
                               className={
-                                cumulativeStats.behavioral.capitalPenalty > 150
+                                (cumulativeStats.counts?.capitals || 0) >= 3 && cumulativeStats.behavioral.capitalPenalty > 150
                                   ? "text-warn"
                                   : ""
                               }
                             >
-                              {cumulativeStats.behavioral.capitalPenalty > 0
-                                ? "+"
-                                : ""}
-                              {cumulativeStats.behavioral.capitalPenalty}%
+                              {(cumulativeStats.counts?.capitals || 0) < 3 ? 'n/a' : `${cumulativeStats.behavioral.capitalPenalty > 0 ? "+" : ""}${cumulativeStats.behavioral.capitalPenalty}%`}
                             </span>
                             <span className="detail-note">
-                              slower on capitals
+                              {(cumulativeStats.counts?.capitals || 0) < 3 ? 'no capitals typed' : 'slower on capitals'}
                             </span>
                           </span>
                         </div>
                       </Tooltip>
 
                       <Tooltip content={TIPS.punctuationPenalty}>
-                        <div className="detail-row">
+                        <div className={`detail-row${(cumulativeStats.counts?.punctuation || 0) < 3 ? ' stat-na' : ''}`}>
                           <span className="detail-label">
                             punctuation penalty
                           </span>
                           <span className="detail-value">
                             <span
                               className={
-                                cumulativeStats.behavioral.punctuationPenalty >
-                                100
+                                (cumulativeStats.counts?.punctuation || 0) >= 3 && cumulativeStats.behavioral.punctuationPenalty > 100
                                   ? "text-warn"
                                   : ""
                               }
                             >
-                              {cumulativeStats.behavioral.punctuationPenalty > 0
-                                ? "+"
-                                : ""}
-                              {cumulativeStats.behavioral.punctuationPenalty}%
+                              {(cumulativeStats.counts?.punctuation || 0) < 3 ? 'n/a' : `${cumulativeStats.behavioral.punctuationPenalty > 0 ? "+" : ""}${cumulativeStats.behavioral.punctuationPenalty}%`}
                             </span>
                             <span className="detail-note">
-                              slower on symbols
+                              {(cumulativeStats.counts?.punctuation || 0) < 3 ? 'no punctuation typed' : 'slower on symbols'}
                             </span>
                           </span>
                         </div>
                       </Tooltip>
 
                       <Tooltip content={TIPS.errorRecovery}>
-                        <div className="detail-row">
+                        <div className={`detail-row${(cumulativeStats.totalErrors || 0) === 0 ? ' stat-na' : ''}`}>
                           <span className="detail-label">error recovery</span>
                           <span className="detail-value">
                             <span
                               className={
-                                cumulativeStats.behavioral.recoveryPenalty > 90
+                                (cumulativeStats.totalErrors || 0) > 0 && cumulativeStats.behavioral.recoveryPenalty > 90
                                   ? "text-warn"
                                   : ""
                               }
                             >
-                              {cumulativeStats.behavioral.recoveryPenalty > 0
-                                ? "+"
-                                : ""}
-                              {cumulativeStats.behavioral.recoveryPenalty}%
+                              {(cumulativeStats.totalErrors || 0) === 0 ? 'n/a' : `${cumulativeStats.behavioral.recoveryPenalty > 0 ? "+" : ""}${cumulativeStats.behavioral.recoveryPenalty}%`}
                             </span>
                             <span className="detail-note">
-                              slower after mistakes
+                              {(cumulativeStats.totalErrors || 0) === 0 ? 'no errors made' : 'slower after mistakes'}
                             </span>
                           </span>
                         </div>
