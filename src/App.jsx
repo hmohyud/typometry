@@ -3063,7 +3063,7 @@ function App() {
 
       <header>
         <h1>
-          <a href="/" style={{ color: "inherit", textDecoration: "none" }}>
+          <a href="/typometry/" style={{ color: "inherit", textDecoration: "none" }}>
             typometry
           </a>
         </h1>
