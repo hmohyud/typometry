@@ -7,6 +7,7 @@ import {
   getFingerStats,
   getFingerTransitionStats,
   getBehavioralStats,
+  getKeyStats,
   getUserStats,
   calculatePercentile,
   resetUserId as resetSupabaseUserId
@@ -18,6 +19,7 @@ export function useGlobalStats() {
   const [bigramAverages, setBigramAverages] = useState(null)
   const [fingerAverages, setFingerAverages] = useState(null)
   const [transitionAverages, setTransitionAverages] = useState(null)
+  const [keyAverages, setKeyAverages] = useState(null)
   const [sessionCount, setSessionCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -27,12 +29,13 @@ export function useGlobalStats() {
       setLoading(true)
       
       // Fetch all stats in parallel
-      const [stats, bigrams, fingers, transitions, behavioral] = await Promise.all([
+      const [stats, bigrams, fingers, transitions, behavioral, keys] = await Promise.all([
         getSessionStats(),
         getBigramStats(200),
         getFingerStats(),
         getFingerTransitionStats(100),
         getBehavioralStats(),
+        getKeyStats(),
       ])
 
       if (stats) {
@@ -110,6 +113,20 @@ export function useGlobalStats() {
           }
         })
         setBehavioralAverages(behavioralObj)
+      }
+
+      // Convert key stats array to object for keyboard heatmap
+      if (keys && keys.length > 0) {
+        const keyObj = {}
+        keys.forEach(stat => {
+          keyObj[stat.key_char] = {
+            avgInterval: parseFloat(stat.avg_interval) || 0,
+            std_dev: parseFloat(stat.std_dev) || 0,
+            accuracy: parseFloat(stat.avg_accuracy) || 0,
+            count: stat.total_presses || 0,
+          }
+        })
+        setKeyAverages(keyObj)
       }
 
     } catch (err) {
@@ -260,6 +277,7 @@ export function useGlobalStats() {
     bigramAverages,
     fingerAverages,
     transitionAverages,
+    keyAverages,
     sessionCount,
     
     // State

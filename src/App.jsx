@@ -1546,6 +1546,7 @@ function App() {
     fingerAverages,
     transitionAverages,
     behavioralAverages,
+    keyAverages,
     submitStats: submitToSupabase, 
     resetUserId,
     compareToGlobal,
@@ -2719,12 +2720,16 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      // If viewing past stats, any key dismisses and resumes typing mode
+      // If viewing past stats, space/enter dismisses and scrolls to top to resume typing
       if (viewingPastStats) {
-        e.preventDefault();
-        setViewingPastStats(false);
-        setIsComplete(false);
-        setStatsView("current");
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setViewingPastStats(false);
+          setIsComplete(false);
+          setStatsView("current");
+          // Scroll to top smoothly
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
         return;
       }
 
@@ -2954,12 +2959,16 @@ function App() {
   };
 
   return (
-    <div
-      className="container"
-      ref={containerRef}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
+    <div 
+      className="app-wrapper"
+      onClick={() => containerRef.current?.focus()}
     >
+      <div
+        className="container"
+        ref={containerRef}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      >
       {/* Stats icon button - positioned absolutely */}
       {!isActive &&
         !isComplete &&
@@ -3008,21 +3017,8 @@ function App() {
       </header>
 
       <main className="typing-area">
-        <div className={`text-display ${viewingPastStats ? 'dimmed' : ''}`}>
+        <div className="text-display">
           {renderText()}
-          {viewingPastStats && (
-            <div 
-              className="resume-overlay"
-              onClick={() => {
-                setViewingPastStats(false);
-                setIsComplete(false);
-                setStatsView("current");
-                containerRef.current?.focus();
-              }}
-            >
-              <span>press any key to resume</span>
-            </div>
-          )}
         </div>
 
         <div className="typing-hint-container">
@@ -3032,7 +3028,7 @@ function App() {
               visibility: !isActive && !isComplete ? "visible" : "hidden",
             }}
           >
-            start typing...
+            {viewingPastStats ? "press space or enter to type..." : "start typing..."}
           </p>
           {isActive && !isComplete && (
             <div className="live-stats">
@@ -4674,6 +4670,34 @@ function App() {
                 </Tooltip>
               </div>
 
+              {/* Global Keyboard Heatmap */}
+              {keyAverages && Object.keys(keyAverages).length > 0 && (
+                <div className="keyboard-section">
+                  <div className="keyboard-header">
+                    <h3>Keyboard Analysis (Global Average)</h3>
+                    <div className="mini-toggles">
+                      <button
+                        className={`mini-toggle ${heatmapMode === "speed" ? "active" : ""}`}
+                        onClick={() => setHeatmapMode("speed")}
+                      >
+                        Speed
+                      </button>
+                      <button
+                        className={`mini-toggle ${heatmapMode === "accuracy" ? "active" : ""}`}
+                        onClick={() => setHeatmapMode("accuracy")}
+                      >
+                        Accuracy
+                      </button>
+                    </div>
+                  </div>
+                  <KeyboardHeatmap
+                    keyStats={keyAverages}
+                    mode={heatmapMode}
+                    comparisonStats={comparisonBase === "alltime" && cumulativeStats?.keyStats ? cumulativeStats.keyStats : null}
+                  />
+                </div>
+              )}
+
               {/* Global Finger Stats - matches keyboard section position in This Paragraph */}
               {fingerAverages && Object.keys(fingerAverages).length > 0 && (
                 <div className="finger-section">
@@ -4773,24 +4797,23 @@ function App() {
                 <div className="behavioral-section global-behavioral">
                   <h3>Typing Patterns (Global Average)</h3>
                   <div className="behavioral-grid">
-                    {/* Correction Style */}
-                    {behavioralAverages.backspaceEfficiency && (
+                    {/* Avg Hesitation Time - replaced backspaceEfficiency which wasn't recording */}
+                    {behavioralAverages.avgHesitation && (
                       <div className="behavioral-stat">
                         <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">correction style</span>
+                          <span className="behavioral-stat-label">avg pause duration</span>
                           <span className="behavioral-stat-value">
-                            {behavioralAverages.backspaceEfficiency.avg <= 1.2 ? 'efficient' :
-                             behavioralAverages.backspaceEfficiency.avg <= 2 ? 'normal' : 'thorough'}
+                            {Math.round(behavioralAverages.avgHesitation.avg)}ms
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
-                          ~{behavioralAverages.backspaceEfficiency.avg.toFixed(1)} backspaces per error
+                          average hesitation length
                         </div>
                         <GlobalDistributionBar 
-                          value={behavioralAverages.backspaceEfficiency.avg}
-                          min={behavioralAverages.backspaceEfficiency.min}
-                          max={behavioralAverages.backspaceEfficiency.max}
-                          stdDev={behavioralAverages.backspaceEfficiency.std_dev}
+                          value={behavioralAverages.avgHesitation.avg}
+                          min={behavioralAverages.avgHesitation.min}
+                          max={behavioralAverages.avgHesitation.max}
+                          stdDev={behavioralAverages.avgHesitation.std_dev}
                           lowerIsBetter={true}
                         />
                       </div>
@@ -5020,7 +5043,8 @@ function App() {
           onTouchEnd={cancelClearHold}
         >
           <span className="hold-btn-text">
-            {clearHoldProgress > 0 ? "clearing..." : "hold to clear history"}
+            <span style={{ visibility: clearHoldProgress > 0 ? 'hidden' : 'visible' }}>hold to clear history</span>
+            <span className="hold-btn-clearing" style={{ visibility: clearHoldProgress > 0 ? 'visible' : 'hidden' }}>clearing...</span>
           </span>
           {clearHoldProgress > 0 && (
             <span
@@ -5119,6 +5143,7 @@ function App() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

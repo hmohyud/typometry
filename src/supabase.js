@@ -142,6 +142,21 @@ export async function getBehavioralStats() {
 }
 
 /**
+ * Get per-key stats for keyboard heatmap
+ */
+export async function getKeyStats() {
+  const { data, error } = await supabase
+    .from('key_stats_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching key stats:', error)
+    return []
+  }
+  return data || []
+}
+
+/**
  * Get user-specific stats
  */
 export async function getUserStats(userId = null) {
