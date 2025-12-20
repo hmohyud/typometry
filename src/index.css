@@ -468,7 +468,6 @@ h1 {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin-bottom: 1.5rem;
-  margin-top: 1.5rem;
 }
 
 .bigrams {

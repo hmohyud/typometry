@@ -5,6 +5,59 @@ import { KeyboardHeatmap, KeyboardFlowMap } from "./KeyboardViz";
 import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
 import { useGlobalStats } from "./useGlobalStats";
 
+// Number formatting utilities
+const formatNumber = (num, options = {}) => {
+  if (num === null || num === undefined || isNaN(num)) return "—";
+  
+  const { 
+    decimals = 0,        // decimal places for normal display
+    compact = false,     // use K, M, B for large numbers
+    maxLength = 6,       // auto-compact if longer than this
+    percent = false,     // treat as percentage (append %)
+    ms = false,          // treat as milliseconds (append ms)
+  } = options;
+  
+  // Handle percentages
+  if (percent) {
+    const rounded = Math.round(num * 10) / 10;
+    return `${rounded}%`;
+  }
+  
+  // Handle milliseconds
+  if (ms) {
+    return `${Math.round(num)}ms`;
+  }
+  
+  // Auto-detect if we should compact
+  const absNum = Math.abs(num);
+  const shouldCompact = compact || String(Math.round(absNum)).length > maxLength;
+  
+  if (shouldCompact && absNum >= 1000) {
+    if (absNum >= 1e9) {
+      return `${(num / 1e9).toFixed(1)}B`;
+    } else if (absNum >= 1e6) {
+      return `${(num / 1e6).toFixed(1)}M`;
+    } else if (absNum >= 1e3) {
+      return `${(num / 1e3).toFixed(1)}K`;
+    }
+  }
+  
+  // Normal formatting
+  if (decimals > 0) {
+    return num.toFixed(decimals);
+  }
+  return Math.round(num).toString();
+};
+
+// Shorthand formatters
+const fmt = {
+  count: (n) => formatNumber(n, { compact: true }),
+  pct: (n) => formatNumber(n, { percent: true }),
+  ms: (n) => formatNumber(n, { ms: true }),
+  int: (n) => formatNumber(n),
+  dec: (n, d = 1) => formatNumber(n, { decimals: d }),
+};
+
 // Flatten all paragraphs into one pool with indices
 const ALL_PARAGRAPHS = Object.values(sentences).flat();
 
@@ -769,10 +822,10 @@ const GlobalDistributionBar = ({ value, min, max, stdDev, lowerIsBetter = false,
       </div>
       <div className="distribution-labels">
         <span className="distribution-min">
-          {isPercent ? `${Math.round(min * 100)}%` : Math.round(min)}
+          {isPercent ? `${fmt.int(min * 100)}%` : fmt.count(min)}
         </span>
         <span className="distribution-max">
-          {isPercent ? `${Math.round(max * 100)}%` : Math.round(max)}
+          {isPercent ? `${fmt.int(max * 100)}%` : fmt.count(max)}
         </span>
       </div>
     </div>
@@ -902,8 +955,8 @@ const FingerHands = ({ fingerStats }) => {
           <span className="finger-hands-note">*conventional placement</span>
         </div>
         <div className="finger-hands-avg">
-          avg: <span className="fh-speed">{avgSpeed}ms</span> ·{" "}
-          <span className="fh-acc">{avgAcc}%</span>
+          avg: <span className="fh-speed">{fmt.int(avgSpeed)}ms</span> ·{" "}
+          <span className="fh-acc">{fmt.int(avgAcc)}%</span>
         </div>
       </div>
 
@@ -1046,7 +1099,7 @@ const FingerHands = ({ fingerStats }) => {
           <div className="ft-stats">
             <div className="ft-stat">
               <span className="ft-label">Speed</span>
-              <span className="ft-value">{hoveredData.avgInterval}ms</span>
+              <span className="ft-value">{fmt.int(hoveredData.avgInterval)}ms</span>
               <span
                 className={`ft-diff ${
                   hoveredData.avgInterval < avgSpeed
@@ -1057,15 +1110,15 @@ const FingerHands = ({ fingerStats }) => {
                 }`}
               >
                 {hoveredData.avgInterval < avgSpeed
-                  ? `${avgSpeed - hoveredData.avgInterval}ms faster`
+                  ? `${fmt.int(avgSpeed - hoveredData.avgInterval)}ms faster`
                   : hoveredData.avgInterval > avgSpeed
-                  ? `${hoveredData.avgInterval - avgSpeed}ms slower`
+                  ? `${fmt.int(hoveredData.avgInterval - avgSpeed)}ms slower`
                   : "avg"}
               </span>
             </div>
             <div className="ft-stat">
               <span className="ft-label">Accuracy</span>
-              <span className="ft-value">{hoveredData.accuracy}%</span>
+              <span className="ft-value">{fmt.int(hoveredData.accuracy)}%</span>
               <span
                 className={`ft-diff ${
                   hoveredData.accuracy > avgAcc
@@ -1076,9 +1129,9 @@ const FingerHands = ({ fingerStats }) => {
                 }`}
               >
                 {hoveredData.accuracy > avgAcc
-                  ? `+${hoveredData.accuracy - avgAcc}%`
+                  ? `+${fmt.int(hoveredData.accuracy - avgAcc)}%`
                   : hoveredData.accuracy < avgAcc
-                  ? `${hoveredData.accuracy - avgAcc}%`
+                  ? `${fmt.int(hoveredData.accuracy - avgAcc)}%`
                   : "avg"}
               </span>
             </div>
@@ -1457,8 +1510,8 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
                     </span>
                     {forward ? (
                       <span className="chord-tooltip-values">
-                        <span style={{ color: forwardColor }}>{forward.avg}ms</span>
-                        <span className="chord-tooltip-count">{forward.count}×</span>
+                        <span style={{ color: forwardColor }}>{fmt.int(forward.avg)}ms</span>
+                        <span className="chord-tooltip-count">{fmt.count(forward.count)}×</span>
                       </span>
                     ) : (
                       <span className="chord-tooltip-nodata">no data</span>
@@ -1472,8 +1525,8 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
                     </span>
                     {reverse ? (
                       <span className="chord-tooltip-values">
-                        <span style={{ color: reverseColor }}>{reverse.avg}ms</span>
-                        <span className="chord-tooltip-count">{reverse.count}×</span>
+                        <span style={{ color: reverseColor }}>{fmt.int(reverse.avg)}ms</span>
+                        <span className="chord-tooltip-count">{fmt.count(reverse.count)}×</span>
                       </span>
                     ) : (
                       <span className="chord-tooltip-nodata">no data</span>
@@ -1483,7 +1536,7 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
                   {/* Average */}
                   <div className="chord-tooltip-avg">
                     <span>avg</span>
-                    <span style={{ color: getChordColor(hoveredChord.avg) }}>{hoveredChord.avg}ms</span>
+                    <span style={{ color: getChordColor(hoveredChord.avg) }}>{fmt.int(hoveredChord.avg)}ms</span>
                   </div>
                 </>
               );
@@ -1494,15 +1547,15 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
                 <div className="chord-tooltip-node-stats">
                   <div className="chord-node-stat">
                     <span className="chord-node-label">speed</span>
-                    <span className="chord-node-value">{hoveredFingerData.avgInterval}ms</span>
+                    <span className="chord-node-value">{fmt.int(hoveredFingerData.avgInterval)}ms</span>
                   </div>
                   <div className="chord-node-stat">
                     <span className="chord-node-label">accuracy</span>
-                    <span className="chord-node-value">{hoveredFingerData.accuracy}%</span>
+                    <span className="chord-node-value">{fmt.int(hoveredFingerData.accuracy)}%</span>
                   </div>
                   <div className="chord-node-stat">
                     <span className="chord-node-label">keys</span>
-                    <span className="chord-node-value">{hoveredFingerData.total}</span>
+                    <span className="chord-node-value">{fmt.count(hoveredFingerData.total)}</span>
                   </div>
                 </div>
               </>
@@ -1534,7 +1587,7 @@ function App() {
   const [completedCount, setCompletedCount] = useState(0);
   const [totalParagraphs] = useState(ALL_PARAGRAPHS.length);
   const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global'
-  const [comparisonBase, setComparisonBase] = useState("alltime"); // 'alltime' | 'global' - what to compare current/alltime against
+  const [comparisonBase, setComparisonBase] = useState("none"); // 'none' | 'alltime' | 'global' | 'current'
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
@@ -2904,6 +2957,10 @@ function App() {
 
   // Get comparison baseline based on user selection
   const getComparisonBase = () => {
+    // "none" means no comparison
+    if (comparisonBase === "none") {
+      return null;
+    }
     if (comparisonBase === "global" && globalAverages && globalAverages.total_sessions > 0) {
       return {
         wpm: Math.round(globalAverages.avg_wpm),
@@ -2914,7 +2971,7 @@ function App() {
         label: "global",
       };
     }
-    if (cumulativeStats && cumulativeStats.sessions > 1) {
+    if (comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0) {
       return {
         wpm: cumulativeStats.wpm,
         accuracy: cumulativeStats.accuracy,
@@ -2922,6 +2979,16 @@ function App() {
         avgInterval: cumulativeStats.avgInterval,
         sessions: cumulativeStats.sessions,
         label: "your avg",
+      };
+    }
+    if (comparisonBase === "current" && stats) {
+      return {
+        wpm: stats.wpm,
+        accuracy: stats.accuracy,
+        consistency: stats.consistency,
+        avgInterval: stats.avgInterval,
+        sessions: 1,
+        label: "this paragraph",
       };
     }
     return null;
@@ -2982,10 +3049,10 @@ function App() {
               // Show alltime if user has local stats, otherwise show global
               if (cumulativeStats && cumulativeStats.sessions > 0) {
                 setStatsView("alltime");
-                setComparisonBase("alltime"); // No comparison by default
+                setComparisonBase("none"); // No comparison by default
               } else {
                 setStatsView("global");
-                setComparisonBase("alltime"); // vs My Average (though won't show if no alltime)
+                setComparisonBase("alltime"); // vs My Average
               }
             }}
             title="View stats"
@@ -3056,7 +3123,7 @@ function App() {
               return (
                 <div className="stats-header global-only">
                   <h3 className="global-title">
-                    Global Statistics ({globalAverages.total_sessions?.toLocaleString()} sessions)
+                    Global Statistics ({fmt.count(globalAverages.total_sessions)} sessions)
                   </h3>
                 </div>
               );
@@ -3078,7 +3145,7 @@ function App() {
                           setComparisonBase("alltime"); // Reset to "vs My Average"
                         }}
                       >
-                        Global ({globalAverages.total_sessions})
+                        Global ({fmt.count(globalAverages.total_sessions)})
                       </button>
                     )}
                   </div>
@@ -3088,7 +3155,7 @@ function App() {
                         value={comparisonBase}
                         onChange={setComparisonBase}
                         options={[
-                          { value: "alltime", label: "No Comparison" },
+                          { value: "none", label: "No Comparison" },
                           { value: "global", label: "vs Global Avg" },
                         ]}
                       />
@@ -3121,7 +3188,7 @@ function App() {
                       All Time ({cumulativeStats.sessions})
                     </button>
                     <button className="toggle-btn active">
-                      Global ({globalAverages.total_sessions})
+                      Global ({fmt.count(globalAverages.total_sessions)})
                     </button>
                   </div>
                   <div className="stats-header-right">
@@ -3129,6 +3196,7 @@ function App() {
                       value={comparisonBase}
                       onChange={setComparisonBase}
                       options={[
+                        { value: "none", label: "No Comparison" },
                         { value: "alltime", label: "vs My Average" },
                       ]}
                     />
@@ -3175,24 +3243,32 @@ function App() {
                           setComparisonBase("alltime"); // Reset to "vs My Average"
                         }}
                       >
-                        Global ({globalAverages.total_sessions})
+                        Global ({fmt.count(globalAverages.total_sessions)})
                       </button>
                     )}
                   </div>
                   <div className="stats-header-right">
-                    {hasGlobalStats && (
+                    {(hasGlobalStats || hasAllTimeStats) && (
                       <ComparisonDropdown
                         value={comparisonBase}
                         onChange={setComparisonBase}
                         options={
                           statsView === "global"
                             ? [
-                                { value: "alltime", label: "vs My Average" },
+                                { value: "none", label: "No Comparison" },
+                                ...(hasAllTimeStats ? [{ value: "alltime", label: "vs My Average" }] : []),
+                                { value: "current", label: "vs This Paragraph" },
+                              ]
+                            : statsView === "alltime"
+                            ? [
+                                { value: "none", label: "No Comparison" },
+                                ...(hasGlobalStats ? [{ value: "global", label: "vs Global Avg" }] : []),
                                 { value: "current", label: "vs This Paragraph" },
                               ]
                             : [
-                                { value: "alltime", label: "No Comparison" },
-                                { value: "global", label: "vs Global Avg" },
+                                { value: "none", label: "No Comparison" },
+                                ...(hasGlobalStats ? [{ value: "global", label: "vs Global Avg" }] : []),
+                                ...(hasAllTimeStats ? [{ value: "alltime", label: "vs My Average" }] : []),
                               ]
                         }
                       />
@@ -3257,7 +3333,7 @@ function App() {
                           {stats.accuracy >= compBase.accuracy
                             ? "↑"
                             : "↓"}
-                          {Math.abs(stats.accuracy - compBase.accuracy).toFixed(1)}
+                          {fmt.dec(Math.abs(stats.accuracy - compBase.accuracy))}
                         </span>
                       )}
                     </span>
@@ -3280,9 +3356,7 @@ function App() {
                           {stats.consistency >= compBase.consistency
                             ? "↑"
                             : "↓"}
-                          {Math.abs(
-                            stats.consistency - compBase.consistency
-                          )}
+                          {fmt.int(Math.abs(stats.consistency - compBase.consistency))}
                         </span>
                       )}
                     </span>
@@ -3355,12 +3429,7 @@ function App() {
                           {stats.errorCount <= cumulativeStats.avgErrors
                             ? "↓"
                             : "↑"}
-                          {Math.abs(
-                            Math.round(
-                              (stats.errorCount - cumulativeStats.avgErrors) *
-                                10
-                            ) / 10
-                          )}
+                          {fmt.dec(Math.abs(stats.errorCount - cumulativeStats.avgErrors))}
                         </span>
                       )}
                     </span>
@@ -3381,10 +3450,7 @@ function App() {
                       <span className="count-label">words</span>
                       <span className="count-accuracy">
                         {stats.counts.words > 0
-                          ? Math.round(
-                              (stats.counts.correctWords / stats.counts.words) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctWords / stats.counts.words) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3396,11 +3462,7 @@ function App() {
                       <span className="count-label">letters</span>
                       <span className="count-accuracy">
                         {stats.counts.letters > 0
-                          ? Math.round(
-                              (stats.counts.correctLetters /
-                                stats.counts.letters) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctLetters / stats.counts.letters) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3412,11 +3474,7 @@ function App() {
                       <span className="count-label">numbers</span>
                       <span className="count-accuracy">
                         {stats.counts.numbers > 0
-                          ? Math.round(
-                              (stats.counts.correctNumbers /
-                                stats.counts.numbers) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctNumbers / stats.counts.numbers) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3428,11 +3486,7 @@ function App() {
                       <span className="count-label">punctuation</span>
                       <span className="count-accuracy">
                         {stats.counts.punctuation > 0
-                          ? Math.round(
-                              (stats.counts.correctPunctuation /
-                                stats.counts.punctuation) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctPunctuation / stats.counts.punctuation) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3444,11 +3498,7 @@ function App() {
                       <span className="count-label">capitals</span>
                       <span className="count-accuracy">
                         {stats.counts.capitals > 0
-                          ? Math.round(
-                              (stats.counts.correctCapitals /
-                                stats.counts.capitals) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctCapitals / stats.counts.capitals) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3460,11 +3510,7 @@ function App() {
                       <span className="count-label">spaces</span>
                       <span className="count-accuracy">
                         {stats.counts.spaces > 0
-                          ? Math.round(
-                              (stats.counts.correctSpaces /
-                                stats.counts.spaces) *
-                                100
-                            )
+                          ? fmt.int((stats.counts.correctSpaces / stats.counts.spaces) * 100)
                           : 0}
                         % ✓
                       </span>
@@ -3577,14 +3623,14 @@ function App() {
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">
-                              {Math.round(avg)}ms
+                              {fmt.int(avg)}ms
                             </span>
                             {distance && (
                               <span
                                 className="bigram-distance"
                                 title="Physical distance on keyboard"
                               >
-                                {distance.toFixed(1)} keys apart
+                                {fmt.dec(distance)} keys apart
                               </span>
                             )}
                           </span>
@@ -3602,14 +3648,14 @@ function App() {
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">
-                              {Math.round(avg)}ms
+                              {fmt.int(avg)}ms
                             </span>
                             {distance && (
                               <span
                                 className="bigram-distance"
                                 title="Physical distance on keyboard"
                               >
-                                {distance.toFixed(1)} keys apart
+                                {fmt.dec(distance)} keys apart
                               </span>
                             )}
                           </span>
@@ -3632,13 +3678,13 @@ function App() {
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">
-                              {Math.round(avg)}ms
+                              {fmt.int(avg)}ms
                             </span>
                             <span
                               className="bigram-distance"
                               title="Physical distance on keyboard"
                             >
-                              {distance.toFixed(1)} keys apart
+                              {fmt.dec(distance)} keys apart
                             </span>
                           </span>
                         </span>
@@ -3937,7 +3983,7 @@ function App() {
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
                           {cumulativeStats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
-                          {Math.abs(Math.round(cumulativeStats.wpm - globalAverages.avg_wpm))}
+                          {fmt.int(Math.abs(cumulativeStats.wpm - globalAverages.avg_wpm))}
                         </span>
                       )}
                     </span>
@@ -3951,7 +3997,7 @@ function App() {
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
                           {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
-                          {Math.abs(Math.round((cumulativeStats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                          {fmt.dec(Math.abs(cumulativeStats.accuracy - globalAverages.avg_accuracy))}
                         </span>
                       )}
                     </span>
@@ -3965,7 +4011,7 @@ function App() {
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {Math.abs(Math.round(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                          {fmt.int(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
                         </span>
                       )}
                     </span>
@@ -3975,7 +4021,7 @@ function App() {
                 <Tooltip content={TIPS.totalTime}>
                   <div className="stat">
                     <span className="stat-value">
-                      {Math.round(cumulativeStats.totalTime / 60)}m
+                      {fmt.int(cumulativeStats.totalTime / 60)}m
                     </span>
                     <span className="stat-label">total time</span>
                   </div>
@@ -3990,7 +4036,7 @@ function App() {
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
                           {cumulativeStats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
-                          {Math.abs(Math.round(cumulativeStats.avgInterval - globalAverages.avg_interval))}
+                          {fmt.int(Math.abs(cumulativeStats.avgInterval - globalAverages.avg_interval))}
                         </span>
                       )}
                     </span>
@@ -4030,96 +4076,72 @@ function App() {
                     <div className="counts-grid">
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctWords || 0}
+                          {fmt.count(cumulativeStats.counts.correctWords)}
                         </span>
                         <span className="count-label">words</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.words > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctWords /
-                                  cumulativeStats.counts.words) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctWords / cumulativeStats.counts.words) * 100)
                             : 0}
                           % correct
                         </span>
                       </div>
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctLetters || 0}
+                          {fmt.count(cumulativeStats.counts.correctLetters)}
                         </span>
                         <span className="count-label">letters</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.letters > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctLetters /
-                                  cumulativeStats.counts.letters) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctLetters / cumulativeStats.counts.letters) * 100)
                             : 0}
                           % correct
                         </span>
                       </div>
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctNumbers || 0}
+                          {fmt.count(cumulativeStats.counts.correctNumbers)}
                         </span>
                         <span className="count-label">numbers</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.numbers > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctNumbers /
-                                  cumulativeStats.counts.numbers) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctNumbers / cumulativeStats.counts.numbers) * 100)
                             : 0}
                           % correct
                         </span>
                       </div>
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctPunctuation || 0}
+                          {fmt.count(cumulativeStats.counts.correctPunctuation)}
                         </span>
                         <span className="count-label">punctuation</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.punctuation > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctPunctuation /
-                                  cumulativeStats.counts.punctuation) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctPunctuation / cumulativeStats.counts.punctuation) * 100)
                             : 0}
                           % correct
                         </span>
                       </div>
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctCapitals || 0}
+                          {fmt.count(cumulativeStats.counts.correctCapitals)}
                         </span>
                         <span className="count-label">capitals</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.capitals > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctCapitals /
-                                  cumulativeStats.counts.capitals) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctCapitals / cumulativeStats.counts.capitals) * 100)
                             : 0}
                           % correct
                         </span>
                       </div>
                       <div className="count-item">
                         <span className="count-value">
-                          {cumulativeStats.counts.correctSpaces || 0}
+                          {fmt.count(cumulativeStats.counts.correctSpaces)}
                         </span>
                         <span className="count-label">spaces</span>
                         <span className="count-accuracy">
                           {cumulativeStats.counts.spaces > 0
-                            ? Math.round(
-                                (cumulativeStats.counts.correctSpaces /
-                                  cumulativeStats.counts.spaces) *
-                                  100
-                              )
+                            ? fmt.int((cumulativeStats.counts.correctSpaces / cumulativeStats.counts.spaces) * 100)
                             : 0}
                           % correct
                         </span>
@@ -4196,7 +4218,7 @@ function App() {
                             <code>{formatBigram(bigram)}</code>
                             <span className="bigram-meta">
                               <span className="bigram-time">
-                                {Math.round(avg)}ms
+                                {fmt.int(avg)}ms
                               </span>
                             </span>
                           </span>
@@ -4213,7 +4235,7 @@ function App() {
                             <code>{formatBigram(bigram)}</code>
                             <span className="bigram-meta">
                               <span className="bigram-time">
-                                {Math.round(avg)}ms
+                                {fmt.int(avg)}ms
                               </span>
                             </span>
                           </span>
@@ -4236,13 +4258,13 @@ function App() {
                               <code>{formatBigram(bigram)}</code>
                               <span className="bigram-meta">
                                 <span className="bigram-time">
-                                  {Math.round(avg)}ms
+                                  {fmt.int(avg)}ms
                                 </span>
                                 <span
                                   className="bigram-distance"
                                   title="Keys apart on keyboard"
                                 >
-                                  {distance.toFixed(1)} apart
+                                  {fmt.dec(distance)} apart
                                 </span>
                               </span>
                             </span>
@@ -4546,7 +4568,7 @@ function App() {
               <div className="global-stats-header">
                 <h3>Global Statistics</h3>
                 <p className="global-stats-subtitle">
-                  Based on {globalAverages.total_sessions?.toLocaleString() || 0} sessions from {globalAverages.total_users?.toLocaleString() || 0} users
+                  Based on {fmt.count(globalAverages.total_sessions)} sessions from {fmt.count(globalAverages.total_users)} users
                 </p>
               </div>
               
@@ -4555,18 +4577,18 @@ function App() {
                 <Tooltip content="Average WPM across all users">
                   <div className="stat">
                     <span className="stat-value">
-                      {Math.round(globalAverages.avg_wpm || 0)}
+                      {fmt.int(globalAverages.avg_wpm)}
                       {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
                         <span className={`stat-delta ${cumulativeStats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
                           {cumulativeStats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
-                          {Math.abs(Math.round(cumulativeStats.wpm - globalAverages.avg_wpm))}
+                          {fmt.int(Math.abs(cumulativeStats.wpm - globalAverages.avg_wpm))}
                           <span className="delta-label">you</span>
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${stats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
                           {stats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
-                          {Math.abs(Math.round(stats.wpm - globalAverages.avg_wpm))}
+                          {fmt.int(Math.abs(stats.wpm - globalAverages.avg_wpm))}
                           <span className="delta-label">this</span>
                         </span>
                       )}
@@ -4577,18 +4599,18 @@ function App() {
                 <Tooltip content="Average accuracy across all users">
                   <div className="stat">
                     <span className="stat-value">
-                      {Math.round((globalAverages.avg_accuracy || 0) * 10) / 10}%
+                      {fmt.dec(globalAverages.avg_accuracy)}%
                       {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
                         <span className={`stat-delta ${cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
                           {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
-                          {Math.abs(Math.round((cumulativeStats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                          {fmt.dec(Math.abs(cumulativeStats.accuracy - globalAverages.avg_accuracy))}
                           <span className="delta-label">you</span>
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${stats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
                           {stats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
-                          {Math.abs(Math.round((stats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                          {fmt.dec(Math.abs(stats.accuracy - globalAverages.avg_accuracy))}
                           <span className="delta-label">this</span>
                         </span>
                       )}
@@ -4599,18 +4621,18 @@ function App() {
                 <Tooltip content="Average consistency across all users">
                   <div className="stat">
                     <span className="stat-value">
-                      {Math.round(globalAverages.avg_consistency || 0)}%
+                      {fmt.int(globalAverages.avg_consistency)}%
                       {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
                         <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {Math.abs(Math.round(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                          {fmt.int(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
                           <span className="delta-label">you</span>
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${stats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {stats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {Math.abs(Math.round(stats.consistency - globalAverages.avg_consistency))}
+                          {fmt.int(Math.abs(stats.consistency - globalAverages.avg_consistency))}
                           <span className="delta-label">this</span>
                         </span>
                       )}
@@ -4621,18 +4643,18 @@ function App() {
                 <Tooltip content="Average keystroke interval across all users">
                   <div className="stat">
                     <span className="stat-value">
-                      {Math.round(globalAverages.avg_interval || 0)}ms
+                      {fmt.int(globalAverages.avg_interval)}ms
                       {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
                         <span className={`stat-delta ${cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
                           {cumulativeStats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
-                          {Math.abs(Math.round(cumulativeStats.avgInterval - globalAverages.avg_interval))}
+                          {fmt.int(Math.abs(cumulativeStats.avgInterval - globalAverages.avg_interval))}
                           <span className="delta-label">you</span>
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${stats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
                           {stats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
-                          {Math.abs(Math.round(stats.avgInterval - globalAverages.avg_interval))}
+                          {fmt.int(Math.abs(stats.avgInterval - globalAverages.avg_interval))}
                           <span className="delta-label">this</span>
                         </span>
                       )}
@@ -4646,25 +4668,25 @@ function App() {
               <div className="stat-grid secondary">
                 <Tooltip content="25th percentile WPM">
                   <div className="stat small">
-                    <span className="stat-value">{Math.round(globalAverages.p25_wpm || 0)}</span>
+                    <span className="stat-value">{fmt.int(globalAverages.p25_wpm)}</span>
                     <span className="stat-label">25th %ile WPM</span>
                   </div>
                 </Tooltip>
                 <Tooltip content="Median WPM">
                   <div className="stat small">
-                    <span className="stat-value">{Math.round(globalAverages.p50_wpm || 0)}</span>
+                    <span className="stat-value">{fmt.int(globalAverages.p50_wpm)}</span>
                     <span className="stat-label">median WPM</span>
                   </div>
                 </Tooltip>
                 <Tooltip content="75th percentile WPM">
                   <div className="stat small">
-                    <span className="stat-value">{Math.round(globalAverages.p75_wpm || 0)}</span>
+                    <span className="stat-value">{fmt.int(globalAverages.p75_wpm)}</span>
                     <span className="stat-label">75th %ile WPM</span>
                   </div>
                 </Tooltip>
                 <Tooltip content="90th percentile WPM - top 10% of users">
                   <div className="stat small">
-                    <span className="stat-value">{Math.round(globalAverages.p90_wpm || 0)}</span>
+                    <span className="stat-value">{fmt.int(globalAverages.p90_wpm)}</span>
                     <span className="stat-label">90th %ile WPM</span>
                   </div>
                 </Tooltip>
@@ -4708,8 +4730,8 @@ function App() {
                         finger,
                         {
                           avgInterval: data.avg_interval,
-                          accuracy: data.avg_accuracy,
-                          count: data.total_presses
+                          accuracy: Math.round(data.avg_accuracy * 100),
+                          total: data.total_presses
                         }
                       ])
                     )
@@ -4741,8 +4763,8 @@ function App() {
                         finger,
                         {
                           avgInterval: data.avg_interval,
-                          accuracy: data.avg_accuracy,
-                          count: data.total_presses
+                          accuracy: Math.round(data.avg_accuracy * 100),
+                          total: data.total_presses
                         }
                       ])
                     ) : {}}
@@ -4764,8 +4786,8 @@ function App() {
                           <span key={i} className="bigram fast">
                             <code>{formatBigram(bigram)}</code>
                             <span className="bigram-meta">
-                              <span className="bigram-time">{Math.round(data.avg_time)}ms</span>
-                              <span className="bigram-count">{data.total_occurrences.toLocaleString()} samples</span>
+                              <span className="bigram-time">{fmt.int(data.avg_time)}ms</span>
+                              <span className="bigram-count">{fmt.count(data.total_occurrences)} samples</span>
                             </span>
                           </span>
                         ))}
@@ -4782,8 +4804,8 @@ function App() {
                           <span key={i} className="bigram slow">
                             <code>{formatBigram(bigram)}</code>
                             <span className="bigram-meta">
-                              <span className="bigram-time">{Math.round(data.avg_time)}ms</span>
-                              <span className="bigram-count">{data.total_occurrences.toLocaleString()} samples</span>
+                              <span className="bigram-time">{fmt.int(data.avg_time)}ms</span>
+                              <span className="bigram-count">{fmt.count(data.total_occurrences)} samples</span>
                             </span>
                           </span>
                         ))}
@@ -4803,7 +4825,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">avg pause duration</span>
                           <span className="behavioral-stat-value">
-                            {Math.round(behavioralAverages.avgHesitation.avg)}ms
+                            {fmt.int(behavioralAverages.avgHesitation.avg)}ms
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -4825,7 +4847,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">avg burst length</span>
                           <span className="behavioral-stat-value">
-                            {behavioralAverages.avgBurstLength.avg.toFixed(1)} chars
+                            {fmt.dec(behavioralAverages.avgBurstLength.avg)} chars
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -4846,7 +4868,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">total bursts</span>
                           <span className="behavioral-stat-value">
-                            {Math.round(behavioralAverages.burstCount.avg)}
+                            {fmt.int(behavioralAverages.burstCount.avg)}
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -4867,7 +4889,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">rhythm score</span>
                           <span className="behavioral-stat-value">
-                            {Math.round(behavioralAverages.rhythmScore.avg)}%
+                            {fmt.int(behavioralAverages.rhythmScore.avg)}%
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -4894,7 +4916,7 @@ function App() {
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
-                          {behavioralAverages.handBalance.avg > 0 ? '+' : ''}{Math.round(behavioralAverages.handBalance.avg)}% {behavioralAverages.handBalance.avg > 0 ? 'right' : 'left'} advantage
+                          {behavioralAverages.handBalance.avg > 0 ? '+' : ''}{fmt.int(behavioralAverages.handBalance.avg)}% {behavioralAverages.handBalance.avg > 0 ? 'right' : 'left'} advantage
                         </div>
                         <GlobalDistributionBar 
                           value={behavioralAverages.handBalance.avg}
@@ -4912,7 +4934,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">home row usage</span>
                           <span className="behavioral-stat-value">
-                            {Math.round(behavioralAverages.homeRowRatio.avg * 100)}%
+                            {fmt.int(behavioralAverages.homeRowRatio.avg * 100)}%
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -4934,7 +4956,7 @@ function App() {
                         <div className="behavioral-stat-header">
                           <span className="behavioral-stat-label">hesitations</span>
                           <span className="behavioral-stat-value">
-                            {Math.round(behavioralAverages.hesitationCount.avg)}
+                            {fmt.int(behavioralAverages.hesitationCount.avg)}
                           </span>
                         </div>
                         <div className="behavioral-stat-detail">
@@ -5130,7 +5152,7 @@ function App() {
                         </span>
                         <span className="history-stat">
                           <span className="history-stat-value">
-                            {Math.round(session.totalTime / 1000)}s
+                            {fmt.int(session.totalTime / 1000)}s
                           </span>
                           <span className="history-stat-label">time</span>
                         </span>
