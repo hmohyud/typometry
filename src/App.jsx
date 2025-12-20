@@ -2973,8 +2973,10 @@ function App() {
               // Show alltime if user has local stats, otherwise show global
               if (cumulativeStats && cumulativeStats.sessions > 0) {
                 setStatsView("alltime");
+                setComparisonBase("alltime"); // No comparison by default
               } else {
                 setStatsView("global");
+                setComparisonBase("alltime"); // vs My Average (though won't show if no alltime)
               }
             }}
             title="View stats"
@@ -3075,7 +3077,10 @@ function App() {
                     {hasGlobalStats && (
                       <button
                         className="toggle-btn"
-                        onClick={() => setStatsView("global")}
+                        onClick={() => {
+                          setStatsView("global");
+                          setComparisonBase("alltime"); // Reset to "vs My Average"
+                        }}
                       >
                         Global ({globalAverages.total_sessions})
                       </button>
@@ -3169,7 +3174,10 @@ function App() {
                     {hasGlobalStats && (
                       <button
                         className={`toggle-btn ${statsView === "global" ? "active" : ""}`}
-                        onClick={() => setStatsView("global")}
+                        onClick={() => {
+                          setStatsView("global");
+                          setComparisonBase("alltime"); // Reset to "vs My Average"
+                        }}
                       >
                         Global ({globalAverages.total_sessions})
                       </button>
@@ -3928,7 +3936,15 @@ function App() {
               <div className="stat-grid primary">
                 <Tooltip content={TIPS.wpm}>
                   <div className="stat">
-                    <span className="stat-value">{cumulativeStats.wpm}</span>
+                    <span className="stat-value">
+                      {cumulativeStats.wpm}
+                      {comparisonBase === "global" && globalAverages && (
+                        <span className={`stat-delta ${cumulativeStats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
+                          {Math.abs(Math.round(cumulativeStats.wpm - globalAverages.avg_wpm))}
+                        </span>
+                      )}
+                    </span>
                     <span className="stat-label">avg wpm</span>
                   </div>
                 </Tooltip>
@@ -3936,6 +3952,12 @@ function App() {
                   <div className="stat">
                     <span className="stat-value">
                       {cumulativeStats.accuracy}%
+                      {comparisonBase === "global" && globalAverages && (
+                        <span className={`stat-delta ${cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
+                          {Math.abs(Math.round((cumulativeStats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                        </span>
+                      )}
                     </span>
                     <span className="stat-label">accuracy</span>
                   </div>
@@ -3944,6 +3966,12 @@ function App() {
                   <div className="stat">
                     <span className="stat-value">
                       {cumulativeStats.consistency}%
+                      {comparisonBase === "global" && globalAverages && (
+                        <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
+                          {Math.abs(Math.round(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                        </span>
+                      )}
                     </span>
                     <span className="stat-label">consistency</span>
                   </div>
@@ -3963,6 +3991,12 @@ function App() {
                   <div className="stat small">
                     <span className="stat-value">
                       {cumulativeStats.avgInterval}ms
+                      {comparisonBase === "global" && globalAverages && (
+                        <span className={`stat-delta ${cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
+                          {Math.abs(Math.round(cumulativeStats.avgInterval - globalAverages.avg_interval))}
+                        </span>
+                      )}
                     </span>
                     <span className="stat-label">avg keystroke</span>
                   </div>

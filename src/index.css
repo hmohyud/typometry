@@ -2058,13 +2058,32 @@ footer {
 
 /* Global Behavioral Stats */
 .global-behavioral {
-  margin-top: 2rem;
+  margin-top: 1.5rem;
 }
 
 .global-behavioral h3 {
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text);
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 1rem 0;
+  text-align: center;
+}
+
+/* Global view section spacing */
+.finger-section,
+.chord-section {
+  margin: 1.5rem 0;
+}
+
+.finger-section h3,
+.chord-section h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
   margin: 0 0 1rem 0;
   text-align: center;
 }
