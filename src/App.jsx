@@ -665,6 +665,120 @@ const GraphIcon = () => (
   </svg>
 );
 
+// Custom Comparison Dropdown
+const ComparisonDropdown = ({ value, onChange, options }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  const selectedOption = options.find(opt => opt.value === value) || options[0];
+  
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
+  return (
+    <div 
+      className={`comparison-select ${isOpen ? 'open' : ''}`}
+      ref={dropdownRef}
+    >
+      <button
+        className="comparison-select-button"
+        onClick={() => setIsOpen(!isOpen)}
+        type="button"
+        title="Compare your stats"
+      >
+        <svg 
+          className="comparison-icon" 
+          width="12" 
+          height="12" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+        >
+          <path d="M18 20V10M12 20V4M6 20v-6" />
+        </svg>
+        {selectedOption?.label}
+      </button>
+      <div className="comparison-select-dropdown">
+        {options.map((option) => (
+          <div
+            key={option.value}
+            className={`comparison-select-option ${value === option.value ? 'selected' : ''}`}
+            onClick={() => {
+              onChange(option.value);
+              setIsOpen(false);
+            }}
+          >
+            {option.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Global Distribution Bar - shows where the average falls with IQR markers
+const GlobalDistributionBar = ({ value, min, max, stdDev, lowerIsBetter = false, centered = false, isPercent = false }) => {
+  // Calculate positions for mean and ±1 std dev (roughly 68% of data)
+  const range = max - min || 1;
+  const valuePos = centered 
+    ? ((value - min) / range) * 100
+    : ((value - min) / range) * 100;
+  
+  // For centered values (like hand balance), 50% is the center
+  const centerPos = centered ? ((0 - min) / range) * 100 : null;
+  
+  // Calculate quartile positions (approximated from std dev)
+  // Q1 ≈ mean - 0.675*stdDev, Q3 ≈ mean + 0.675*stdDev
+  const q1Pos = Math.max(0, ((value - 0.675 * stdDev - min) / range) * 100);
+  const q3Pos = Math.min(100, ((value + 0.675 * stdDev - min) / range) * 100);
+  
+  // P10 ≈ mean - 1.28*stdDev, P90 ≈ mean + 1.28*stdDev  
+  const p10Pos = Math.max(0, ((value - 1.28 * stdDev - min) / range) * 100);
+  const p90Pos = Math.min(100, ((value + 1.28 * stdDev - min) / range) * 100);
+
+  return (
+    <div className="global-distribution-bar">
+      <div className="distribution-track">
+        {/* P10-P90 range (80% of users) */}
+        <div 
+          className="distribution-range p10-p90"
+          style={{ left: `${p10Pos}%`, width: `${p90Pos - p10Pos}%` }}
+        />
+        {/* IQR range (50% of users) */}
+        <div 
+          className="distribution-range iqr"
+          style={{ left: `${q1Pos}%`, width: `${q3Pos - q1Pos}%` }}
+        />
+        {/* Center line for balanced metrics */}
+        {centered && centerPos !== null && (
+          <div className="distribution-center" style={{ left: `${centerPos}%` }} />
+        )}
+        {/* Mean marker */}
+        <div 
+          className={`distribution-mean ${lowerIsBetter ? 'lower-better' : ''}`}
+          style={{ left: `${valuePos}%` }}
+        />
+      </div>
+      <div className="distribution-labels">
+        <span className="distribution-min">
+          {isPercent ? `${Math.round(min * 100)}%` : Math.round(min)}
+        </span>
+        <span className="distribution-max">
+          {isPercent ? `${Math.round(max * 100)}%` : Math.round(max)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 // Mini keyboard for tooltip
 const MiniKeyboard = ({ highlightKeys, color }) => {
   const rows = [
@@ -1419,14 +1533,19 @@ function App() {
   const [cumulativeStats, setCumulativeStats] = useState(null);
   const [completedCount, setCompletedCount] = useState(0);
   const [totalParagraphs] = useState(ALL_PARAGRAPHS.length);
-  const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime'
+  const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global'
+  const [comparisonBase, setComparisonBase] = useState("alltime"); // 'alltime' | 'global' - what to compare current/alltime against
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
 
   // Global stats from Supabase for comparisons
   const { 
-    globalAverages, 
+    globalAverages,
+    bigramAverages,
+    fingerAverages,
+    transitionAverages,
+    behavioralAverages,
     submitStats: submitToSupabase, 
     resetUserId,
     compareToGlobal,
@@ -2608,7 +2727,7 @@ function App() {
         setStatsView("current");
         return;
       }
-      
+
       if (isComplete) {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -2722,36 +2841,10 @@ function App() {
         const newHistory = [...history, historyEntry];
         saveToStorage(STORAGE_KEYS.HISTORY, newHistory);
 
-        // Submit to Supabase for global stats
+        // Submit to Supabase - only keystrokes needed!
+        // The database trigger derives everything else
         submitToSupabase({
-          // Core stats
-          wpm: finalStats.wpm,
-          accuracy: finalStats.accuracy,
-          avgInterval: finalStats.avgInterval,
-          totalChars: finalStats.charCount,
-          totalTime,
-          errorCount: finalStats.errorCount,
           sentenceId: currentIndex,
-          
-          // Variance stats
-          stdDev: finalStats.stdDev,
-          consistency: finalStats.consistency,
-          
-          // Percentiles
-          percentiles: finalStats.percentiles,
-          
-          // Counts breakdown
-          counts: finalStats.counts,
-          
-          // Bigram & finger data
-          bigrams: finalStats.bigrams,
-          fingerStats: finalStats.fingerStats,
-          fingerTransitions: finalStats.fingerTransitions,
-          
-          // Behavioral stats
-          behavioral: finalStats.behavioral,
-          
-          // Raw keystroke data for later analysis
           keystrokes: [...keystrokeData, keystroke],
         });
 
@@ -2804,6 +2897,33 @@ function App() {
     return `${char1} → ${char2}`;
   };
 
+  // Get comparison baseline based on user selection
+  const getComparisonBase = () => {
+    if (comparisonBase === "global" && globalAverages && globalAverages.total_sessions > 0) {
+      return {
+        wpm: Math.round(globalAverages.avg_wpm),
+        accuracy: Math.round(globalAverages.avg_accuracy * 10) / 10,
+        consistency: Math.round(globalAverages.avg_consistency),
+        avgInterval: Math.round(globalAverages.avg_interval),
+        sessions: globalAverages.total_sessions,
+        label: "global",
+      };
+    }
+    if (cumulativeStats && cumulativeStats.sessions > 1) {
+      return {
+        wpm: cumulativeStats.wpm,
+        accuracy: cumulativeStats.accuracy,
+        consistency: cumulativeStats.consistency,
+        avgInterval: cumulativeStats.avgInterval,
+        sessions: cumulativeStats.sessions,
+        label: "your avg",
+      };
+    }
+    return null;
+  };
+
+  const compBase = getComparisonBase();
+
   const clearHistory = () => {
     resetTest(true);
     setCumulativeStats(null);
@@ -2843,16 +2963,21 @@ function App() {
       {/* Stats icon button - positioned absolutely */}
       {!isActive &&
         !isComplete &&
-        cumulativeStats &&
-        cumulativeStats.sessions > 0 && (
+        ((cumulativeStats && cumulativeStats.sessions > 0) || 
+         (globalAverages && globalAverages.total_sessions > 0)) && (
           <button
             className="stats-icon-btn"
             onClick={() => {
               setViewingPastStats(true);
               setIsComplete(true);
-              setStatsView("alltime");
+              // Show alltime if user has local stats, otherwise show global
+              if (cumulativeStats && cumulativeStats.sessions > 0) {
+                setStatsView("alltime");
+              } else {
+                setStatsView("global");
+              }
             }}
-            title="View past stats"
+            title="View stats"
           >
             <GraphIcon />
           </button>
@@ -2893,7 +3018,7 @@ function App() {
                 containerRef.current?.focus();
               }}
             >
-              <span>click or press any key to resume</span>
+              <span>press any key to resume</span>
             </div>
           )}
         </div>
@@ -2918,76 +3043,174 @@ function App() {
       </main>
 
       {(isComplete && stats) ||
-      (isComplete && statsView === "alltime" && cumulativeStats) ? (
+      (isComplete && statsView === "alltime" && cumulativeStats) ||
+      (isComplete && statsView === "global" && globalAverages) ? (
         <section className="stats">
-          {/* Stats View Toggle */}
-          {cumulativeStats && cumulativeStats.sessions > 1 && stats && (
-            <div className="stats-header">
-              <div className="stats-toggle">
-                <button
-                  className={`toggle-btn ${
-                    statsView === "current" ? "active" : ""
-                  }`}
-                  onClick={() => setStatsView("current")}
-                >
-                  This Paragraph
-                </button>
-                <button
-                  className={`toggle-btn ${
-                    statsView === "alltime" ? "active" : ""
-                  }`}
-                  onClick={() => setStatsView("alltime")}
-                >
-                  All Time ({cumulativeStats.sessions})
-                </button>
-              </div>
-              <button
-                className="history-btn"
-                onClick={() => setShowHistory(true)}
-                title="View session history"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                History
-              </button>
-            </div>
-          )}
-
-          {/* Header for all-time only view (no current stats) */}
-          {!stats && statsView === "alltime" && cumulativeStats && (
-            <div className="stats-header alltime-only">
-              <h3 className="alltime-title">
-                All Time Stats ({cumulativeStats.sessions} sessions)
-              </h3>
-              <button
-                className="history-btn"
-                onClick={() => setShowHistory(true)}
-                title="View session history"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                History
-              </button>
-            </div>
-          )}
+          {/* Stats View Toggle - shows in different configurations based on available data */}
+          {(() => {
+            const hasCurrentStats = !!stats;
+            const hasAllTimeStats = cumulativeStats && cumulativeStats.sessions > 0;
+            const hasGlobalStats = globalAverages && globalAverages.total_sessions > 0;
+            const showTabs = (hasCurrentStats && hasAllTimeStats) || (hasAllTimeStats && hasGlobalStats) || (hasCurrentStats && hasGlobalStats);
+            
+            // Global-only view (no local stats)
+            if (!hasCurrentStats && !hasAllTimeStats && hasGlobalStats && statsView === "global") {
+              return (
+                <div className="stats-header global-only">
+                  <h3 className="global-title">
+                    Global Statistics ({globalAverages.total_sessions?.toLocaleString()} sessions)
+                  </h3>
+                </div>
+              );
+            }
+            
+            // All-time only view (clicked stats button without current paragraph)
+            if (!hasCurrentStats && hasAllTimeStats && statsView === "alltime") {
+              return (
+                <div className="stats-header alltime-only">
+                  <div className="stats-toggle">
+                    <button className="toggle-btn active">
+                      All Time ({cumulativeStats.sessions})
+                    </button>
+                    {hasGlobalStats && (
+                      <button
+                        className="toggle-btn"
+                        onClick={() => setStatsView("global")}
+                      >
+                        Global ({globalAverages.total_sessions})
+                      </button>
+                    )}
+                  </div>
+                  <div className="stats-header-right">
+                    {hasGlobalStats && (
+                      <ComparisonDropdown
+                        value={comparisonBase}
+                        onChange={setComparisonBase}
+                        options={[
+                          { value: "alltime", label: "No Comparison" },
+                          { value: "global", label: "vs Global Avg" },
+                        ]}
+                      />
+                    )}
+                    <button
+                      className="history-btn"
+                      onClick={() => setShowHistory(true)}
+                      title="View session history"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      History
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
+            // Global view without current stats but with alltime
+            if (!hasCurrentStats && hasAllTimeStats && hasGlobalStats && statsView === "global") {
+              return (
+                <div className="stats-header">
+                  <div className="stats-toggle">
+                    <button
+                      className="toggle-btn"
+                      onClick={() => setStatsView("alltime")}
+                    >
+                      All Time ({cumulativeStats.sessions})
+                    </button>
+                    <button className="toggle-btn active">
+                      Global ({globalAverages.total_sessions})
+                    </button>
+                  </div>
+                  <div className="stats-header-right">
+                    <ComparisonDropdown
+                      value={comparisonBase}
+                      onChange={setComparisonBase}
+                      options={[
+                        { value: "alltime", label: "vs My Average" },
+                      ]}
+                    />
+                    <button
+                      className="history-btn"
+                      onClick={() => setShowHistory(true)}
+                      title="View session history"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      History
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
+            // Full view with all tabs
+            if (showTabs && hasCurrentStats) {
+              return (
+                <div className="stats-header">
+                  <div className="stats-toggle">
+                    <button
+                      className={`toggle-btn ${statsView === "current" ? "active" : ""}`}
+                      onClick={() => setStatsView("current")}
+                    >
+                      This Paragraph
+                    </button>
+                    {hasAllTimeStats && (
+                      <button
+                        className={`toggle-btn ${statsView === "alltime" ? "active" : ""}`}
+                        onClick={() => setStatsView("alltime")}
+                      >
+                        All Time ({cumulativeStats.sessions})
+                      </button>
+                    )}
+                    {hasGlobalStats && (
+                      <button
+                        className={`toggle-btn ${statsView === "global" ? "active" : ""}`}
+                        onClick={() => setStatsView("global")}
+                      >
+                        Global ({globalAverages.total_sessions})
+                      </button>
+                    )}
+                  </div>
+                  <div className="stats-header-right">
+                    {hasGlobalStats && (
+                      <ComparisonDropdown
+                        value={comparisonBase}
+                        onChange={setComparisonBase}
+                        options={
+                          statsView === "global"
+                            ? [
+                                { value: "alltime", label: "vs My Average" },
+                                { value: "current", label: "vs This Paragraph" },
+                              ]
+                            : [
+                                { value: "alltime", label: "No Comparison" },
+                                { value: "global", label: "vs Global Avg" },
+                              ]
+                        }
+                      />
+                    )}
+                    <button
+                      className="history-btn"
+                      onClick={() => setShowHistory(true)}
+                      title="View session history"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      History
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
+            return null;
+          })()}
 
           {statsView === "current" && stats ? (
             <>
@@ -2997,46 +3220,40 @@ function App() {
                   <div className="stat">
                     <span className="stat-value">
                       {stats.wpm}
-                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      {compBase && (
                         <span
                           className={`stat-delta ${
-                            stats.wpm >= cumulativeStats.wpm
+                            stats.wpm >= compBase.wpm
                               ? "positive"
                               : "negative"
                           }`}
+                          title={`vs ${compBase.label}`}
                         >
-                          {stats.wpm >= cumulativeStats.wpm ? "↑" : "↓"}
-                          {Math.abs(stats.wpm - cumulativeStats.wpm)}
+                          {stats.wpm >= compBase.wpm ? "↑" : "↓"}
+                          {Math.abs(stats.wpm - compBase.wpm)}
                         </span>
                       )}
                     </span>
                     <span className="stat-label">wpm</span>
-                    {/* {globalAverages && (
-                      <span className={`stat-global ${stats.wpm >= globalAverages.avg_wpm ? 'above' : 'below'}`}>
-                        {stats.wpm >= globalAverages.p90_wpm ? 'top 10%' :
-                         stats.wpm >= globalAverages.p75_wpm ? 'top 25%' :
-                         stats.wpm >= globalAverages.p50_wpm ? 'above avg' :
-                         'below avg'}
-                      </span>
-                    )} */}
                   </div>
                 </Tooltip>
                 <Tooltip content={TIPS.accuracy}>
                   <div className="stat">
                     <span className="stat-value">
                       {stats.accuracy}%
-                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      {compBase && (
                         <span
                           className={`stat-delta ${
-                            stats.accuracy >= cumulativeStats.accuracy
+                            stats.accuracy >= compBase.accuracy
                               ? "positive"
                               : "negative"
                           }`}
+                          title={`vs ${compBase.label}`}
                         >
-                          {stats.accuracy >= cumulativeStats.accuracy
+                          {stats.accuracy >= compBase.accuracy
                             ? "↑"
                             : "↓"}
-                          {Math.abs(stats.accuracy - cumulativeStats.accuracy)}
+                          {Math.abs(stats.accuracy - compBase.accuracy).toFixed(1)}
                         </span>
                       )}
                     </span>
@@ -3047,19 +3264,20 @@ function App() {
                   <div className="stat">
                     <span className="stat-value">
                       {stats.consistency}%
-                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      {compBase && (
                         <span
                           className={`stat-delta ${
-                            stats.consistency >= cumulativeStats.consistency
+                            stats.consistency >= compBase.consistency
                               ? "positive"
                               : "negative"
                           }`}
+                          title={`vs ${compBase.label}`}
                         >
-                          {stats.consistency >= cumulativeStats.consistency
+                          {stats.consistency >= compBase.consistency
                             ? "↑"
                             : "↓"}
                           {Math.abs(
-                            stats.consistency - cumulativeStats.consistency
+                            stats.consistency - compBase.consistency
                           )}
                         </span>
                       )}
@@ -3080,19 +3298,20 @@ function App() {
                   <div className="stat small">
                     <span className="stat-value">
                       {stats.avgInterval}ms
-                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      {compBase && (
                         <span
                           className={`stat-delta ${
-                            stats.avgInterval <= cumulativeStats.avgInterval
+                            stats.avgInterval <= compBase.avgInterval
                               ? "positive"
                               : "negative"
                           }`}
+                          title={`vs ${compBase.label}`}
                         >
-                          {stats.avgInterval <= cumulativeStats.avgInterval
+                          {stats.avgInterval <= compBase.avgInterval
                             ? "↓"
                             : "↑"}
                           {Math.abs(
-                            stats.avgInterval - cumulativeStats.avgInterval
+                            stats.avgInterval - compBase.avgInterval
                           )}
                         </span>
                       )}
@@ -3375,7 +3594,7 @@ function App() {
                   <div className="bigram-list">
                     {stats.slowestBigrams.map(
                       ({ bigram, avg, distance }, i) => (
-                        <span key={i} className="bigram">
+                        <span key={i} className="bigram slow">
                           <code>{formatBigram(bigram)}</code>
                           <span className="bigram-meta">
                             <span className="bigram-time">
@@ -3703,80 +3922,76 @@ function App() {
                 </div>
               )}
             </>
-          ) : (
+          ) : statsView === "alltime" && cumulativeStats ? (
             /* All-time stats view */
-            cumulativeStats && (
-              <>
-                <div className="stat-grid primary">
-                  <Tooltip content={TIPS.wpm}>
-                    <div className="stat">
-                      <span className="stat-value">{cumulativeStats.wpm}</span>
-                      <span className="stat-label">avg wpm</span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.accuracy}>
-                    <div className="stat">
-                      <span className="stat-value">
-                        {cumulativeStats.accuracy}%
-                      </span>
-                      <span className="stat-label">accuracy</span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.totalChars}>
-                    <div className="stat">
-                      <span className="stat-value">
-                        {cumulativeStats.totalChars.toLocaleString()}
-                      </span>
-                      <span className="stat-label">total chars</span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.totalTime}>
-                    <div className="stat">
-                      <span className="stat-value">
-                        {Math.round(cumulativeStats.totalTime / 60)}m
-                      </span>
-                      <span className="stat-label">total time</span>
-                    </div>
-                  </Tooltip>
-                </div>
+            <>
+              <div className="stat-grid primary">
+                <Tooltip content={TIPS.wpm}>
+                  <div className="stat">
+                    <span className="stat-value">{cumulativeStats.wpm}</span>
+                    <span className="stat-label">avg wpm</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.accuracy}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {cumulativeStats.accuracy}%
+                    </span>
+                    <span className="stat-label">accuracy</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.consistency}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {cumulativeStats.consistency}%
+                    </span>
+                    <span className="stat-label">consistency</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.totalTime}>
+                  <div className="stat">
+                    <span className="stat-value">
+                      {Math.round(cumulativeStats.totalTime / 60)}m
+                    </span>
+                    <span className="stat-label">total time</span>
+                  </div>
+                </Tooltip>
+              </div>
 
-                <div className="stat-grid secondary">
-                  <Tooltip content={TIPS.avgKeystroke}>
-                    <div className="stat small">
-                      <span className="stat-value">
-                        {cumulativeStats.avgInterval}ms
-                      </span>
-                      <span className="stat-label">avg keystroke</span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.avgWordTime}>
-                    <div className="stat small">
-                      <span className="stat-value">
-                        {cumulativeStats.avgWordInterval}ms
-                      </span>
-                      <span className="stat-label">avg word time</span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.avgTravel}>
-                    <div className="stat small">
-                      <span className="stat-value">
-                        {cumulativeStats.avgDistance}
-                      </span>
-                      <span className="stat-label">
-                        avg travel{" "}
-                        <span className="label-hint">(keys apart)</span>
-                      </span>
-                    </div>
-                  </Tooltip>
-                  <Tooltip content={TIPS.sessions}>
-                    <div className="stat small">
-                      <span className="stat-value">
-                        {cumulativeStats.sessions}
-                      </span>
-                      <span className="stat-label">sessions</span>
-                    </div>
-                  </Tooltip>
-                </div>
+              <div className="stat-grid secondary">
+                <Tooltip content={TIPS.avgKeystroke}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {cumulativeStats.avgInterval}ms
+                    </span>
+                    <span className="stat-label">avg keystroke</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.avgWordTime}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {cumulativeStats.avgWordInterval}ms
+                    </span>
+                    <span className="stat-label">avg word time</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.totalChars}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {cumulativeStats.totalChars.toLocaleString()}
+                    </span>
+                    <span className="stat-label">total chars</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content={TIPS.sessions}>
+                  <div className="stat small">
+                    <span className="stat-value">
+                      {cumulativeStats.sessions}
+                    </span>
+                    <span className="stat-label">sessions</span>
+                  </div>
+                </Tooltip>
+              </div>
 
                 {/* Counts breakdown */}
                 {cumulativeStats.counts && (
@@ -3883,6 +4098,64 @@ function App() {
                   </div>
                 )}
 
+                {/* Keyboard Analysis for All Time - matches This Paragraph order */}
+                {cumulativeStats.keyStats &&
+                  Object.keys(cumulativeStats.keyStats).length > 0 && (
+                    <div className="keyboard-section">
+                      <div className="keyboard-header">
+                        <h3>Keyboard Analysis (All Time)</h3>
+                        <div className="mini-toggles">
+                          <button
+                            className={`mini-toggle ${
+                              heatmapMode === "speed" ? "active" : ""
+                            }`}
+                            onClick={() => setHeatmapMode("speed")}
+                          >
+                            Speed
+                          </button>
+                          <button
+                            className={`mini-toggle ${
+                              heatmapMode === "accuracy" ? "active" : ""
+                            }`}
+                            onClick={() => setHeatmapMode("accuracy")}
+                          >
+                            Accuracy
+                          </button>
+                        </div>
+                      </div>
+                      <KeyboardHeatmap
+                        keyStats={cumulativeStats.keyStats}
+                        mode={heatmapMode}
+                      />
+
+                      <div className="keyboard-flows">
+                        <KeyboardFlowMap
+                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.mostAccurateBigrams : cumulativeStats.fastestBigrams}
+                          flowType="fast"
+                          mode={heatmapMode}
+                        />
+                        <KeyboardFlowMap
+                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.leastAccurateBigrams : cumulativeStats.slowestBigrams}
+                          flowType="slow"
+                          mode={heatmapMode}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                {/* Finger Performance for All Time */}
+                {cumulativeStats.fingerStats && (
+                  <FingerHands fingerStats={cumulativeStats.fingerStats} />
+                )}
+                
+                {/* Finger Transitions for All Time */}
+                {cumulativeStats.fingerTransitions && Object.keys(cumulativeStats.fingerTransitions).length > 0 && (
+                  <FingerChordDiagram 
+                    fingerTransitions={cumulativeStats.fingerTransitions} 
+                    fingerStats={cumulativeStats.fingerStats}
+                  />
+                )}
+
                 <div className="bigrams-container">
                   <div className="bigrams">
                     <p className="bigram-label">all-time fastest</p>
@@ -3948,64 +4221,6 @@ function App() {
                       </div>
                     </div>
                   )}
-
-                {/* Keyboard Analysis for All Time */}
-                {cumulativeStats.keyStats &&
-                  Object.keys(cumulativeStats.keyStats).length > 0 && (
-                    <div className="keyboard-section">
-                      <div className="keyboard-header">
-                        <h3>Keyboard Analysis (All Time)</h3>
-                        <div className="mini-toggles">
-                          <button
-                            className={`mini-toggle ${
-                              heatmapMode === "speed" ? "active" : ""
-                            }`}
-                            onClick={() => setHeatmapMode("speed")}
-                          >
-                            Speed
-                          </button>
-                          <button
-                            className={`mini-toggle ${
-                              heatmapMode === "accuracy" ? "active" : ""
-                            }`}
-                            onClick={() => setHeatmapMode("accuracy")}
-                          >
-                            Accuracy
-                          </button>
-                        </div>
-                      </div>
-                      <KeyboardHeatmap
-                        keyStats={cumulativeStats.keyStats}
-                        mode={heatmapMode}
-                      />
-
-                      <div className="keyboard-flows">
-                        <KeyboardFlowMap
-                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.mostAccurateBigrams : cumulativeStats.fastestBigrams}
-                          flowType="fast"
-                          mode={heatmapMode}
-                        />
-                        <KeyboardFlowMap
-                          topBigrams={heatmapMode === "accuracy" ? cumulativeStats.leastAccurateBigrams : cumulativeStats.slowestBigrams}
-                          flowType="slow"
-                          mode={heatmapMode}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                {/* Finger Performance for All Time */}
-                {cumulativeStats.fingerStats && (
-                  <FingerHands fingerStats={cumulativeStats.fingerStats} />
-                )}
-                
-                {/* Finger Transitions for All Time */}
-                {cumulativeStats.fingerTransitions && Object.keys(cumulativeStats.fingerTransitions).length > 0 && (
-                  <FingerChordDiagram 
-                    fingerTransitions={cumulativeStats.fingerTransitions} 
-                    fingerStats={cumulativeStats.fingerStats}
-                  />
-                )}
 
                 {/* Behavioral Insights for All Time */}
                 {cumulativeStats.behavioral && (
@@ -4295,8 +4510,464 @@ function App() {
                   </div>
                 )}
               </>
-            )
-          )}
+          ) : statsView === "global" && globalAverages ? (
+            /* Global stats view */
+            <>
+              <div className="global-stats-header">
+                <h3>Global Statistics</h3>
+                <p className="global-stats-subtitle">
+                  Based on {globalAverages.total_sessions?.toLocaleString() || 0} sessions from {globalAverages.total_users?.toLocaleString() || 0} users
+                </p>
+              </div>
+              
+              {/* Primary stats with comparison */}
+              <div className="stat-grid primary">
+                <Tooltip content="Average WPM across all users">
+                  <div className="stat">
+                    <span className="stat-value">
+                      {Math.round(globalAverages.avg_wpm || 0)}
+                      {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
+                        <span className={`stat-delta ${cumulativeStats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
+                          {Math.abs(Math.round(cumulativeStats.wpm - globalAverages.avg_wpm))}
+                          <span className="delta-label">you</span>
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${stats.wpm >= globalAverages.avg_wpm ? 'positive' : 'negative'}`}>
+                          {stats.wpm >= globalAverages.avg_wpm ? '↑' : '↓'}
+                          {Math.abs(Math.round(stats.wpm - globalAverages.avg_wpm))}
+                          <span className="delta-label">this</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">avg wpm</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Average accuracy across all users">
+                  <div className="stat">
+                    <span className="stat-value">
+                      {Math.round((globalAverages.avg_accuracy || 0) * 10) / 10}%
+                      {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
+                        <span className={`stat-delta ${cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
+                          {Math.abs(Math.round((cumulativeStats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                          <span className="delta-label">you</span>
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${stats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
+                          {stats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
+                          {Math.abs(Math.round((stats.accuracy - globalAverages.avg_accuracy) * 10) / 10)}
+                          <span className="delta-label">this</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">avg accuracy</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Average consistency across all users">
+                  <div className="stat">
+                    <span className="stat-value">
+                      {Math.round(globalAverages.avg_consistency || 0)}%
+                      {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
+                        <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
+                          {Math.abs(Math.round(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                          <span className="delta-label">you</span>
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${stats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
+                          {stats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
+                          {Math.abs(Math.round(stats.consistency - globalAverages.avg_consistency))}
+                          <span className="delta-label">this</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">avg consistency</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Average keystroke interval across all users">
+                  <div className="stat">
+                    <span className="stat-value">
+                      {Math.round(globalAverages.avg_interval || 0)}ms
+                      {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
+                        <span className={`stat-delta ${cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
+                          {Math.abs(Math.round(cumulativeStats.avgInterval - globalAverages.avg_interval))}
+                          <span className="delta-label">you</span>
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${stats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
+                          {stats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
+                          {Math.abs(Math.round(stats.avgInterval - globalAverages.avg_interval))}
+                          <span className="delta-label">this</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="stat-label">avg interval</span>
+                  </div>
+                </Tooltip>
+              </div>
+
+              {/* Percentile distribution */}
+              <div className="stat-grid secondary">
+                <Tooltip content="25th percentile WPM">
+                  <div className="stat small">
+                    <span className="stat-value">{Math.round(globalAverages.p25_wpm || 0)}</span>
+                    <span className="stat-label">25th %ile WPM</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="Median WPM">
+                  <div className="stat small">
+                    <span className="stat-value">{Math.round(globalAverages.p50_wpm || 0)}</span>
+                    <span className="stat-label">median WPM</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="75th percentile WPM">
+                  <div className="stat small">
+                    <span className="stat-value">{Math.round(globalAverages.p75_wpm || 0)}</span>
+                    <span className="stat-label">75th %ile WPM</span>
+                  </div>
+                </Tooltip>
+                <Tooltip content="90th percentile WPM - top 10% of users">
+                  <div className="stat small">
+                    <span className="stat-value">{Math.round(globalAverages.p90_wpm || 0)}</span>
+                    <span className="stat-label">90th %ile WPM</span>
+                  </div>
+                </Tooltip>
+              </div>
+
+              {/* Global Finger Stats - matches keyboard section position in This Paragraph */}
+              {fingerAverages && Object.keys(fingerAverages).length > 0 && (
+                <div className="finger-section">
+                  <h3>Finger Performance (Global Average)</h3>
+                  <FingerHands fingerStats={
+                    Object.fromEntries(
+                      Object.entries(fingerAverages).map(([finger, data]) => [
+                        finger,
+                        {
+                          avgInterval: data.avg_interval,
+                          accuracy: data.avg_accuracy,
+                          count: data.total_presses
+                        }
+                      ])
+                    )
+                  } />
+                </div>
+              )}
+
+              {/* Global Finger Transition Chord Diagram - before bigrams to match This Paragraph */}
+              {transitionAverages && Object.keys(transitionAverages).length > 0 && (
+                <div className="chord-section">
+                  <h3>Finger Transitions (Global Average)</h3>
+                  <FingerChordDiagram 
+                    fingerTransitions={
+                      Object.fromEntries(
+                        Object.entries(transitionAverages).map(([key, data]) => [
+                          key,
+                          {
+                            count: data.total_occurrences,
+                            totalTime: data.avg_time * data.total_occurrences,
+                            avg: data.avg_time,
+                            from: data.from_finger,
+                            to: data.to_finger
+                          }
+                        ])
+                      )
+                    }
+                    fingerStats={fingerAverages ? Object.fromEntries(
+                      Object.entries(fingerAverages).map(([finger, data]) => [
+                        finger,
+                        {
+                          avgInterval: data.avg_interval,
+                          accuracy: data.avg_accuracy,
+                          count: data.total_presses
+                        }
+                      ])
+                    ) : {}}
+                  />
+                </div>
+              )}
+
+              {/* Global Bigram Stats */}
+              {bigramAverages && Object.keys(bigramAverages).length > 0 && (
+                <div className="bigrams-container">
+                  <div className="bigrams">
+                    <p className="bigram-label">globally fastest transitions</p>
+                    <div className="bigram-list">
+                      {Object.entries(bigramAverages)
+                        .filter(([_, data]) => data.total_occurrences >= 10)
+                        .sort((a, b) => a[1].avg_time - b[1].avg_time)
+                        .slice(0, 5)
+                        .map(([bigram, data], i) => (
+                          <span key={i} className="bigram fast">
+                            <code>{formatBigram(bigram)}</code>
+                            <span className="bigram-meta">
+                              <span className="bigram-time">{Math.round(data.avg_time)}ms</span>
+                              <span className="bigram-count">{data.total_occurrences.toLocaleString()} samples</span>
+                            </span>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                  <div className="bigrams">
+                    <p className="bigram-label">globally slowest transitions</p>
+                    <div className="bigram-list">
+                      {Object.entries(bigramAverages)
+                        .filter(([_, data]) => data.total_occurrences >= 10)
+                        .sort((a, b) => b[1].avg_time - a[1].avg_time)
+                        .slice(0, 5)
+                        .map(([bigram, data], i) => (
+                          <span key={i} className="bigram slow">
+                            <code>{formatBigram(bigram)}</code>
+                            <span className="bigram-meta">
+                              <span className="bigram-time">{Math.round(data.avg_time)}ms</span>
+                              <span className="bigram-count">{data.total_occurrences.toLocaleString()} samples</span>
+                            </span>
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Global Behavioral Stats */}
+              {behavioralAverages && Object.keys(behavioralAverages).length > 0 && (
+                <div className="behavioral-section global-behavioral">
+                  <h3>Typing Patterns (Global Average)</h3>
+                  <div className="behavioral-grid">
+                    {/* Correction Style */}
+                    {behavioralAverages.backspaceEfficiency && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">correction style</span>
+                          <span className="behavioral-stat-value">
+                            {behavioralAverages.backspaceEfficiency.avg <= 1.2 ? 'efficient' :
+                             behavioralAverages.backspaceEfficiency.avg <= 2 ? 'normal' : 'thorough'}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          ~{behavioralAverages.backspaceEfficiency.avg.toFixed(1)} backspaces per error
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.backspaceEfficiency.avg}
+                          min={behavioralAverages.backspaceEfficiency.min}
+                          max={behavioralAverages.backspaceEfficiency.max}
+                          stdDev={behavioralAverages.backspaceEfficiency.std_dev}
+                          lowerIsBetter={true}
+                        />
+                      </div>
+                    )}
+
+                    {/* Burst Stats */}
+                    {behavioralAverages.avgBurstLength && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">avg burst length</span>
+                          <span className="behavioral-stat-value">
+                            {behavioralAverages.avgBurstLength.avg.toFixed(1)} chars
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          consecutive fast keystrokes
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.avgBurstLength.avg}
+                          min={behavioralAverages.avgBurstLength.min}
+                          max={behavioralAverages.avgBurstLength.max}
+                          stdDev={behavioralAverages.avgBurstLength.std_dev}
+                        />
+                      </div>
+                    )}
+
+                    {/* Burst Count */}
+                    {behavioralAverages.burstCount && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">total bursts</span>
+                          <span className="behavioral-stat-value">
+                            {Math.round(behavioralAverages.burstCount.avg)}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          avg fast typing sequences per session
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.burstCount.avg}
+                          min={behavioralAverages.burstCount.min}
+                          max={behavioralAverages.burstCount.max}
+                          stdDev={behavioralAverages.burstCount.std_dev}
+                        />
+                      </div>
+                    )}
+
+                    {/* Rhythm Score */}
+                    {behavioralAverages.rhythmScore && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">rhythm score</span>
+                          <span className="behavioral-stat-value">
+                            {Math.round(behavioralAverages.rhythmScore.avg)}%
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          typing consistency
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.rhythmScore.avg}
+                          min={behavioralAverages.rhythmScore.min}
+                          max={behavioralAverages.rhythmScore.max}
+                          stdDev={behavioralAverages.rhythmScore.std_dev}
+                          isPercent={true}
+                        />
+                      </div>
+                    )}
+
+                    {/* Hand Balance */}
+                    {behavioralAverages.handBalance && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">hand balance</span>
+                          <span className="behavioral-stat-value">
+                            {Math.abs(behavioralAverages.handBalance.avg) <= 10 ? 'balanced' :
+                             behavioralAverages.handBalance.avg > 10 ? 'right dominant' : 'left dominant'}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          {behavioralAverages.handBalance.avg > 0 ? '+' : ''}{Math.round(behavioralAverages.handBalance.avg)}% {behavioralAverages.handBalance.avg > 0 ? 'right' : 'left'} advantage
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.handBalance.avg}
+                          min={behavioralAverages.handBalance.min}
+                          max={behavioralAverages.handBalance.max}
+                          stdDev={behavioralAverages.handBalance.std_dev}
+                          centered={true}
+                        />
+                      </div>
+                    )}
+
+                    {/* Home Row */}
+                    {behavioralAverages.homeRowRatio && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">home row usage</span>
+                          <span className="behavioral-stat-value">
+                            {Math.round(behavioralAverages.homeRowRatio.avg * 100)}%
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          keystrokes on home row
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.homeRowRatio.avg}
+                          min={behavioralAverages.homeRowRatio.min}
+                          max={behavioralAverages.homeRowRatio.max}
+                          stdDev={behavioralAverages.homeRowRatio.std_dev}
+                          isPercent={true}
+                        />
+                      </div>
+                    )}
+
+                    {/* Total Hesitations */}
+                    {behavioralAverages.hesitationCount && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">hesitations</span>
+                          <span className="behavioral-stat-value">
+                            {Math.round(behavioralAverages.hesitationCount.avg)}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          avg pauses &gt;500ms per session
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.hesitationCount.avg}
+                          min={behavioralAverages.hesitationCount.min}
+                          max={behavioralAverages.hesitationCount.max}
+                          stdDev={behavioralAverages.hesitationCount.std_dev}
+                          lowerIsBetter={true}
+                        />
+                      </div>
+                    )}
+
+                    {/* Error Rate */}
+                    {behavioralAverages.errorRate && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">error rate</span>
+                          <span className="behavioral-stat-value">
+                            {behavioralAverages.errorRate.avg.toFixed(1)}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          avg errors per session
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.errorRate.avg}
+                          min={behavioralAverages.errorRate.min}
+                          max={behavioralAverages.errorRate.max}
+                          stdDev={behavioralAverages.errorRate.std_dev}
+                          lowerIsBetter={true}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Your Ranking */}
+              {cumulativeStats && cumulativeStats.sessions > 0 && (
+                <div className="your-ranking">
+                  <h4>Your Ranking</h4>
+                  <div className="ranking-grid">
+                    <div className="ranking-item">
+                      <span className="ranking-label">Your Avg WPM</span>
+                      <span className="ranking-value">{cumulativeStats.wpm}</span>
+                      <span className={`ranking-percentile ${
+                        cumulativeStats.wpm >= globalAverages.p90_wpm ? 'top10' :
+                        cumulativeStats.wpm >= globalAverages.p75_wpm ? 'top25' :
+                        cumulativeStats.wpm >= globalAverages.p50_wpm ? 'above' : 'below'
+                      }`}>
+                        {cumulativeStats.wpm >= globalAverages.p90_wpm ? 'Top 10%' :
+                         cumulativeStats.wpm >= globalAverages.p75_wpm ? 'Top 25%' :
+                         cumulativeStats.wpm >= globalAverages.p50_wpm ? 'Above Median' : 'Below Median'}
+                      </span>
+                    </div>
+                    <div className="ranking-item">
+                      <span className="ranking-label">Your Avg Accuracy</span>
+                      <span className="ranking-value">{cumulativeStats.accuracy}%</span>
+                      <span className={`ranking-percentile ${
+                        cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'above' : 'below'
+                      }`}>
+                        {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'Above Avg' : 'Below Avg'}
+                      </span>
+                    </div>
+                    <div className="ranking-item">
+                      <span className="ranking-label">Your Avg Consistency</span>
+                      <span className="ranking-value">{cumulativeStats.consistency}%</span>
+                      <span className={`ranking-percentile ${
+                        cumulativeStats.consistency >= globalAverages.avg_consistency ? 'above' : 'below'
+                      }`}>
+                        {cumulativeStats.consistency >= globalAverages.avg_consistency ? 'Above Avg' : 'Below Avg'}
+                      </span>
+                    </div>
+                    <div className="ranking-item">
+                      <span className="ranking-label">Your Avg Interval</span>
+                      <span className="ranking-value">{cumulativeStats.avgInterval}ms</span>
+                      <span className={`ranking-percentile ${
+                        cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'above' : 'below'
+                      }`}>
+                        {cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'Faster' : 'Slower'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
 
           <p className="restart-hint">press enter or space to continue</p>
         </section>

@@ -3,13 +3,12 @@ import {
   submitSession,
   getSessionStats,
   getSessionCount,
-  getRecentWpms,
-  calculatePercentile,
-  getGlobalPercentiles,
-  getBehavioralStats,
   getBigramStats,
   getFingerStats,
   getFingerTransitionStats,
+  getBehavioralStats,
+  getUserStats,
+  calculatePercentile,
   resetUserId as resetSupabaseUserId
 } from './supabase'
 
@@ -20,7 +19,6 @@ export function useGlobalStats() {
   const [fingerAverages, setFingerAverages] = useState(null)
   const [transitionAverages, setTransitionAverages] = useState(null)
   const [sessionCount, setSessionCount] = useState(0)
-  const [recentWpms, setRecentWpms] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -29,44 +27,31 @@ export function useGlobalStats() {
       setLoading(true)
       
       // Fetch all stats in parallel
-      const [stats, count, wpms, behavioral, bigrams, fingers, transitions] = await Promise.all([
+      const [stats, bigrams, fingers, transitions, behavioral] = await Promise.all([
         getSessionStats(),
-        getSessionCount(),
-        getRecentWpms(1000),
-        getBehavioralStats(),
         getBigramStats(200),
         getFingerStats(),
         getFingerTransitionStats(100),
+        getBehavioralStats(),
       ])
 
       if (stats) {
         setGlobalAverages({
-          total_sessions: stats.total_sessions,
-          total_users: stats.total_users,
+          total_sessions: stats.total_sessions || 0,
+          total_users: stats.total_users || 0,
           avg_wpm: parseFloat(stats.avg_wpm) || 0,
           avg_accuracy: parseFloat(stats.avg_accuracy) || 0,
           avg_interval: parseFloat(stats.avg_interval) || 0,
           avg_consistency: parseFloat(stats.avg_consistency) || 0,
+          wpm_std_dev: parseFloat(stats.wpm_std_dev) || 0,
+          min_wpm: parseFloat(stats.min_wpm) || 0,
+          max_wpm: parseFloat(stats.max_wpm) || 0,
           p25_wpm: parseFloat(stats.p25_wpm) || 0,
           p50_wpm: parseFloat(stats.median_wpm) || 0,
           p75_wpm: parseFloat(stats.p75_wpm) || 0,
           p90_wpm: parseFloat(stats.p90_wpm) || 0,
         })
-      }
-      
-      // Convert behavioral stats array to object for easy lookup
-      if (behavioral && behavioral.length > 0) {
-        const behavioralObj = {}
-        behavioral.forEach(stat => {
-          behavioralObj[stat.stat_name] = {
-            avg: parseFloat(stat.avg_value) || 0,
-            p25: parseFloat(stat.p25) || 0,
-            p50: parseFloat(stat.p50) || 0,
-            p75: parseFloat(stat.p75) || 0,
-            p90: parseFloat(stat.p90) || 0,
-          }
-        })
-        setBehavioralAverages(behavioralObj)
+        setSessionCount(stats.total_sessions || 0)
       }
 
       // Convert bigram stats array to object for easy lookup
@@ -75,9 +60,9 @@ export function useGlobalStats() {
         bigrams.forEach(stat => {
           bigramObj[stat.bigram] = {
             avg_time: parseFloat(stat.avg_time) || 0,
-            p50_time: parseFloat(stat.p50_time) || 0,
+            std_dev: parseFloat(stat.std_dev) || 0,
             avg_accuracy: parseFloat(stat.avg_accuracy) || 0,
-            total_occurrences: stat.total_occurrences,
+            total_occurrences: stat.total_occurrences || 0,
           }
         })
         setBigramAverages(bigramObj)
@@ -89,9 +74,9 @@ export function useGlobalStats() {
         fingers.forEach(stat => {
           fingerObj[stat.finger] = {
             avg_interval: parseFloat(stat.avg_interval) || 0,
-            p50_interval: parseFloat(stat.p50_interval) || 0,
+            std_dev: parseFloat(stat.std_dev) || 0,
             avg_accuracy: parseFloat(stat.avg_accuracy) || 0,
-            total_presses: stat.total_presses,
+            total_presses: stat.total_presses || 0,
           }
         })
         setFingerAverages(fingerObj)
@@ -103,17 +88,29 @@ export function useGlobalStats() {
         transitions.forEach(stat => {
           transitionObj[stat.transition_key] = {
             avg_time: parseFloat(stat.avg_time) || 0,
-            p50_time: parseFloat(stat.p50_time) || 0,
+            std_dev: parseFloat(stat.std_dev) || 0,
             from_finger: stat.from_finger,
             to_finger: stat.to_finger,
-            total_occurrences: stat.total_occurrences,
+            total_occurrences: stat.total_occurrences || 0,
           }
         })
         setTransitionAverages(transitionObj)
       }
-      
-      setSessionCount(count)
-      setRecentWpms(wpms)
+
+      // Convert behavioral stats array to object
+      if (behavioral && behavioral.length > 0) {
+        const behavioralObj = {}
+        behavioral.forEach(stat => {
+          behavioralObj[stat.stat_name] = {
+            avg: parseFloat(stat.avg_value) || 0,
+            std_dev: parseFloat(stat.std_dev) || 0,
+            min: parseFloat(stat.min_value) || 0,
+            max: parseFloat(stat.max_value) || 0,
+            count: stat.total_samples || 0,
+          }
+        })
+        setBehavioralAverages(behavioralObj)
+      }
 
     } catch (err) {
       console.error('Error fetching global stats:', err)
@@ -127,28 +124,10 @@ export function useGlobalStats() {
     fetchStats()
   }, [fetchStats])
 
+  // Submit session - only keystrokes needed!
   const submitStats = useCallback(async (stats) => {
     const result = await submitSession({
-      // Core stats
-      wpm: stats.wpm,
-      accuracy: stats.accuracy,
-      avgInterval: stats.avgInterval,
-      totalChars: stats.totalChars,
-      totalTime: stats.totalTime,
-      errorCount: stats.errorCount,
       sentenceId: stats.sentenceId,
-      
-      // Variance stats
-      stdDev: stats.stdDev,
-      consistency: stats.consistency,
-      
-      // Complex data
-      percentiles: stats.percentiles,
-      counts: stats.counts,
-      bigrams: stats.bigrams,
-      fingerStats: stats.fingerStats,
-      fingerTransitions: stats.fingerTransitions,
-      behavioral: stats.behavioral,
       keystrokes: stats.keystrokes,
     })
     
@@ -167,9 +146,11 @@ export function useGlobalStats() {
     return resetSupabaseUserId()
   }, [])
 
+  // Calculate percentile using global stats
   const getPercentile = useCallback((wpm) => {
-    return calculatePercentile(wpm, recentWpms)
-  }, [recentWpms])
+    if (!globalAverages || !globalAverages.wpm_std_dev) return null
+    return calculatePercentile(wpm, globalAverages.avg_wpm, globalAverages.wpm_std_dev)
+  }, [globalAverages])
 
   // Compare a value to global average
   const compareToGlobal = useCallback((type, value) => {
@@ -234,10 +215,8 @@ export function useGlobalStats() {
     
     return {
       avg: stat.avg,
-      p50: stat.p50,
       diff,
       better,
-      percentile: value > stat.p90 ? 90 : value > stat.p75 ? 75 : value > stat.p50 ? 50 : value > stat.p25 ? 25 : 10,
     }
   }, [behavioralAverages])
 
@@ -251,7 +230,6 @@ export function useGlobalStats() {
     
     return {
       globalAvg: stat.avg_time,
-      globalP50: stat.p50_time,
       diff,
       better,
       percentFaster: Math.round((diff / stat.avg_time) * 100),
@@ -268,7 +246,6 @@ export function useGlobalStats() {
     
     return {
       globalAvg: stat.avg_interval,
-      globalP50: stat.p50_interval,
       globalAccuracy: stat.avg_accuracy,
       diff,
       better,

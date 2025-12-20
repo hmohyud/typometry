@@ -31,51 +31,20 @@ export function resetUserId() {
 }
 
 // ============================================================
-// SESSION SUBMISSION
+// SESSION SUBMISSION - MINIMAL! Only keystrokes needed
+// Everything else is derived by the database trigger
 // ============================================================
 
-/**
- * Submit a completed session with ALL stats
- */
 export async function submitSession(sessionData) {
   const userId = getUserId()
   
-  console.log('Submitting session:', {
-    userId,
-    wpm: sessionData.wpm,
-    keystrokesCount: sessionData.keystrokes?.length,
-    hasBehavioral: !!sessionData.behavioral,
-    hasFingerTransitions: !!sessionData.fingerTransitions,
-  })
-  
+  // Only send keystrokes - the DB trigger derives everything else!
   const { data, error } = await supabase
-    .from('raw_sessions')
+    .from('keystroke_sessions')
     .insert([{
       user_id: userId,
-      
-      // Core stats
-      wpm: Math.round(sessionData.wpm || 0),
-      accuracy: sessionData.accuracy || 0,
-      avg_interval: sessionData.avgInterval || 0,
-      total_chars: Math.round(sessionData.totalChars || 0),
-      total_time_ms: Math.round(sessionData.totalTime || 0),
-      error_count: Math.round(sessionData.errorCount || 0),
       sentence_id: sessionData.sentenceId,
-      
-      // Variance stats
-      std_dev: sessionData.stdDev || null,
-      consistency: sessionData.consistency || null,
-      
-      // JSONB columns
-      percentiles: sessionData.percentiles || null,
-      counts: sessionData.counts || null,
-      bigrams: sessionData.bigrams || [],
-      finger_stats: sessionData.fingerStats || {},
-      finger_transitions: sessionData.fingerTransitions || {},
-      behavioral: sessionData.behavioral || null,
-      keystrokes: sessionData.keystrokes || [],
-      
-      processed: false,
+      keystrokes: sessionData.keystrokes,
     }])
     .select()
 
@@ -84,16 +53,16 @@ export async function submitSession(sessionData) {
     return null
   }
   
-  console.log('Session submitted successfully:', data[0]?.id)
+  console.log('Session submitted, auto-processed by trigger:', data[0]?.id)
   return data[0]
 }
 
 // ============================================================
-// STATS QUERIES
+// STATS QUERIES - From views backed by running_stats
 // ============================================================
 
 /**
- * Get basic stats from all sessions
+ * Get session stats (global averages)
  */
 export async function getSessionStats() {
   const { data, error } = await supabase
@@ -109,43 +78,11 @@ export async function getSessionStats() {
 }
 
 /**
- * Get global percentiles for a specific stat
- */
-export async function getGlobalPercentiles(statName = 'wpm') {
-  const { data, error } = await supabase
-    .from('global_percentiles')
-    .select('*')
-    .eq('stat_name', statName)
-    .single()
-
-  if (error) {
-    console.error('Error fetching percentiles:', error)
-    return null
-  }
-  return data
-}
-
-/**
- * Get all behavioral stats
- */
-export async function getBehavioralStats() {
-  const { data, error } = await supabase
-    .from('behavioral_global_stats')
-    .select('*')
-
-  if (error) {
-    console.error('Error fetching behavioral stats:', error)
-    return []
-  }
-  return data || []
-}
-
-/**
- * Get bigram stats (top N by occurrences)
+ * Get bigram stats
  */
 export async function getBigramStats(limit = 100) {
   const { data, error } = await supabase
-    .from('bigram_global_stats')
+    .from('bigram_stats_view')
     .select('*')
     .order('total_occurrences', { ascending: false })
     .limit(limit)
@@ -162,7 +99,7 @@ export async function getBigramStats(limit = 100) {
  */
 export async function getFingerStats() {
   const { data, error } = await supabase
-    .from('finger_global_stats')
+    .from('finger_stats_view')
     .select('*')
 
   if (error) {
@@ -175,9 +112,9 @@ export async function getFingerStats() {
 /**
  * Get finger transition stats
  */
-export async function getFingerTransitionStats(limit = 50) {
+export async function getFingerTransitionStats(limit = 100) {
   const { data, error } = await supabase
-    .from('finger_transition_stats')
+    .from('finger_transition_stats_view')
     .select('*')
     .order('total_occurrences', { ascending: false })
     .limit(limit)
@@ -190,67 +127,83 @@ export async function getFingerTransitionStats(limit = 50) {
 }
 
 /**
- * Get total session count
+ * Get behavioral stats
  */
-export async function getSessionCount() {
-  const { count, error } = await supabase
-    .from('raw_sessions')
-    .select('*', { count: 'exact', head: true })
-
-  if (error) {
-    console.error('Error fetching session count:', error)
-    return 0
-  }
-  return count || 0
-}
-
-/**
- * Get recent WPMs for percentile calculation (client-side)
- */
-export async function getRecentWpms(limit = 1000) {
+export async function getBehavioralStats() {
   const { data, error } = await supabase
-    .from('raw_sessions')
-    .select('wpm, user_id')
-    .order('created_at', { ascending: false })
-    .limit(limit)
+    .from('behavioral_stats_view')
+    .select('*')
 
   if (error) {
-    console.error('Error fetching WPMs:', error)
+    console.error('Error fetching behavioral stats:', error)
     return []
   }
   return data || []
 }
 
 /**
- * Calculate percentile from raw data (client-side fallback)
+ * Get user-specific stats
  */
-export function calculatePercentile(wpm, allWpms) {
-  if (!allWpms || allWpms.length === 0) return null
+export async function getUserStats(userId = null) {
+  const uid = userId || getUserId()
   
-  // Get unique user averages to weight by user, not session
-  const userAvgs = {}
-  allWpms.forEach(row => {
-    if (!userAvgs[row.user_id]) {
-      userAvgs[row.user_id] = { total: 0, count: 0 }
+  const { data, error } = await supabase
+    .from('user_stats_view')
+    .select('*')
+    .eq('user_id', uid)
+
+  if (error) {
+    console.error('Error fetching user stats:', error)
+    return null
+  }
+  
+  // Convert to object keyed by stat name
+  const stats = {}
+  data?.forEach(row => {
+    stats[row.stat_name] = {
+      avg: parseFloat(row.avg_value) || 0,
+      count: row.total_samples || 0,
     }
-    userAvgs[row.user_id].total += row.wpm
-    userAvgs[row.user_id].count += 1
   })
   
-  const avgWpms = Object.values(userAvgs).map(u => u.total / u.count)
-  const below = avgWpms.filter(avg => avg < wpm).length
-  
-  return Math.round((below / avgWpms.length) * 100)
+  return stats
 }
 
 /**
- * Trigger server-side stats processing (if you have an edge function)
+ * Get session count from global WPM stat
  */
-export async function triggerStatsProcessing() {
-  // This would call an edge function that runs process_all_stats()
-  // For now, you can run it manually in SQL editor:
-  // SELECT * FROM process_all_stats();
-  console.log('Stats processing should be triggered via SQL: SELECT * FROM process_all_stats();')
+export async function getSessionCount() {
+  const stats = await getSessionStats()
+  return stats?.total_sessions || 0
+}
+
+/**
+ * Calculate percentile using normal distribution approximation
+ */
+export function calculatePercentile(value, avg, stdDev) {
+  if (!stdDev || stdDev === 0) return 50
+  
+  const z = (value - avg) / stdDev
+  // Approximate CDF using logistics function
+  const percentile = 100 / (1 + Math.exp(-1.7 * z))
+  
+  return Math.round(Math.max(1, Math.min(99, percentile)))
+}
+
+/**
+ * Cleanup old sessions (call periodically if needed)
+ */
+export async function cleanupOldSessions(daysToKeep = 30) {
+  const { data, error } = await supabase
+    .rpc('cleanup_old_sessions', { days_to_keep: daysToKeep })
+
+  if (error) {
+    console.error('Error cleaning up sessions:', error)
+    return null
+  }
+  
+  console.log('Cleanup result:', data)
+  return data
 }
 
 export default supabase
