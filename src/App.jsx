@@ -2773,9 +2773,9 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      // If viewing past stats, space/enter dismisses and scrolls to top to resume typing
+      // If viewing past stats, Shift+Enter dismisses and scrolls to top to resume typing
       if (viewingPastStats) {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.key === "Enter" && e.shiftKey) {
           e.preventDefault();
           setViewingPastStats(false);
           setIsComplete(false);
@@ -2787,7 +2787,8 @@ function App() {
       }
 
       if (isComplete) {
-        if (e.key === "Enter" || e.key === " ") {
+        // Shift+Enter to restart
+        if (e.key === "Enter" && e.shiftKey) {
           e.preventDefault();
           resetTest();
         }
@@ -2853,6 +2854,14 @@ function App() {
         );
         setIsComplete(true);
         setStats(finalStats);
+        
+        // Scroll to stats section after a brief delay
+        setTimeout(() => {
+          const statsSection = document.querySelector('.stats');
+          if (statsSection) {
+            statsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
 
         // Save to history
         const newCompleted = [...completedIndices, currentIndex];
@@ -3095,7 +3104,7 @@ function App() {
               visibility: !isActive && !isComplete ? "visible" : "hidden",
             }}
           >
-            {viewingPastStats ? "press space or enter to type..." : "start typing..."}
+            {viewingPastStats ? "shift+enter to resume..." : "start typing..."}
           </p>
           {isActive && !isComplete && (
             <div className="live-stats">
@@ -3103,6 +3112,11 @@ function App() {
                 {typed.length} / {currentText.length}
               </span>
             </div>
+          )}
+          {isComplete && (
+            <p className="hint complete-hint">
+              <span className="checkmark">✓</span> complete · <kbd>shift</kbd>+<kbd>enter</kbd> for next
+            </p>
           )}
         </div>
       </main>
@@ -3986,6 +4000,12 @@ function App() {
                           {fmt.int(Math.abs(cumulativeStats.wpm - globalAverages.avg_wpm))}
                         </span>
                       )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${cumulativeStats.wpm >= stats.wpm ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.wpm >= stats.wpm ? '↑' : '↓'}
+                          {fmt.int(Math.abs(cumulativeStats.wpm - stats.wpm))}
+                        </span>
+                      )}
                     </span>
                     <span className="stat-label">avg wpm</span>
                   </div>
@@ -4000,6 +4020,12 @@ function App() {
                           {fmt.dec(Math.abs(cumulativeStats.accuracy - globalAverages.avg_accuracy))}
                         </span>
                       )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${cumulativeStats.accuracy >= stats.accuracy ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.accuracy >= stats.accuracy ? '↑' : '↓'}
+                          {fmt.dec(Math.abs(cumulativeStats.accuracy - stats.accuracy))}
+                        </span>
+                      )}
                     </span>
                     <span className="stat-label">accuracy</span>
                   </div>
@@ -4012,6 +4038,12 @@ function App() {
                         <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
                           {fmt.int(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${cumulativeStats.consistency >= stats.consistency ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.consistency >= stats.consistency ? '↑' : '↓'}
+                          {fmt.int(Math.abs(cumulativeStats.consistency - stats.consistency))}
                         </span>
                       )}
                     </span>
@@ -4037,6 +4069,12 @@ function App() {
                         <span className={`stat-delta ${cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'positive' : 'negative'}`}>
                           {cumulativeStats.avgInterval <= globalAverages.avg_interval ? '↓' : '↑'}
                           {fmt.int(Math.abs(cumulativeStats.avgInterval - globalAverages.avg_interval))}
+                        </span>
+                      )}
+                      {comparisonBase === "current" && stats && (
+                        <span className={`stat-delta ${cumulativeStats.avgInterval <= stats.avgInterval ? 'positive' : 'negative'}`}>
+                          {cumulativeStats.avgInterval <= stats.avgInterval ? '↓' : '↑'}
+                          {fmt.int(Math.abs(cumulativeStats.avgInterval - stats.avgInterval))}
                         </span>
                       )}
                     </span>
@@ -5048,12 +5086,12 @@ function App() {
             </>
           ) : null}
 
-          <p className="restart-hint">press enter or space to continue</p>
+          <p className="restart-hint">shift+enter to continue</p>
         </section>
       ) : null}
 
       <footer>
-        <button className="reset-btn" onClick={() => resetTest()}>
+        <button className="reset-btn" onClick={() => resetTest()} title="shift+enter">
           next
         </button>
         <button
