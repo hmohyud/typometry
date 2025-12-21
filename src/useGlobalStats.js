@@ -9,12 +9,14 @@ import {
   getBehavioralStats,
   getKeyStats,
   getUserStats,
+  getGlobalHistograms,
   calculatePercentile,
   resetUserId as resetSupabaseUserId
 } from './supabase'
 
 export function useGlobalStats() {
   const [globalAverages, setGlobalAverages] = useState(null)
+  const [globalHistograms, setGlobalHistograms] = useState(null)
   const [behavioralAverages, setBehavioralAverages] = useState(null)
   const [bigramAverages, setBigramAverages] = useState(null)
   const [fingerAverages, setFingerAverages] = useState(null)
@@ -29,13 +31,14 @@ export function useGlobalStats() {
       setLoading(true)
       
       // Fetch all stats in parallel
-      const [stats, bigrams, fingers, transitions, behavioral, keys] = await Promise.all([
+      const [stats, bigrams, fingers, transitions, behavioral, keys, histograms] = await Promise.all([
         getSessionStats(),
         getBigramStats(200),
         getFingerStats(),
         getFingerTransitionStats(100),
         getBehavioralStats(),
         getKeyStats(),
+        getGlobalHistograms(),
       ])
 
       if (stats) {
@@ -55,6 +58,11 @@ export function useGlobalStats() {
           p90_wpm: parseFloat(stats.p90_wpm) || 0,
         })
         setSessionCount(stats.total_sessions || 0)
+      }
+
+      // Set global histograms
+      if (histograms) {
+        setGlobalHistograms(histograms)
       }
 
       // Convert bigram stats array to object for easy lookup
@@ -273,6 +281,7 @@ export function useGlobalStats() {
   return {
     // Data
     globalAverages,
+    globalHistograms,
     behavioralAverages,
     bigramAverages,
     fingerAverages,

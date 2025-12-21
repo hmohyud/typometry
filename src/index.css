@@ -962,6 +962,21 @@ h1 {
 .histogram-bar.current {
   background: #98c379;
   opacity: 1;
+  min-height: 4px;
+  position: relative;
+}
+
+.histogram-bar.current::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #98c379;
 }
 
 .histogram-bar.current.hovered {

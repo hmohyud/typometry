@@ -1035,6 +1035,55 @@ const GlobalDistributionBar = ({ value, min, max, stdDev, lowerIsBetter = false,
   );
 };
 
+// Convert global histogram JSON from Supabase to array format for SessionHistogram
+// Global histograms are stored as { "0": count, "1": count, ... } where keys are bucket indices
+const globalHistogramToArray = (globalHist, configKey) => {
+  if (!globalHist || !globalHist.data) return null;
+  
+  const config = HISTOGRAM_CONFIG[configKey];
+  if (!config) return null;
+  
+  const bucketCount = config.getBucketCount();
+  const arr = new Array(bucketCount).fill(0);
+  
+  // The global histogram keys are bucket indices based on bucket_size in SQL
+  // We need to map them to our local bucket structure
+  // SQL uses: bucket_key = FLOOR(value / bucket_size)
+  // Our local uses: bucketIdx = FLOOR((value - min) / step)
+  
+  Object.entries(globalHist.data).forEach(([bucketKey, count]) => {
+    const sqlBucket = parseInt(bucketKey, 10);
+    if (isNaN(sqlBucket)) return;
+    
+    // Map SQL bucket to local bucket
+    let localIdx;
+    
+    if (configKey === 'handBalance' || configKey === 'homeRowAdvantage') {
+      // SQL stores as 0-100 (value + 50), local stores as -50 to 50
+      // SQL bucket 0 = local -50, SQL bucket 50 = local 0, SQL bucket 100 = local 50
+      // Clamp to valid range since SQL bucket 100 would be out of bounds
+      localIdx = Math.min(sqlBucket, bucketCount - 1);
+    } else if (configKey === 'avgInterval') {
+      // SQL bucket_size is 5, so bucket 10 = 50ms, bucket 20 = 100ms, etc.
+      // Local min is 50, step is 5
+      // SQL bucket corresponds to value range [bucket*5, (bucket+1)*5)
+      // Local idx for value v: FLOOR((v - 50) / 5)
+      const approxValue = sqlBucket * 5;
+      localIdx = Math.floor((approxValue - config.min) / config.step);
+    } else {
+      // For wpm, accuracy, consistency, flowRatio, rhythmScore
+      // SQL bucket_size is 1, local step is 1
+      localIdx = sqlBucket - config.min;
+    }
+    
+    if (localIdx >= 0 && localIdx < bucketCount) {
+      arr[localIdx] += count;
+    }
+  });
+  
+  return arr;
+};
+
 // Session distribution histogram component - actual bar chart with smart zoom
 const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = true, xAxisLabels = null, formatValue = null, reversed = false }) => {
   const config = HISTOGRAM_CONFIG[configKey];
@@ -1055,6 +1104,18 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
   const totalSessions = validData.reduce((a, b) => a + b, 0);
   if (totalSessions === 0 || isNaN(totalSessions)) return null;
   
+  // Find which bucket the current/average values fall into (in original indices)
+  const getBucketIndex = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return -1;
+    // Round to nearest step for proper bucket alignment
+    const roundedValue = Math.round(value / config.step) * config.step;
+    const idx = Math.floor((roundedValue - config.min) / config.step);
+    return Math.max(0, Math.min(idx, validData.length - 1));
+  };
+  
+  const currentBucket = getBucketIndex(currentValue);
+  const averageBucket = getBucketIndex(average);
+  
   // Find the range of non-zero buckets for smart zoom
   let startIdx = 0;
   let endIdx = validData.length - 1;
@@ -1066,6 +1127,16 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
     
     if (firstNonZero === -1) firstNonZero = 0;
     if (lastNonZero === -1 || lastNonZero < firstNonZero) lastNonZero = validData.length - 1;
+    
+    // Expand range to include current and average values if they exist
+    if (currentBucket >= 0) {
+      firstNonZero = Math.min(firstNonZero, currentBucket);
+      lastNonZero = Math.max(lastNonZero, currentBucket);
+    }
+    if (averageBucket >= 0) {
+      firstNonZero = Math.min(firstNonZero, averageBucket);
+      lastNonZero = Math.max(lastNonZero, averageBucket);
+    }
     
     // Add some padding (15% of range on each side, minimum 5 buckets)
     const range = lastNonZero - firstNonZero;
@@ -1084,15 +1155,6 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
   }
   
   const maxCount = Math.max(...visibleData, 1);
-  
-  // Find which bucket the current/average values fall into (in original indices)
-  const getBucketIndex = (value) => {
-    if (value === null || value === undefined || isNaN(value)) return -1;
-    const idx = Math.floor((value - config.min) / config.step);
-    return Math.max(0, Math.min(idx, validData.length - 1));
-  };
-  
-  const currentBucket = getBucketIndex(currentValue);
   
   // Calculate display range values
   const displayMin = config.min + startIdx * config.step;
@@ -1126,21 +1188,22 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
             const percentage = totalSessions > 0 ? ((count / totalSessions) * 100).toFixed(1) : '0';
             const isHovered = hoverInfo && hoverInfo.idx === i;
             
-            // Format the range display - use custom formatter if provided
+            // Format the range display - use custom formatter if provided, otherwise just show bucket value
             const rangeDisplay = formatValue 
-              ? `${formatValue(bucketStart)} – ${formatValue(bucketEnd)}`
-              : `${bucketStart}${config.unit} – ${bucketEnd}${config.unit}`;
+              ? formatValue(bucketStart)
+              : `${bucketStart}${config.unit}`;
             
             return (
               <div 
                 key={i}
-                className={`histogram-bar ${isCurrent ? 'current' : ''} ${count === 0 ? 'empty' : ''} ${isHovered ? 'hovered' : ''}`}
-                style={{ height: `${Math.max(height, count > 0 ? 4 : 0)}%` }}
-                onMouseEnter={() => count > 0 && setHoverInfo({
+                className={`histogram-bar ${isCurrent ? 'current' : ''} ${count === 0 && !isCurrent ? 'empty' : ''} ${isHovered ? 'hovered' : ''}`}
+                style={{ height: `${Math.max(height, (count > 0 || isCurrent) ? 4 : 0)}%` }}
+                onMouseEnter={() => (count > 0 || isCurrent) && setHoverInfo({
                   idx: i,
                   range: rangeDisplay,
                   count,
-                  percentage
+                  percentage,
+                  isCurrent
                 })}
               />
             );
@@ -1154,7 +1217,7 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
                 position: 'fixed',
               }}
             >
-              <div className="histogram-tooltip-range">{hoverInfo.range}</div>
+              <div className="histogram-tooltip-range">{hoverInfo.range}{hoverInfo.isCurrent ? ' (you)' : ''}</div>
               <div className="histogram-tooltip-count">{hoverInfo.count} session{hoverInfo.count !== 1 ? 's' : ''} ({hoverInfo.percentage}%)</div>
             </div>
           )}
@@ -1988,6 +2051,7 @@ function App() {
   // Global stats from Supabase for comparisons
   const { 
     globalAverages,
+    globalHistograms,
     bigramAverages,
     fingerAverages,
     transitionAverages,
@@ -2138,7 +2202,7 @@ function App() {
     const wpm = minutes > 0 ? Math.round(totalChars / 5 / minutes) : 0;
     const accuracy =
       totalChars > 0
-        ? Math.round(((totalChars - totalErrors) / totalChars) * 100)
+        ? Math.round(((totalChars - totalErrors) / totalChars) * 1000) / 10
         : 0;
 
     // Aggregate counts
@@ -2461,7 +2525,7 @@ function App() {
       totalTime: Math.round(totalTime / 1000),
       wpm,
       accuracy,
-      consistency: Math.round(avgConsistency),
+      consistency: Math.round(avgConsistency * 10) / 10,
       avgErrors: Math.round(avgErrors * 10) / 10,
       avgInterval: Math.round(avgInterval),
       avgWordInterval: Math.round(avgWordInterval),
@@ -2522,7 +2586,7 @@ function App() {
 
     // Consistency score
     const cv = avgInterval > 0 ? stdDev / avgInterval : 0;
-    const consistency = Math.max(0, Math.round((1 - Math.min(cv, 1)) * 100));
+    const consistency = Math.max(0, Math.round((1 - Math.min(cv, 1)) * 1000) / 10);
 
     const correctChars = data.filter((d) => d.correct).length;
     const accuracy = data.length > 0 ? (correctChars / data.length) * 100 : 0;
@@ -3103,7 +3167,7 @@ function App() {
     return {
       wpm,
       cpm,
-      accuracy: Math.round(accuracy),
+      accuracy: Math.round(accuracy * 10) / 10,
       avgInterval: Math.round(avgInterval),
       stdDev: Math.round(stdDev),
       consistency,
@@ -3445,7 +3509,7 @@ function App() {
       return {
         wpm: Math.round(globalAverages.avg_wpm),
         accuracy: Math.round(globalAverages.avg_accuracy * 10) / 10,
-        consistency: Math.round(globalAverages.avg_consistency),
+        consistency: Math.round(globalAverages.avg_consistency * 10) / 10,
         avgInterval: Math.round(globalAverages.avg_interval),
         sessions: globalAverages.total_sessions,
         label: "global",
@@ -3867,7 +3931,7 @@ function App() {
                           {stats.consistency >= compBase.consistency
                             ? "↑"
                             : "↓"}
-                          {fmt.int(Math.abs(stats.consistency - compBase.consistency))}
+                          {fmt.dec(Math.abs(stats.consistency - compBase.consistency))}
                         </span>
                       )}
                     </span>
@@ -4515,7 +4579,7 @@ function App() {
                 <Tooltip content={TIPS.accuracy}>
                   <div className="stat">
                     <span className="stat-value">
-                      {cumulativeStats.accuracy}%
+                      {fmt.dec(cumulativeStats.accuracy)}%
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'positive' : 'negative'}`}>
                           {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? '↑' : '↓'}
@@ -4539,13 +4603,13 @@ function App() {
                       {comparisonBase === "global" && globalAverages && (
                         <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {fmt.int(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                          {fmt.dec(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${cumulativeStats.consistency >= stats.consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= stats.consistency ? '↑' : '↓'}
-                          {fmt.int(Math.abs(cumulativeStats.consistency - stats.consistency))}
+                          {fmt.dec(Math.abs(cumulativeStats.consistency - stats.consistency))}
                         </span>
                       )}
                     </span>
@@ -4631,8 +4695,8 @@ function App() {
                       </Tooltip>
                     </div>
                     <div className="histogram-legend">
-                      <span className="legend-item"><span className="legend-swatch normal"></span>history</span>
-                      <span className="legend-item"><span className="legend-swatch current"></span>current</span>
+                      <span className="legend-item"><span className="legend-swatch normal"></span>your sessions</span>
+                      <span className="legend-item"><span className="legend-swatch current"></span>this paragraph</span>
                     </div>
                   </div>
                   <div className="histograms-grid">
@@ -5305,18 +5369,18 @@ function App() {
                 <Tooltip content="Average consistency across all users">
                   <div className="stat">
                     <span className="stat-value">
-                      {fmt.int(globalAverages.avg_consistency)}%
+                      {fmt.dec(globalAverages.avg_consistency)}%
                       {comparisonBase === "alltime" && cumulativeStats && cumulativeStats.sessions > 0 && (
                         <span className={`stat-delta ${cumulativeStats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {cumulativeStats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {fmt.int(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
+                          {fmt.dec(Math.abs(cumulativeStats.consistency - globalAverages.avg_consistency))}
                           <span className="delta-label">you</span>
                         </span>
                       )}
                       {comparisonBase === "current" && stats && (
                         <span className={`stat-delta ${stats.consistency >= globalAverages.avg_consistency ? 'positive' : 'negative'}`}>
                           {stats.consistency >= globalAverages.avg_consistency ? '↑' : '↓'}
-                          {fmt.int(Math.abs(stats.consistency - globalAverages.avg_consistency))}
+                          {fmt.dec(Math.abs(stats.consistency - globalAverages.avg_consistency))}
                           <span className="delta-label">this</span>
                         </span>
                       )}
@@ -5375,6 +5439,149 @@ function App() {
                   </div>
                 </Tooltip>
               </div>
+
+              {/* Global Session Distribution Histograms */}
+              {globalHistograms && Object.keys(globalHistograms).length > 0 && (
+                <div className="histograms-section">
+                  <div className="histograms-header-row">
+                    <div className="histograms-header-left">
+                      <h3 className="histograms-header">Global Session Distributions</h3>
+                      <label className="zoom-toggle">
+                        <input 
+                          type="checkbox" 
+                          checked={histogramZoom} 
+                          onChange={(e) => {
+                            setHistogramZoom(e.target.checked);
+                            saveToStorage(STORAGE_KEYS.HISTOGRAM_ZOOM, e.target.checked);
+                          }}
+                        />
+                        <span>smart zoom</span>
+                      </label>
+                      <Tooltip content={TIPS.sessionDistributions}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
+                    <div className="histogram-legend">
+                      <span className="legend-item"><span className="legend-swatch normal"></span>all users</span>
+                      {comparisonBase !== "none" && (
+                        <span className="legend-item"><span className="legend-swatch current"></span>
+                          {comparisonBase === "current" ? "this paragraph" : comparisonBase === "alltime" ? "your average" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="histograms-grid">
+                    {globalHistograms.wpm && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.wpm}>
+                          <span className="histogram-title">WPM</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.wpm, 'wpm')} 
+                          configKey="wpm" 
+                          currentValue={comparisonBase === "current" ? stats?.wpm : comparisonBase === "alltime" ? cumulativeStats?.wpm : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.accuracy && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.accuracy}>
+                          <span className="histogram-title">Accuracy</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.accuracy, 'accuracy')} 
+                          configKey="accuracy" 
+                          currentValue={comparisonBase === "current" ? stats?.accuracy : comparisonBase === "alltime" ? cumulativeStats?.accuracy : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.consistency && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.consistency}>
+                          <span className="histogram-title">Consistency</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.consistency, 'consistency')} 
+                          configKey="consistency" 
+                          currentValue={comparisonBase === "current" ? stats?.consistency : comparisonBase === "alltime" ? cumulativeStats?.consistency : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.avgInterval && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.avgKeystroke}>
+                          <span className="histogram-title">Keystroke Time</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.avgInterval, 'avgInterval')} 
+                          configKey="avgInterval" 
+                          currentValue={comparisonBase === "current" ? stats?.avgInterval : comparisonBase === "alltime" ? cumulativeStats?.avgInterval : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.flowRatio && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.flowState}>
+                          <span className="histogram-title">Flow State</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.flowRatio, 'flowRatio')} 
+                          configKey="flowRatio" 
+                          currentValue={comparisonBase === "current" ? stats?.behavioral?.flowRatio : comparisonBase === "alltime" ? cumulativeStats?.behavioral?.flowRatio : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.rhythmScore && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.rhythmScore}>
+                          <span className="histogram-title">Rhythm</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.rhythmScore, 'rhythmScore')} 
+                          configKey="rhythmScore" 
+                          currentValue={comparisonBase === "current" ? stats?.behavioral?.rhythmScore : comparisonBase === "alltime" ? cumulativeStats?.behavioral?.rhythmScore : undefined}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.handBalance && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.handBalance}>
+                          <span className="histogram-title">Hand Balance</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.handBalance, 'handBalance')} 
+                          configKey="handBalance" 
+                          currentValue={comparisonBase === "current" && stats?.behavioral ? Math.round(stats.behavioral.handBalance) : comparisonBase === "alltime" && cumulativeStats?.behavioral ? Math.round(cumulativeStats.behavioral.handBalance) : undefined}
+                          smartZoom={histogramZoom}
+                          reversed={true}
+                          xAxisLabels={{ min: "← left faster", max: "right faster →" }}
+                          formatValue={(val) => `${Math.abs(val)}% ${val > 0 ? 'left' : val < 0 ? 'right' : 'balanced'}`}
+                        />
+                      </div>
+                    )}
+                    {globalHistograms.homeRowAdvantage && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.homeRow}>
+                          <span className="histogram-title">Home Row</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={globalHistogramToArray(globalHistograms.homeRowAdvantage, 'homeRowAdvantage')} 
+                          configKey="homeRowAdvantage" 
+                          currentValue={comparisonBase === "current" && stats?.behavioral ? Math.round(stats.behavioral.homeRowAdvantage) : comparisonBase === "alltime" && cumulativeStats?.behavioral ? Math.round(cumulativeStats.behavioral.homeRowAdvantage) : undefined}
+                          smartZoom={histogramZoom}
+                          xAxisLabels={{ min: "← away faster", max: "home faster →" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Global Keyboard Heatmap */}
               {keyAverages && Object.keys(keyAverages).length > 0 && (

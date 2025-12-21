@@ -221,4 +221,38 @@ export async function cleanupOldSessions(daysToKeep = 30) {
   return data
 }
 
+/**
+ * Get global histograms for all metrics
+ * Returns histogram data that can be displayed in the UI
+ */
+export async function getGlobalHistograms() {
+  const { data, error } = await supabase
+    .from('global_histograms_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching global histograms:', error)
+    return null
+  }
+
+  if (!data || data.length === 0) return null
+
+  // Convert to object keyed by metric name
+  const histograms = {}
+  data.forEach(row => {
+    if (row.histogram && Object.keys(row.histogram).length > 0) {
+      histograms[row.metric] = {
+        data: row.histogram,
+        totalSessions: row.total_sessions || 0,
+        avg: parseFloat(row.avg_value) || 0,
+        stdDev: parseFloat(row.std_dev) || 0,
+        min: parseFloat(row.min_value) || 0,
+        max: parseFloat(row.max_value) || 0,
+      }
+    }
+  })
+
+  return histograms
+}
+
 export default supabase
