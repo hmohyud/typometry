@@ -468,6 +468,7 @@ h1 {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 .bigrams {
@@ -1329,6 +1330,76 @@ footer {
 
 .typing-hint-container .live-stats {
   position: absolute;
+}
+
+/* Complete hint shown after finishing paragraph */
+.complete-hint-container {
+  text-align: center;
+  padding: 2rem 0 1rem;
+  margin-top: 1rem;
+  transition: opacity 0.3s ease;
+}
+
+.complete-hint-container.faded {
+  opacity: 0.3;
+}
+
+.complete-hint {
+  color: #98c379;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.complete-hint .checkmark {
+  font-size: 1.2rem;
+}
+
+.complete-hint kbd {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: #e2b714;
+}
+
+/* Fixed floating hint when scrolled */
+.fixed-hint {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(15, 15, 15, 0.95);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.9rem;
+  color: #646669;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fixed-hint.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.fixed-hint kbd {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: #e2b714;
 }
 
 /* Finger Hands Visualization */

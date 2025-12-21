@@ -1591,6 +1591,7 @@ function App() {
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
+  const [showFixedHint, setShowFixedHint] = useState(false);
 
   // Global stats from Supabase for comparisons
   const { 
@@ -1612,6 +1613,8 @@ function App() {
   const containerRef = useRef(null);
   const clearHoldTimer = useRef(null);
   const clearHoldInterval = useRef(null);
+  const completeHintRef = useRef(null);
+  const restartHintRef = useRef(null);
 
   // Load completed indices on mount
   const [completedIndices, setCompletedIndices] = useState(() =>
@@ -1664,6 +1667,52 @@ function App() {
   useEffect(() => {
     containerRef.current?.focus();
   }, []);
+
+  // Track visibility of hint elements to show/hide fixed floating hint
+  useEffect(() => {
+    if (!isComplete) {
+      setShowFixedHint(false);
+      return;
+    }
+    
+    // Track which hints are visible
+    let topHintVisible = false;
+    let bottomHintVisible = false;
+    
+    const updateFixedHint = () => {
+      // Hide fixed hint if either the top or bottom hint is visible
+      setShowFixedHint(!topHintVisible && !bottomHintVisible);
+    };
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.target === completeHintRef.current) {
+            topHintVisible = entry.isIntersecting;
+          } else if (entry.target === restartHintRef.current) {
+            bottomHintVisible = entry.isIntersecting;
+          }
+        });
+        updateFixedHint();
+      },
+      { threshold: 0.5 }
+    );
+    
+    // Small delay to let the DOM update
+    const timer = setTimeout(() => {
+      if (completeHintRef.current) {
+        observer.observe(completeHintRef.current);
+      }
+      if (restartHintRef.current) {
+        observer.observe(restartHintRef.current);
+      }
+    }, 200);
+    
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [isComplete]);
 
   const calculateCumulativeStats = (history) => {
     if (history.length === 0) return null;
@@ -2855,11 +2904,11 @@ function App() {
         setIsComplete(true);
         setStats(finalStats);
         
-        // Scroll to stats section after a brief delay
+        // Scroll to show complete hint after a brief delay
         setTimeout(() => {
-          const statsSection = document.querySelector('.stats');
-          if (statsSection) {
-            statsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const completeHint = document.querySelector('.complete-hint-container');
+          if (completeHint) {
+            completeHint.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
         }, 100);
 
@@ -2968,6 +3017,18 @@ function App() {
   const getComparisonBase = () => {
     // "none" means no comparison
     if (comparisonBase === "none") {
+      return null;
+    }
+    // Don't compare to self - if viewing "This Paragraph" and comparison is "current", return null
+    if (statsView === "current" && comparisonBase === "current") {
+      return null;
+    }
+    // Don't compare to self - if viewing "All Time" and comparison is "alltime", return null
+    if (statsView === "alltime" && comparisonBase === "alltime") {
+      return null;
+    }
+    // Don't compare to self - if viewing "Global" and comparison is "global", return null
+    if (statsView === "global" && comparisonBase === "global") {
       return null;
     }
     if (comparisonBase === "global" && globalAverages && globalAverages.total_sessions > 0) {
@@ -3113,13 +3174,22 @@ function App() {
               </span>
             </div>
           )}
-          {isComplete && (
-            <p className="hint complete-hint">
+        </div>
+        {isComplete && (
+          <div className={`complete-hint-container ${showFixedHint ? 'faded' : ''}`} ref={completeHintRef}>
+            <p className="complete-hint">
               <span className="checkmark">✓</span> complete · <kbd>shift</kbd>+<kbd>enter</kbd> for next
             </p>
-          )}
-        </div>
+          </div>
+        )}
       </main>
+
+      {/* Fixed floating hint when scrolled past the main hint */}
+      {isComplete && (
+        <div className={`fixed-hint ${showFixedHint ? 'visible' : ''}`}>
+          <kbd>shift</kbd>+<kbd>enter</kbd> for next
+        </div>
+      )}
 
       {(isComplete && stats) ||
       (isComplete && statsView === "alltime" && cumulativeStats) ||
@@ -3237,14 +3307,26 @@ function App() {
                   <div className="stats-toggle">
                     <button
                       className={`toggle-btn ${statsView === "current" ? "active" : ""}`}
-                      onClick={() => setStatsView("current")}
+                      onClick={() => {
+                        setStatsView("current");
+                        // Reset comparison if "vs This Paragraph" was selected (would compare to self)
+                        if (comparisonBase === "current") {
+                          setComparisonBase("none");
+                        }
+                      }}
                     >
                       This Paragraph
                     </button>
                     {hasAllTimeStats && (
                       <button
                         className={`toggle-btn ${statsView === "alltime" ? "active" : ""}`}
-                        onClick={() => setStatsView("alltime")}
+                        onClick={() => {
+                          setStatsView("alltime");
+                          // Reset comparison if "vs My Average" was selected (would compare to self)
+                          if (comparisonBase === "alltime") {
+                            setComparisonBase("none");
+                          }
+                        }}
                       >
                         All Time ({cumulativeStats.sessions})
                       </button>
@@ -3254,7 +3336,10 @@ function App() {
                         className={`toggle-btn ${statsView === "global" ? "active" : ""}`}
                         onClick={() => {
                           setStatsView("global");
-                          setComparisonBase("alltime"); // Reset to "vs My Average"
+                          // Reset comparison if "vs Global" was selected (would compare to self)
+                          if (comparisonBase === "global") {
+                            setComparisonBase("none");
+                          }
                         }}
                       >
                         Global ({fmt.count(globalAverages.total_sessions)})
@@ -5086,7 +5171,7 @@ function App() {
             </>
           ) : null}
 
-          <p className="restart-hint">shift+enter to continue</p>
+          <p className="restart-hint" ref={restartHintRef}>shift+enter to continue</p>
         </section>
       ) : null}
 
