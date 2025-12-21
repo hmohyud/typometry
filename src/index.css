@@ -24,13 +24,33 @@ body {
   color: var(--text);
   min-height: 100vh;
   line-height: 1.6;
+  cursor: default;
 }
 
 /* App wrapper - full viewport for click/key capture */
 .app-wrapper {
   min-height: 100vh;
   width: 100%;
+  cursor: default;
+}
+
+/* Text cursor only for actual text inputs */
+input[type="text"], 
+input[type="search"], 
+input[type="email"], 
+input[type="password"],
+textarea, 
+[contenteditable="true"] {
   cursor: text;
+}
+
+/* Pointer cursor for interactive elements */
+button, 
+a, 
+select,
+.clickable,
+[role="button"] {
+  cursor: pointer;
 }
 
 .container {
@@ -187,6 +207,12 @@ h1 {
   background: var(--bg-tertiary);
   border-radius: 4px;
   padding: 2px;
+}
+
+.keyboard-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .mini-toggle {
@@ -602,7 +628,7 @@ h1 {
   align-items: center;
   gap: 0.75rem;
   margin-top: 0.5rem;
-  cursor: help;
+  cursor: default;
 }
 
 .strength-label {
@@ -761,6 +787,269 @@ h1 {
   color: var(--incorrect);
 }
 
+/* Histograms Section */
+.histograms-section {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.histograms-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.histograms-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.histograms-header {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.histogram-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-swatch.current {
+  background: #98c379;
+}
+
+.legend-swatch.normal {
+  background: #e2b714;
+  opacity: 0.7;
+}
+
+.zoom-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.zoom-toggle input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.zoom-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.histograms-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem 1.5rem;
+}
+
+.histogram-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.histogram-title {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  font-weight: 500;
+}
+
+/* Session Histogram - bar chart style */
+.session-histogram {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+}
+
+.histogram-chart-area {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  cursor: default;
+}
+
+.histogram-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 0.45rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 2px 0;
+  min-width: 12px;
+  flex-shrink: 0;
+}
+
+.histogram-bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  height: 50px;
+  gap: 0;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  padding: 3px;
+  min-width: 0;
+  overflow: hidden;
+  cursor: default;
+}
+
+.histogram-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #e2b714;
+  opacity: 0.7;
+  border-radius: 1px 1px 0 0;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  cursor: default;
+}
+
+.histogram-bar:hover {
+  opacity: 1;
+}
+
+.histogram-bar.hovered {
+  opacity: 1;
+  background: #5af;
+  box-shadow: 0 0 8px rgba(85, 170, 255, 0.6);
+}
+
+.histogram-bar.empty {
+  background: transparent;
+  cursor: default;
+}
+
+.histogram-bar.current {
+  background: #98c379;
+  opacity: 1;
+}
+
+.histogram-bar.current.hovered {
+  background: #5af;
+  box-shadow: 0 0 8px rgba(85, 170, 255, 0.6);
+}
+
+.histogram-tooltip {
+  pointer-events: none;
+  z-index: 1000;
+  background: var(--bg-tertiary, #2a2a2a);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.histogram-tooltip-range {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+}
+
+.histogram-tooltip-count {
+  font-size: 0.6rem;
+  color: var(--text-muted, #888);
+}
+
+.histogram-x-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 0 3px 0 16px;
+}
+
+/* Inline stat with histogram */
+.stat-with-histogram {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-with-histogram .stat {
+  margin: 0;
+}
+
+.stat-with-histogram .session-histogram {
+  margin-top: 0.25rem;
+}
+
+/* Compact inline histogram for stat cards */
+.stat-histogram-inline {
+  width: 100%;
+  max-width: 120px;
+  margin: 0.25rem auto 0;
+}
+
+.stat-histogram-inline .histogram-bars {
+  height: 20px;
+  padding: 1px;
+}
+
+.stat-histogram-inline .histogram-range {
+  font-size: 0.45rem;
+}
+
+@media (max-width: 900px) {
+  .histograms-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .histograms-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .histograms-header-row {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+}
+
 /* Counts Section */
 .counts-section {
   margin: 1.5rem 0;
@@ -886,7 +1175,7 @@ footer {
 /* Custom Tooltips */
 .tooltip-trigger,
 .tooltip-wrapper {
-  cursor: help;
+  cursor: inherit;
 }
 
 .tooltip-wrapper {
@@ -1432,6 +1721,12 @@ footer {
   color: #4a4a4a;
 }
 
+.finger-hands-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .finger-hands-avg {
   font-size: 0.75rem;
   color: #646669;
@@ -1566,9 +1861,15 @@ footer {
 
 .chord-header {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.chord-header-left {
+  display: flex;
+  flex-direction: column;
 }
 
 .chord-title {
@@ -1580,6 +1881,30 @@ footer {
 .chord-subtitle {
   font-size: 0.65rem;
   color: var(--text-muted);
+}
+
+/* Help button for section explanations */
+.help-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.help-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(226, 183, 20, 0.1);
 }
 
 .chord-container {

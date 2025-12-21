@@ -65,6 +65,135 @@ const ALL_PARAGRAPHS = Object.values(sentences).flat();
 const STORAGE_KEYS = {
   COMPLETED: "typometry_completed",
   HISTORY: "typometry_history",
+  HISTOGRAMS: "typometry_histograms",
+  HISTOGRAM_ZOOM: "typometry_histogram_zoom",
+};
+
+// Histogram bucket configurations - fine granularity for smooth distributions
+const HISTOGRAM_CONFIG = {
+  wpm: {
+    label: "WPM",
+    min: 0,
+    max: 300,
+    step: 1,
+    unit: "",
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(Infinity);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  accuracy: {
+    label: "Accuracy",
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(100.1);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  consistency: {
+    label: "Consistency",
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(100.1);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  avgInterval: {
+    label: "Keystroke",
+    min: 50,
+    max: 350,
+    step: 5,
+    unit: "ms",
+    lowerIsBetter: true,
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(Infinity);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  flowRatio: {
+    label: "Flow State",
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(100.1);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  rhythmScore: {
+    label: "Rhythm",
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "%",
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(100.1);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  handBalance: {
+    label: "Hand Balance",
+    min: -50,
+    max: 50,
+    step: 1,
+    unit: "%",
+    centered: true, // 0% is balanced
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(Infinity);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
+  homeRowAdvantage: {
+    label: "Home Row",
+    min: -50,
+    max: 50,
+    step: 1,
+    unit: "%",
+    centered: true, // 0 is neutral
+    get buckets() { return this.generateBuckets(); },
+    generateBuckets() {
+      const b = [];
+      for (let i = this.min; i < this.max; i += this.step) b.push(i);
+      b.push(Infinity);
+      return b;
+    },
+    getBucketCount() { return Math.ceil((this.max - this.min) / this.step); }
+  },
 };
 
 // Finger assignments for conventional touch typing
@@ -597,6 +726,80 @@ const TIPS = {
       <TipHint>70%+ = very rhythmic typing</TipHint>
     </>
   ),
+  // Visualization explanations
+  fingerTransitions: (
+    <>
+      <TipTitle>Finger Transitions</TipTitle>
+      <TipText>
+        Shows how quickly you transition between different fingers. Each line 
+        connects two fingers, colored by speed.
+      </TipText>
+      <TipText>
+        • <span style={{color: '#98c379'}}>Green</span> = fast transitions
+        • <span style={{color: '#e2b714'}}>Yellow</span> = medium
+        • <span style={{color: '#e06c75'}}>Red</span> = slow transitions
+      </TipText>
+      <TipText>Thicker lines = more frequent transitions.</TipText>
+      <TipHint>Hover lines to see timing details</TipHint>
+    </>
+  ),
+  fingerSpeed: (
+    <>
+      <TipTitle>Finger Speed</TipTitle>
+      <TipText>
+        Shows average typing speed for each finger. Finger color indicates 
+        speed relative to your overall average.
+      </TipText>
+      <TipText>
+        • <span style={{color: '#98c379'}}>Green</span> = faster than average
+        • <span style={{color: '#e06c75'}}>Red</span> = slower than average
+      </TipText>
+      <TipHint>Hover fingers to see detailed timing</TipHint>
+    </>
+  ),
+  keyboardHeatmap: (
+    <>
+      <TipTitle>Keyboard Heatmap</TipTitle>
+      <TipText>
+        Visualizes your typing performance key-by-key. Toggle between:
+      </TipText>
+      <TipText>
+        • <strong>Speed mode:</strong> Green = fast keys, Red = slow keys
+      </TipText>
+      <TipText>
+        • <strong>Accuracy mode:</strong> Green = accurate, Red = error-prone
+      </TipText>
+      <TipHint>Hover keys to see exact timing and accuracy</TipHint>
+    </>
+  ),
+  bigramTiming: (
+    <>
+      <TipTitle>Bigram Timing</TipTitle>
+      <TipText>
+        Shows your fastest and slowest two-letter combinations (bigrams). 
+        These reveal which key pairs flow naturally vs. cause hesitation.
+      </TipText>
+      <TipText>
+        Common slow bigrams often involve awkward finger reaches or same-finger 
+        sequences.
+      </TipText>
+      <TipHint>Times are in milliseconds between the two keys</TipHint>
+    </>
+  ),
+  sessionDistributions: (
+    <>
+      <TipTitle>Session Distributions</TipTitle>
+      <TipText>
+        Shows how your typing performance varies across all sessions. Each bar 
+        represents how many sessions fell into that range.
+      </TipText>
+      <TipText>
+        • <span style={{color: '#e2b714'}}>Gold line</span> = current session
+        • <span style={{color: '#98c379'}}>Green line</span> = your average
+      </TipText>
+      <TipHint>Hover bars to see exact counts</TipHint>
+    </>
+  ),
 };
 
 // Load/save helpers
@@ -832,6 +1035,162 @@ const GlobalDistributionBar = ({ value, min, max, stdDev, lowerIsBetter = false,
   );
 };
 
+// Session distribution histogram component - actual bar chart with smart zoom
+const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = true, xAxisLabels = null, formatValue = null, reversed = false }) => {
+  const config = HISTOGRAM_CONFIG[configKey];
+  const [hoverInfo, setHoverInfo] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  
+  if (!config || !data || !Array.isArray(data) || data.length === 0) return null;
+  
+  // Validate data array - filter out any non-numbers
+  const validData = data.map(v => (typeof v === 'number' && !isNaN(v)) ? v : 0);
+  
+  // Check if bucket count matches - if not, data is from old format
+  const expectedBuckets = config.getBucketCount();
+  if (validData.length !== expectedBuckets) {
+    return null; // Skip rendering if data doesn't match current bucket structure
+  }
+  
+  const totalSessions = validData.reduce((a, b) => a + b, 0);
+  if (totalSessions === 0 || isNaN(totalSessions)) return null;
+  
+  // Find the range of non-zero buckets for smart zoom
+  let startIdx = 0;
+  let endIdx = validData.length - 1;
+  
+  if (smartZoom) {
+    // Find first and last non-zero bucket
+    let firstNonZero = validData.findIndex(c => c > 0);
+    let lastNonZero = validData.length - 1 - [...validData].reverse().findIndex(c => c > 0);
+    
+    if (firstNonZero === -1) firstNonZero = 0;
+    if (lastNonZero === -1 || lastNonZero < firstNonZero) lastNonZero = validData.length - 1;
+    
+    // Add some padding (15% of range on each side, minimum 5 buckets)
+    const range = lastNonZero - firstNonZero;
+    const padding = Math.max(5, Math.ceil(range * 0.2));
+    
+    startIdx = Math.max(0, firstNonZero - padding);
+    endIdx = Math.min(validData.length - 1, lastNonZero + padding);
+  }
+  
+  // Slice the data to the visible range
+  let visibleData = validData.slice(startIdx, endIdx + 1);
+  
+  // If reversed, flip the data order (for intuitive left/right displays)
+  if (reversed) {
+    visibleData = [...visibleData].reverse();
+  }
+  
+  const maxCount = Math.max(...visibleData, 1);
+  
+  // Find which bucket the current/average values fall into (in original indices)
+  const getBucketIndex = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return -1;
+    const idx = Math.floor((value - config.min) / config.step);
+    return Math.max(0, Math.min(idx, validData.length - 1));
+  };
+  
+  const currentBucket = getBucketIndex(currentValue);
+  
+  // Calculate display range values
+  const displayMin = config.min + startIdx * config.step;
+  const displayMax = Math.min(config.min + (endIdx + 1) * config.step, config.max);
+  
+  const handleMouseMove = (e) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+  
+  return (
+    <div className="session-histogram">
+      <div className="histogram-chart-area">
+        <div className="histogram-y-axis">
+          <span>{maxCount}</span>
+          <span>0</span>
+        </div>
+        <div 
+          className="histogram-bars"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoverInfo(null)}
+        >
+          {visibleData.map((count, i) => {
+            // When reversed, i=0 corresponds to the end of the range
+            const originalIdx = reversed 
+              ? endIdx - i 
+              : startIdx + i;
+            const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
+            const isCurrent = originalIdx === currentBucket;
+            const bucketStart = config.min + originalIdx * config.step;
+            const bucketEnd = Math.min(bucketStart + config.step, config.max);
+            const percentage = totalSessions > 0 ? ((count / totalSessions) * 100).toFixed(1) : '0';
+            const isHovered = hoverInfo && hoverInfo.idx === i;
+            
+            // Format the range display - use custom formatter if provided
+            const rangeDisplay = formatValue 
+              ? `${formatValue(bucketStart)} – ${formatValue(bucketEnd)}`
+              : `${bucketStart}${config.unit} – ${bucketEnd}${config.unit}`;
+            
+            return (
+              <div 
+                key={i}
+                className={`histogram-bar ${isCurrent ? 'current' : ''} ${count === 0 ? 'empty' : ''} ${isHovered ? 'hovered' : ''}`}
+                style={{ height: `${Math.max(height, count > 0 ? 4 : 0)}%` }}
+                onMouseEnter={() => count > 0 && setHoverInfo({
+                  idx: i,
+                  range: rangeDisplay,
+                  count,
+                  percentage
+                })}
+              />
+            );
+          })}
+          {hoverInfo && (
+            <div 
+              className="histogram-tooltip"
+              style={{
+                left: mousePos.x,
+                top: mousePos.y - 45,
+                position: 'fixed',
+              }}
+            >
+              <div className="histogram-tooltip-range">{hoverInfo.range}</div>
+              <div className="histogram-tooltip-count">{hoverInfo.count} session{hoverInfo.count !== 1 ? 's' : ''} ({hoverInfo.percentage}%)</div>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="histogram-x-axis">
+        <span>{xAxisLabels?.min ?? (reversed ? `${displayMax}${config.unit}` : `${displayMin}${config.unit}`)}</span>
+        <span>{xAxisLabels?.max ?? (reversed ? `${displayMin}${config.unit}` : `${displayMax}${config.unit}`)}</span>
+      </div>
+    </div>
+  );
+};
+
+// Helper function to update histogram data
+const updateHistogram = (histograms, key, value) => {
+  const config = HISTOGRAM_CONFIG[key];
+  if (!config || value === null || value === undefined || isNaN(value)) return histograms;
+  
+  const newHistograms = { ...histograms };
+  const bucketCount = config.getBucketCount();
+  
+  // Reset if bucket count doesn't match (data from old format)
+  if (!newHistograms[key] || !Array.isArray(newHistograms[key]) || newHistograms[key].length !== bucketCount) {
+    newHistograms[key] = new Array(bucketCount).fill(0);
+  }
+  
+  // Find the bucket for this value using simple math
+  const bucketIdx = Math.floor((value - config.min) / config.step);
+  const clampedIdx = Math.max(0, Math.min(bucketIdx, bucketCount - 1));
+  
+  newHistograms[key] = [...newHistograms[key]];
+  newHistograms[key][clampedIdx]++;
+  
+  return newHistograms;
+};
+
 // Mini keyboard for tooltip
 const MiniKeyboard = ({ highlightKeys, color }) => {
   const rows = [
@@ -954,9 +1313,14 @@ const FingerHands = ({ fingerStats }) => {
           <span>Finger Performance</span>
           <span className="finger-hands-note">*conventional placement</span>
         </div>
-        <div className="finger-hands-avg">
-          avg: <span className="fh-speed">{fmt.int(avgSpeed)}ms</span> ·{" "}
-          <span className="fh-acc">{fmt.int(avgAcc)}%</span>
+        <div className="finger-hands-right">
+          <div className="finger-hands-avg">
+            avg: <span className="fh-speed">{fmt.int(avgSpeed)}ms</span> ·{" "}
+            <span className="fh-acc">{fmt.int(avgAcc)}%</span>
+          </div>
+          <Tooltip content={TIPS.fingerSpeed}>
+            <button className="help-btn" type="button" aria-label="Help">?</button>
+          </Tooltip>
         </div>
       </div>
 
@@ -1409,8 +1773,13 @@ const FingerChordDiagram = ({ fingerTransitions, fingerStats }) => {
   return (
     <div className="finger-chord-diagram">
       <div className="chord-header">
-        <span className="chord-title">Finger Transitions</span>
-        <span className="chord-subtitle">speed between fingers</span>
+        <div className="chord-header-left">
+          <span className="chord-title">Finger Transitions</span>
+          <span className="chord-subtitle">speed between fingers</span>
+        </div>
+        <Tooltip content={TIPS.fingerTransitions}>
+          <button className="help-btn" type="button" aria-label="Help">?</button>
+        </Tooltip>
       </div>
       
       <div className="chord-container" ref={containerRef} onMouseMove={handleMouseMove}>
@@ -1592,6 +1961,29 @@ function App() {
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [showFixedHint, setShowFixedHint] = useState(false);
+  const [histograms, setHistograms] = useState(() => {
+    const stored = loadFromStorage(STORAGE_KEYS.HISTOGRAMS, {});
+    // Validate histogram data matches current bucket counts
+    const validated = {};
+    let needsReset = false;
+    for (const key of Object.keys(HISTOGRAM_CONFIG)) {
+      const config = HISTOGRAM_CONFIG[key];
+      const expectedLength = config.getBucketCount();
+      if (stored[key] && Array.isArray(stored[key]) && stored[key].length === expectedLength) {
+        validated[key] = stored[key];
+      } else if (stored[key]) {
+        needsReset = true; // Old format detected
+      }
+    }
+    if (needsReset) {
+      // Clear old histogram data
+      saveToStorage(STORAGE_KEYS.HISTOGRAMS, validated);
+    }
+    return validated;
+  });
+  const [histogramZoom, setHistogramZoom] = useState(() =>
+    loadFromStorage(STORAGE_KEYS.HISTOGRAM_ZOOM, true)
+  );
 
   // Global stats from Supabase for comparisons
   const { 
@@ -1629,6 +2021,8 @@ function App() {
         setCompletedIndices([]);
         saveToStorage(STORAGE_KEYS.COMPLETED, []);
         saveToStorage(STORAGE_KEYS.HISTORY, []);
+        saveToStorage(STORAGE_KEYS.HISTOGRAMS, {});
+        setHistograms({});
       }
 
       const { text, index, reset } = getNextParagraph(indices);
@@ -2957,6 +3351,22 @@ function App() {
         const newHistory = [...history, historyEntry];
         saveToStorage(STORAGE_KEYS.HISTORY, newHistory);
 
+        // Update histograms with new session data
+        let newHistograms = loadFromStorage(STORAGE_KEYS.HISTOGRAMS, {});
+        newHistograms = updateHistogram(newHistograms, 'wpm', finalStats.wpm);
+        newHistograms = updateHistogram(newHistograms, 'accuracy', finalStats.accuracy);
+        newHistograms = updateHistogram(newHistograms, 'consistency', finalStats.consistency);
+        newHistograms = updateHistogram(newHistograms, 'avgInterval', finalStats.avgInterval);
+        // Behavioral histograms - flowRatio and rhythmScore are already 0-100
+        if (finalStats.behavioral) {
+          newHistograms = updateHistogram(newHistograms, 'flowRatio', finalStats.behavioral.flowRatio);
+          newHistograms = updateHistogram(newHistograms, 'rhythmScore', finalStats.behavioral.rhythmScore);
+          newHistograms = updateHistogram(newHistograms, 'handBalance', Math.round(finalStats.behavioral.handBalance));
+          newHistograms = updateHistogram(newHistograms, 'homeRowAdvantage', Math.round(finalStats.behavioral.homeRowAdvantage));
+        }
+        saveToStorage(STORAGE_KEYS.HISTOGRAMS, newHistograms);
+        setHistograms(newHistograms);
+
         // Submit to Supabase - only keystrokes needed!
         // The database trigger derives everything else
         submitToSupabase({
@@ -3047,6 +3457,7 @@ function App() {
         accuracy: cumulativeStats.accuracy,
         consistency: cumulativeStats.consistency,
         avgInterval: cumulativeStats.avgInterval,
+        avgErrors: cumulativeStats.avgErrors,
         sessions: cumulativeStats.sessions,
         label: "your avg",
       };
@@ -3057,6 +3468,7 @@ function App() {
         accuracy: stats.accuracy,
         consistency: stats.consistency,
         avgInterval: stats.avgInterval,
+        avgErrors: stats.errorCount,
         sessions: 1,
         label: "this paragraph",
       };
@@ -3517,18 +3929,18 @@ function App() {
                   <div className="stat small">
                     <span className="stat-value">
                       {stats.errorCount}
-                      {cumulativeStats && cumulativeStats.sessions > 1 && (
+                      {compBase && compBase.avgErrors !== undefined && (
                         <span
                           className={`stat-delta ${
-                            stats.errorCount <= cumulativeStats.avgErrors
+                            stats.errorCount <= compBase.avgErrors
                               ? "positive"
                               : "negative"
                           }`}
                         >
-                          {stats.errorCount <= cumulativeStats.avgErrors
+                          {stats.errorCount <= compBase.avgErrors
                             ? "↓"
                             : "↑"}
-                          {fmt.dec(Math.abs(stats.errorCount - cumulativeStats.avgErrors))}
+                          {fmt.dec(Math.abs(stats.errorCount - compBase.avgErrors))}
                         </span>
                       )}
                     </span>
@@ -3622,23 +4034,28 @@ function App() {
               <div className="keyboard-section">
                 <div className="keyboard-header">
                   <h3>Keyboard Analysis</h3>
-                  <div className="heatmap-toggle">
-                    <button
-                      className={`mini-toggle ${
-                        heatmapMode === "speed" ? "active" : ""
-                      }`}
-                      onClick={() => setHeatmapMode("speed")}
-                    >
-                      Speed
-                    </button>
-                    <button
-                      className={`mini-toggle ${
-                        heatmapMode === "accuracy" ? "active" : ""
-                      }`}
-                      onClick={() => setHeatmapMode("accuracy")}
-                    >
-                      Accuracy
-                    </button>
+                  <div className="keyboard-header-right">
+                    <div className="heatmap-toggle">
+                      <button
+                        className={`mini-toggle ${
+                          heatmapMode === "speed" ? "active" : ""
+                        }`}
+                        onClick={() => setHeatmapMode("speed")}
+                      >
+                        Speed
+                      </button>
+                      <button
+                        className={`mini-toggle ${
+                          heatmapMode === "accuracy" ? "active" : ""
+                        }`}
+                        onClick={() => setHeatmapMode("accuracy")}
+                      >
+                        Accuracy
+                      </button>
+                    </div>
+                    <Tooltip content={TIPS.keyboardHeatmap}>
+                      <button className="help-btn" type="button" aria-label="Help">?</button>
+                    </Tooltip>
                   </div>
                 </div>
                 <KeyboardHeatmap keyStats={stats.keyStats} mode={heatmapMode} />
@@ -4192,6 +4609,145 @@ function App() {
                 </Tooltip>
               </div>
 
+              {/* Session Distribution Histograms */}
+              {histograms && Object.keys(histograms).length > 0 && (
+                <div className="histograms-section">
+                  <div className="histograms-header-row">
+                    <div className="histograms-header-left">
+                      <h3 className="histograms-header">Session Distributions</h3>
+                      <label className="zoom-toggle">
+                        <input 
+                          type="checkbox" 
+                          checked={histogramZoom} 
+                          onChange={(e) => {
+                            setHistogramZoom(e.target.checked);
+                            saveToStorage(STORAGE_KEYS.HISTOGRAM_ZOOM, e.target.checked);
+                          }}
+                        />
+                        <span>smart zoom</span>
+                      </label>
+                      <Tooltip content={TIPS.sessionDistributions}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
+                    <div className="histogram-legend">
+                      <span className="legend-item"><span className="legend-swatch normal"></span>history</span>
+                      <span className="legend-item"><span className="legend-swatch current"></span>current</span>
+                    </div>
+                  </div>
+                  <div className="histograms-grid">
+                    <div className="histogram-item">
+                      <Tooltip content={TIPS.wpm}>
+                        <span className="histogram-title">WPM</span>
+                      </Tooltip>
+                      <SessionHistogram 
+                        data={histograms.wpm} 
+                        configKey="wpm" 
+                        currentValue={stats?.wpm}
+                        average={cumulativeStats?.wpm}
+                        smartZoom={histogramZoom}
+                      />
+                    </div>
+                    <div className="histogram-item">
+                      <Tooltip content={TIPS.accuracy}>
+                        <span className="histogram-title">Accuracy</span>
+                      </Tooltip>
+                      <SessionHistogram 
+                        data={histograms.accuracy} 
+                        configKey="accuracy" 
+                        currentValue={stats?.accuracy}
+                        average={cumulativeStats?.accuracy}
+                        smartZoom={histogramZoom}
+                      />
+                    </div>
+                    <div className="histogram-item">
+                      <Tooltip content={TIPS.consistency}>
+                        <span className="histogram-title">Consistency</span>
+                      </Tooltip>
+                      <SessionHistogram 
+                        data={histograms.consistency} 
+                        configKey="consistency" 
+                        currentValue={stats?.consistency}
+                        average={cumulativeStats?.consistency}
+                        smartZoom={histogramZoom}
+                      />
+                    </div>
+                    <div className="histogram-item">
+                      <Tooltip content={TIPS.avgKeystroke}>
+                        <span className="histogram-title">Keystroke Time</span>
+                      </Tooltip>
+                      <SessionHistogram 
+                        data={histograms.avgInterval} 
+                        configKey="avgInterval" 
+                        currentValue={stats?.avgInterval}
+                        average={cumulativeStats?.avgInterval}
+                        smartZoom={histogramZoom}
+                      />
+                    </div>
+                    {histograms.flowRatio && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.flowState}>
+                          <span className="histogram-title">Flow State</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={histograms.flowRatio} 
+                          configKey="flowRatio" 
+                          currentValue={stats?.behavioral?.flowRatio}
+                          average={cumulativeStats?.behavioral?.flowRatio}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {histograms.rhythmScore && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.rhythmScore}>
+                          <span className="histogram-title">Rhythm</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={histograms.rhythmScore} 
+                          configKey="rhythmScore" 
+                          currentValue={stats?.behavioral?.rhythmScore}
+                          average={cumulativeStats?.behavioral?.rhythmScore}
+                          smartZoom={histogramZoom}
+                        />
+                      </div>
+                    )}
+                    {histograms.handBalance && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.handBalance}>
+                          <span className="histogram-title">Hand Balance</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={histograms.handBalance} 
+                          configKey="handBalance" 
+                          currentValue={stats?.behavioral ? Math.round(stats.behavioral.handBalance) : undefined}
+                          average={cumulativeStats?.behavioral?.handBalance}
+                          smartZoom={histogramZoom}
+                          reversed={true}
+                          xAxisLabels={{ min: "← left faster", max: "right faster →" }}
+                          formatValue={(val) => `${Math.abs(val)}% ${val > 0 ? 'left' : val < 0 ? 'right' : 'balanced'}`}
+                        />
+                      </div>
+                    )}
+                    {histograms.homeRowAdvantage && (
+                      <div className="histogram-item">
+                        <Tooltip content={TIPS.homeRow}>
+                          <span className="histogram-title">Home Row</span>
+                        </Tooltip>
+                        <SessionHistogram 
+                          data={histograms.homeRowAdvantage} 
+                          configKey="homeRowAdvantage" 
+                          currentValue={stats?.behavioral ? Math.round(stats.behavioral.homeRowAdvantage) : undefined}
+                          average={cumulativeStats?.behavioral?.homeRowAdvantage}
+                          smartZoom={histogramZoom}
+                          xAxisLabels={{ min: "← away faster", max: "home faster →" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
                 {/* Counts breakdown */}
                 {cumulativeStats.counts && (
                   <div className="counts-section">
@@ -4279,23 +4835,28 @@ function App() {
                     <div className="keyboard-section">
                       <div className="keyboard-header">
                         <h3>Keyboard Analysis (All Time)</h3>
-                        <div className="mini-toggles">
-                          <button
-                            className={`mini-toggle ${
-                              heatmapMode === "speed" ? "active" : ""
-                            }`}
-                            onClick={() => setHeatmapMode("speed")}
-                          >
-                            Speed
-                          </button>
-                          <button
-                            className={`mini-toggle ${
-                              heatmapMode === "accuracy" ? "active" : ""
-                            }`}
-                            onClick={() => setHeatmapMode("accuracy")}
-                          >
-                            Accuracy
-                          </button>
+                        <div className="keyboard-header-right">
+                          <div className="mini-toggles">
+                            <button
+                              className={`mini-toggle ${
+                                heatmapMode === "speed" ? "active" : ""
+                              }`}
+                              onClick={() => setHeatmapMode("speed")}
+                            >
+                              Speed
+                            </button>
+                            <button
+                              className={`mini-toggle ${
+                                heatmapMode === "accuracy" ? "active" : ""
+                              }`}
+                              onClick={() => setHeatmapMode("accuracy")}
+                            >
+                              Accuracy
+                            </button>
+                          </div>
+                          <Tooltip content={TIPS.keyboardHeatmap}>
+                            <button className="help-btn" type="button" aria-label="Help">?</button>
+                          </Tooltip>
                         </div>
                       </div>
                       <KeyboardHeatmap
@@ -5116,55 +5677,6 @@ function App() {
                         />
                       </div>
                     )}
-                  </div>
-                </div>
-              )}
-
-              {/* Your Ranking */}
-              {cumulativeStats && cumulativeStats.sessions > 0 && (
-                <div className="your-ranking">
-                  <h4>Your Ranking</h4>
-                  <div className="ranking-grid">
-                    <div className="ranking-item">
-                      <span className="ranking-label">Your Avg WPM</span>
-                      <span className="ranking-value">{cumulativeStats.wpm}</span>
-                      <span className={`ranking-percentile ${
-                        cumulativeStats.wpm >= globalAverages.p90_wpm ? 'top10' :
-                        cumulativeStats.wpm >= globalAverages.p75_wpm ? 'top25' :
-                        cumulativeStats.wpm >= globalAverages.p50_wpm ? 'above' : 'below'
-                      }`}>
-                        {cumulativeStats.wpm >= globalAverages.p90_wpm ? 'Top 10%' :
-                         cumulativeStats.wpm >= globalAverages.p75_wpm ? 'Top 25%' :
-                         cumulativeStats.wpm >= globalAverages.p50_wpm ? 'Above Median' : 'Below Median'}
-                      </span>
-                    </div>
-                    <div className="ranking-item">
-                      <span className="ranking-label">Your Avg Accuracy</span>
-                      <span className="ranking-value">{cumulativeStats.accuracy}%</span>
-                      <span className={`ranking-percentile ${
-                        cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'above' : 'below'
-                      }`}>
-                        {cumulativeStats.accuracy >= globalAverages.avg_accuracy ? 'Above Avg' : 'Below Avg'}
-                      </span>
-                    </div>
-                    <div className="ranking-item">
-                      <span className="ranking-label">Your Avg Consistency</span>
-                      <span className="ranking-value">{cumulativeStats.consistency}%</span>
-                      <span className={`ranking-percentile ${
-                        cumulativeStats.consistency >= globalAverages.avg_consistency ? 'above' : 'below'
-                      }`}>
-                        {cumulativeStats.consistency >= globalAverages.avg_consistency ? 'Above Avg' : 'Below Avg'}
-                      </span>
-                    </div>
-                    <div className="ranking-item">
-                      <span className="ranking-label">Your Avg Interval</span>
-                      <span className="ranking-value">{cumulativeStats.avgInterval}ms</span>
-                      <span className={`ranking-percentile ${
-                        cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'above' : 'below'
-                      }`}>
-                        {cumulativeStats.avgInterval <= globalAverages.avg_interval ? 'Faster' : 'Slower'}
-                      </span>
-                    </div>
                   </div>
                 </div>
               )}
