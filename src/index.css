@@ -698,7 +698,15 @@ h1 {
   align-items: center;
   gap: 0.75rem;
   margin-top: 0.5rem;
-  cursor: default;
+  cursor: help;
+  padding: 0.5rem;
+  margin: 0.5rem -0.5rem -0.5rem -0.5rem;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.profile-strength:hover {
+  background-color: rgba(226, 183, 20, 0.1);
 }
 
 .strength-label {
@@ -1419,6 +1427,11 @@ footer {
 .behavioral-grid .tooltip-wrapper,
 .behavioral-details .tooltip-wrapper {
   display: block;
+}
+
+.archetype-card .tooltip-wrapper {
+  display: block;
+  width: 100%;
 }
 
 .stat-grid .tooltip-wrapper {

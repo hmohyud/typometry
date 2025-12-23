@@ -395,7 +395,7 @@ const TIPS = {
   ),
   profileStrength: (
     <>
-      <TipTitle>Profile Strength</TipTitle>
+      <TipTitle>Profile Match</TipTitle>
       <TipText>
         How strongly your typing matches this archetype, based on:
       </TipText>
@@ -4536,7 +4536,7 @@ function App() {
                     </span>
                     <Tooltip content={TIPS.profileStrength}>
                       <div className="profile-strength">
-                        <span className="strength-label">profile strength</span>
+                        <span className="strength-label">profile match</span>
                         <div className="strength-bar">
                           <div
                             className="strength-fill"
@@ -5384,7 +5384,7 @@ function App() {
                       <Tooltip content={TIPS.profileStrength}>
                         <div className="profile-strength">
                           <span className="strength-label">
-                            profile strength
+                            profile match
                           </span>
                           <div className="strength-bar">
                             <div
