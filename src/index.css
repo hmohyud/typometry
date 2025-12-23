@@ -945,6 +945,21 @@ h1 {
   gap: 0.35rem;
   min-width: 0;
   overflow: hidden;
+  cursor: pointer;
+  padding: 0.35rem;
+  margin: -0.35rem;
+  border-radius: 6px;
+  position: relative;
+  outline: 1px solid transparent;
+  transition: outline-color 0.15s ease;
+}
+
+.histogram-item:hover {
+  outline-color: rgba(226, 183, 20, 0.3);
+}
+
+.histogram-item.selected {
+  outline: 2px solid var(--accent);
 }
 
 .histogram-title {
@@ -965,11 +980,99 @@ h1 {
   user-select: none;
 }
 
+.session-histogram.expanded {
+  margin-top: 0.5rem;
+}
+
+.session-histogram.expanded .histogram-bars {
+  height: 150px;
+}
+
+.histogram-expanded-container {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.histogram-stats-overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(20, 22, 24, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: 0.65rem;
+  z-index: 10;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.histogram-stats-overlay:hover {
+  opacity: 1;
+}
+
+.histogram-stat-compact {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.histogram-stat-compact.highlight {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.histogram-stat-divider {
+  color: var(--text-muted);
+  opacity: 0.4;
+  margin: 0 0.35rem;
+}
+
+.histogram-expanded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.histogram-expanded-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(226, 183, 20, 0.4);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.histogram-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  transition: color 0.15s ease;
+}
+
+.histogram-close-btn:hover {
+  color: var(--text);
+}
+
 .histogram-chart-area {
   display: flex;
   gap: 4px;
   min-width: 0;
   cursor: default;
+  position: relative;
 }
 
 .histogram-y-axis {
@@ -997,6 +1100,15 @@ h1 {
   min-width: 0;
   overflow: hidden;
   cursor: default;
+  position: relative;
+}
+
+.histogram-curve {
+  position: absolute;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  pointer-events: none;
 }
 
 .histogram-bar {
@@ -1007,6 +1119,8 @@ h1 {
   border-radius: 1px 1px 0 0;
   transition: opacity 0.15s ease, box-shadow 0.15s ease;
   cursor: default;
+  position: relative;
+  z-index: 1;
 }
 
 .histogram-bar:hover {
@@ -1078,6 +1192,42 @@ h1 {
   color: var(--text-muted);
   opacity: 0.6;
   padding: 0 3px 0 16px;
+}
+
+.histogram-x-axis.expanded {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  padding: 0.35rem 3px 0 20px;
+}
+
+.histogram-x-axis.expanded > span:first-child,
+.histogram-x-axis.expanded > span:last-child {
+  color: var(--text);
+  font-weight: 500;
+  background: rgba(226, 183, 20, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.histogram-x-axis-label {
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-size: 0.6rem;
+  text-transform: lowercase;
+}
+
+/* Expanded y-axis styling */
+.session-histogram.expanded .histogram-y-axis {
+  font-size: 0.6rem;
+  opacity: 0.8;
+  min-width: 20px;
+}
+
+.session-histogram.expanded .histogram-y-axis span {
+  background: rgba(226, 183, 20, 0.1);
+  padding: 0.1rem 0.25rem;
+  border-radius: 2px;
+  color: var(--text);
 }
 
 /* Inline stat with histogram */
@@ -1814,10 +1964,20 @@ footer {
 
 .finger-hands-avg .fh-speed {
   color: #e2b714;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(226, 183, 20, 0.4);
+  text-underline-offset: 2px;
+  cursor: help;
 }
 
 .finger-hands-avg .fh-acc {
   color: #98c379;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(152, 195, 121, 0.4);
+  text-underline-offset: 2px;
+  cursor: help;
 }
 
 .finger-hands-svg {
@@ -1840,6 +2000,20 @@ footer {
   width: 160px;
   height: auto;
   overflow: visible;
+}
+
+/* Subtle pulse animation to indicate circles are interactive */
+@keyframes finger-glow {
+  0%, 100% { 
+    filter: drop-shadow(0 0 0px transparent);
+  }
+  50% { 
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
+  }
+}
+
+.finger-hand-svg circle {
+  animation: finger-glow 3s ease-in-out infinite;
 }
 
 .finger-hands-legend {

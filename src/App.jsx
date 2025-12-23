@@ -1091,7 +1091,7 @@ const globalHistogramToArray = (globalHist, configKey) => {
 };
 
 // Session distribution histogram component - actual bar chart with smart zoom
-const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = true, xAxisLabels = null, formatValue = null, reversed = false }) => {
+const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = true, xAxisLabels = null, formatValue = null, reversed = false, expanded = false, showCurve = true }) => {
   const config = HISTOGRAM_CONFIG[configKey];
   const [hoverInfo, setHoverInfo] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -1109,6 +1109,58 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
   
   const totalSessions = validData.reduce((a, b) => a + b, 0);
   if (totalSessions === 0 || isNaN(totalSessions)) return null;
+  
+  // Calculate distribution stats for expanded view
+  const calculateStats = () => {
+    if (!expanded) return null;
+    
+    // Weighted mean
+    let weightedSum = 0;
+    validData.forEach((count, idx) => {
+      const bucketValue = config.min + idx * config.step + config.step / 2;
+      weightedSum += bucketValue * count;
+    });
+    const mean = weightedSum / totalSessions;
+    
+    // Median (50th percentile)
+    let cumulative = 0;
+    let medianBucket = 0;
+    for (let i = 0; i < validData.length; i++) {
+      cumulative += validData[i];
+      if (cumulative >= totalSessions / 2) {
+        medianBucket = i;
+        break;
+      }
+    }
+    const median = config.min + medianBucket * config.step + config.step / 2;
+    
+    // Mode (most common bucket)
+    const maxIdx = validData.indexOf(Math.max(...validData));
+    const mode = config.min + maxIdx * config.step + config.step / 2;
+    
+    // User's percentile
+    let userPercentile = null;
+    if (currentValue !== null && currentValue !== undefined && !isNaN(currentValue)) {
+      const userBucket = Math.floor((currentValue - config.min) / config.step);
+      let below = 0;
+      for (let i = 0; i < Math.min(userBucket, validData.length); i++) {
+        below += validData[i];
+      }
+      userPercentile = Math.round((below / totalSessions) * 100);
+    }
+    
+    // Standard deviation
+    let varianceSum = 0;
+    validData.forEach((count, idx) => {
+      const bucketValue = config.min + idx * config.step + config.step / 2;
+      varianceSum += count * Math.pow(bucketValue - mean, 2);
+    });
+    const stdDev = Math.sqrt(varianceSum / totalSessions);
+    
+    return { mean, median, mode, userPercentile, stdDev, totalSessions };
+  };
+  
+  const stats = calculateStats();
   
   // Find which bucket the current/average values fall into (in original indices)
   const getBucketIndex = (value) => {
@@ -1166,12 +1218,81 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
   const displayMin = config.min + startIdx * config.step;
   const displayMax = Math.min(config.min + (endIdx + 1) * config.step, config.max);
   
+  // Generate smooth trend curve using moving average then spline
+  const generateCurvePath = () => {
+    if (visibleData.length < 4) return '';
+    
+    // Apply gaussian-weighted moving average for smoother trend
+    const windowSize = Math.max(3, Math.floor(visibleData.length / 8));
+    const smoothed = [];
+    
+    for (let i = 0; i < visibleData.length; i++) {
+      let sum = 0;
+      let weightSum = 0;
+      for (let j = -windowSize; j <= windowSize; j++) {
+        const idx = i + j;
+        if (idx >= 0 && idx < visibleData.length) {
+          // Gaussian weight
+          const weight = Math.exp(-(j * j) / (2 * (windowSize / 2) * (windowSize / 2)));
+          sum += visibleData[idx] * weight;
+          weightSum += weight;
+        }
+      }
+      smoothed.push(sum / weightSum);
+    }
+    
+    // Sample fewer points for even looser fit
+    const sampleRate = Math.max(1, Math.floor(visibleData.length / 12));
+    const sampledPoints = [];
+    for (let i = 0; i < smoothed.length; i += sampleRate) {
+      sampledPoints.push({
+        x: (i + 0.5) / visibleData.length * 100,
+        y: 100 - (smoothed[i] / maxCount) * 100
+      });
+    }
+    // Always include last point
+    if (sampledPoints.length > 0) {
+      const lastIdx = smoothed.length - 1;
+      sampledPoints.push({
+        x: (lastIdx + 0.5) / visibleData.length * 100,
+        y: 100 - (smoothed[lastIdx] / maxCount) * 100
+      });
+    }
+    
+    if (sampledPoints.length < 2) return '';
+    
+    // Catmull-Rom to Bezier conversion with low tension for smooth curves
+    const catmullRomToBezier = (p0, p1, p2, p3, tension = 0.3) => {
+      const cp1x = p1.x + (p2.x - p0.x) / 6 * tension;
+      const cp1y = p1.y + (p2.y - p0.y) / 6 * tension;
+      const cp2x = p2.x - (p3.x - p1.x) / 6 * tension;
+      const cp2y = p2.y - (p3.y - p1.y) / 6 * tension;
+      return { cp1: { x: cp1x, y: cp1y }, cp2: { x: cp2x, y: cp2y } };
+    };
+    
+    let path = `M ${sampledPoints[0].x} ${sampledPoints[0].y}`;
+    
+    for (let i = 0; i < sampledPoints.length - 1; i++) {
+      const p0 = sampledPoints[Math.max(0, i - 1)];
+      const p1 = sampledPoints[i];
+      const p2 = sampledPoints[i + 1];
+      const p3 = sampledPoints[Math.min(sampledPoints.length - 1, i + 2)];
+      
+      const { cp1, cp2 } = catmullRomToBezier(p0, p1, p2, p3, 1.5);
+      path += ` C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${p2.x} ${p2.y}`;
+    }
+    
+    return path;
+  };
+  
   const handleMouseMove = (e) => {
     setMousePos({ x: e.clientX, y: e.clientY });
   };
   
   return (
-    <div className="session-histogram">
+    <div 
+      className={`session-histogram ${expanded ? 'expanded' : ''}`}
+    >
       <div className="histogram-chart-area">
         <div className="histogram-y-axis">
           <span>{maxCount}</span>
@@ -1214,6 +1335,39 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
               />
             );
           })}
+          {/* Smooth trend curve overlay */}
+          {showCurve && visibleData.some(v => v > 0) && (() => {
+            const curvePath = generateCurvePath();
+            if (!curvePath) return null;
+            const curveId = `curve-${configKey}-${expanded ? 'exp' : 'sm'}`;
+            return (
+              <svg 
+                className="histogram-curve" 
+                viewBox="0 0 100 100" 
+                preserveAspectRatio="none"
+                style={{ overflow: 'visible' }}
+              >
+                <defs>
+                  <linearGradient id={curveId} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#7cf" stopOpacity="0.2" />
+                    <stop offset="30%" stopColor="#7cf" stopOpacity="0.8" />
+                    <stop offset="70%" stopColor="#7cf" stopOpacity="0.8" />
+                    <stop offset="100%" stopColor="#7cf" stopOpacity="0.2" />
+                  </linearGradient>
+                </defs>
+                <path 
+                  d={curvePath} 
+                  fill="none" 
+                  stroke={`url(#${curveId})`}
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            );
+          })()}
           {hoverInfo && (
             <div 
               className="histogram-tooltip"
@@ -1227,10 +1381,35 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
               <div className="histogram-tooltip-count">{hoverInfo.count} session{hoverInfo.count !== 1 ? 's' : ''} ({hoverInfo.percentage}%)</div>
             </div>
           )}
+          {/* Stats overlay for expanded view */}
+          {expanded && stats && (
+            <div className="histogram-stats-overlay">
+              <span className="histogram-stat-compact">
+                {stats.totalSessions.toLocaleString()} sessions
+              </span>
+              <span className="histogram-stat-divider">·</span>
+              <span className="histogram-stat-compact">
+                avg {Math.round(stats.mean)}{config.unit}
+              </span>
+              <span className="histogram-stat-divider">·</span>
+              <span className="histogram-stat-compact">
+                median {Math.round(stats.median)}{config.unit}
+              </span>
+              {stats.userPercentile !== null && (
+                <>
+                  <span className="histogram-stat-divider">·</span>
+                  <span className="histogram-stat-compact highlight">
+                    top {100 - stats.userPercentile}%
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
-      <div className="histogram-x-axis">
+      <div className={`histogram-x-axis ${expanded ? 'expanded' : ''}`}>
         <span>{xAxisLabels?.min ?? (reversed ? `${displayMax}${config.unit}` : `${displayMin}${config.unit}`)}</span>
+        {expanded && <span className="histogram-x-axis-label">← distribution range →</span>}
         <span>{xAxisLabels?.max ?? (reversed ? `${displayMin}${config.unit}` : `${displayMax}${config.unit}`)}</span>
       </div>
     </div>
@@ -1384,8 +1563,14 @@ const FingerHands = ({ fingerStats }) => {
         </div>
         <div className="finger-hands-right">
           <div className="finger-hands-avg">
-            avg: <span className="fh-speed">{fmt.int(avgSpeed)}ms</span> ·{" "}
-            <span className="fh-acc">{fmt.int(avgAcc)}%</span>
+            avg:{" "}
+            <Tooltip content="Average milliseconds between keystrokes for this finger — lower is faster">
+              <span className="fh-speed">{fmt.int(avgSpeed)}ms</span>
+            </Tooltip>
+            {" · "}
+            <Tooltip content="Average accuracy for keys typed by this finger — higher means fewer errors">
+              <span className="fh-acc">{fmt.int(avgAcc)}%</span>
+            </Tooltip>
           </div>
           <Tooltip content={TIPS.fingerSpeed}>
             <button className="help-btn" type="button" aria-label="Help">?</button>
@@ -2053,6 +2238,8 @@ function App() {
   const [histogramZoom, setHistogramZoom] = useState(() =>
     loadFromStorage(STORAGE_KEYS.HISTOGRAM_ZOOM, true)
   );
+  const [selectedHistogram, setSelectedHistogram] = useState('wpm');
+  const [selectedGlobalHistogram, setSelectedGlobalHistogram] = useState('wpm');
 
   // Global stats from Supabase for comparisons
   const { 
@@ -2966,15 +3153,18 @@ function App() {
     const bigramAccuracyMap = {};
 
     // Build list of correct keystrokes only for speed/distance
-    const correctKeystrokes = data.filter((d) => d.correct);
+    // Only count bigrams where BOTH keystrokes are consecutive AND correct
+    // (no errors or corrections between them)
+    for (let i = 1; i < data.length; i++) {
+      const prev = data[i - 1];
+      const curr = data[i];
 
-    for (let i = 1; i < correctKeystrokes.length; i++) {
-      const prev = correctKeystrokes[i - 1];
-      const curr = correctKeystrokes[i];
-
+      // Both must be correct for a valid bigram timing
+      if (!prev.correct || !curr.correct) continue;
+      
       if (curr.interval && curr.expected && prev.expected) {
-        // Skip same-character transitions (not meaningful)
-        if (curr.expected === prev.expected) continue;
+        // Skip same-character transitions (not meaningful for speed)
+        if (curr.expected.toLowerCase() === prev.expected.toLowerCase()) continue;
 
         const distance = getKeyDistance(prev.expected, curr.expected);
         if (distance !== null) {
@@ -2993,7 +3183,8 @@ function App() {
       const prev = data[i - 1];
       const curr = data[i];
       
-      if (curr.expected && prev.expected && prev.expected !== curr.expected) {
+      // Skip same-character bigrams (case-insensitive)
+      if (curr.expected && prev.expected && prev.expected.toLowerCase() !== curr.expected.toLowerCase()) {
         const bigram = (prev.expected + curr.expected).toLowerCase();
         if (!bigramAccuracyMap[bigram]) {
           bigramAccuracyMap[bigram] = { correct: 0, total: 0, distance: getKeyDistance(prev.expected, curr.expected) };
@@ -3058,6 +3249,7 @@ function App() {
     // Track finger-to-finger transitions
     const fingerTransitions = {};
     let prevFinger = null;
+    let prevWasCorrect = false;
 
     data.forEach((d) => {
       if (d.expected) {
@@ -3069,16 +3261,21 @@ function App() {
             fingerStats[finger].correct++;
             if (d.interval) fingerStats[finger].times.push(d.interval);
             
-            // Track transition from previous finger
-            if (prevFinger && d.interval && prevFinger !== finger) {
+            // Track transition from previous finger ONLY if previous was also correct
+            // This ensures we're measuring real consecutive transitions, not corrections
+            if (prevFinger && prevWasCorrect && d.interval && prevFinger !== finger) {
               const key = `${prevFinger}->${finger}`;
               if (!fingerTransitions[key]) {
                 fingerTransitions[key] = { times: [], from: prevFinger, to: finger };
               }
               fingerTransitions[key].times.push(d.interval);
             }
+            prevFinger = finger;
+            prevWasCorrect = true;
+          } else {
+            // Reset on error - next correct keystroke won't form a valid transition
+            prevWasCorrect = false;
           }
-          prevFinger = finger;
         }
       }
     });
@@ -4706,7 +4903,10 @@ function App() {
                     </div>
                   </div>
                   <div className="histograms-grid">
-                    <div className="histogram-item">
+                    <div 
+                      className={`histogram-item ${selectedHistogram === 'wpm' ? 'selected' : ''}`}
+                      onClick={() => setSelectedHistogram(selectedHistogram === 'wpm' ? null : 'wpm')}
+                    >
                       <Tooltip content={TIPS.wpm}>
                         <span className="histogram-title">WPM</span>
                       </Tooltip>
@@ -4718,7 +4918,10 @@ function App() {
                         smartZoom={histogramZoom}
                       />
                     </div>
-                    <div className="histogram-item">
+                    <div 
+                      className={`histogram-item ${selectedHistogram === 'accuracy' ? 'selected' : ''}`}
+                      onClick={() => setSelectedHistogram(selectedHistogram === 'accuracy' ? null : 'accuracy')}
+                    >
                       <Tooltip content={TIPS.accuracy}>
                         <span className="histogram-title">Accuracy</span>
                       </Tooltip>
@@ -4730,7 +4933,10 @@ function App() {
                         smartZoom={histogramZoom}
                       />
                     </div>
-                    <div className="histogram-item">
+                    <div 
+                      className={`histogram-item ${selectedHistogram === 'consistency' ? 'selected' : ''}`}
+                      onClick={() => setSelectedHistogram(selectedHistogram === 'consistency' ? null : 'consistency')}
+                    >
                       <Tooltip content={TIPS.consistency}>
                         <span className="histogram-title">Consistency</span>
                       </Tooltip>
@@ -4742,7 +4948,10 @@ function App() {
                         smartZoom={histogramZoom}
                       />
                     </div>
-                    <div className="histogram-item">
+                    <div 
+                      className={`histogram-item ${selectedHistogram === 'avgInterval' ? 'selected' : ''}`}
+                      onClick={() => setSelectedHistogram(selectedHistogram === 'avgInterval' ? null : 'avgInterval')}
+                    >
                       <Tooltip content={TIPS.avgKeystroke}>
                         <span className="histogram-title">Keystroke Time</span>
                       </Tooltip>
@@ -4755,7 +4964,10 @@ function App() {
                       />
                     </div>
                     {histograms.flowRatio && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedHistogram === 'flowRatio' ? 'selected' : ''}`}
+                        onClick={() => setSelectedHistogram(selectedHistogram === 'flowRatio' ? null : 'flowRatio')}
+                      >
                         <Tooltip content={TIPS.flowState}>
                           <span className="histogram-title">Flow State</span>
                         </Tooltip>
@@ -4769,7 +4981,10 @@ function App() {
                       </div>
                     )}
                     {histograms.rhythmScore && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedHistogram === 'rhythmScore' ? 'selected' : ''}`}
+                        onClick={() => setSelectedHistogram(selectedHistogram === 'rhythmScore' ? null : 'rhythmScore')}
+                      >
                         <Tooltip content={TIPS.rhythmScore}>
                           <span className="histogram-title">Rhythm</span>
                         </Tooltip>
@@ -4783,7 +4998,10 @@ function App() {
                       </div>
                     )}
                     {histograms.handBalance && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedHistogram === 'handBalance' ? 'selected' : ''}`}
+                        onClick={() => setSelectedHistogram(selectedHistogram === 'handBalance' ? null : 'handBalance')}
+                      >
                         <Tooltip content={TIPS.handBalance}>
                           <span className="histogram-title">Hand Balance</span>
                         </Tooltip>
@@ -4800,7 +5018,10 @@ function App() {
                       </div>
                     )}
                     {histograms.homeRowAdvantage && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedHistogram === 'homeRowAdvantage' ? 'selected' : ''}`}
+                        onClick={() => setSelectedHistogram(selectedHistogram === 'homeRowAdvantage' ? null : 'homeRowAdvantage')}
+                      >
                         <Tooltip content={TIPS.homeRow}>
                           <span className="histogram-title">Home Row</span>
                         </Tooltip>
@@ -4815,6 +5036,81 @@ function App() {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Expanded histogram view */}
+                  {selectedHistogram && histograms[selectedHistogram] && (
+                    <div className="histogram-expanded-container">
+                      <div className="histogram-expanded-header">
+                        <Tooltip content={
+                          selectedHistogram === 'wpm' ? TIPS.wpm :
+                          selectedHistogram === 'accuracy' ? TIPS.accuracy :
+                          selectedHistogram === 'consistency' ? TIPS.consistency :
+                          selectedHistogram === 'avgInterval' ? TIPS.avgKeystroke :
+                          selectedHistogram === 'flowRatio' ? TIPS.flowState :
+                          selectedHistogram === 'rhythmScore' ? TIPS.rhythmScore :
+                          selectedHistogram === 'handBalance' ? TIPS.handBalance :
+                          selectedHistogram === 'homeRowAdvantage' ? TIPS.homeRow :
+                          null
+                        }>
+                          <span className="histogram-expanded-title">
+                            {selectedHistogram === 'wpm' && 'Words Per Minute'}
+                            {selectedHistogram === 'accuracy' && 'Accuracy'}
+                            {selectedHistogram === 'consistency' && 'Consistency'}
+                            {selectedHistogram === 'avgInterval' && 'Keystroke Time'}
+                            {selectedHistogram === 'flowRatio' && 'Flow State'}
+                            {selectedHistogram === 'rhythmScore' && 'Rhythm Score'}
+                            {selectedHistogram === 'handBalance' && 'Hand Balance'}
+                            {selectedHistogram === 'homeRowAdvantage' && 'Home Row Advantage'}
+                          </span>
+                        </Tooltip>
+                        <button 
+                          className="histogram-close-btn"
+                          onClick={() => setSelectedHistogram(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <SessionHistogram 
+                        data={histograms[selectedHistogram]} 
+                        configKey={selectedHistogram}
+                        currentValue={
+                          selectedHistogram === 'wpm' ? stats?.wpm :
+                          selectedHistogram === 'accuracy' ? stats?.accuracy :
+                          selectedHistogram === 'consistency' ? stats?.consistency :
+                          selectedHistogram === 'avgInterval' ? stats?.avgInterval :
+                          selectedHistogram === 'flowRatio' ? stats?.behavioral?.flowRatio :
+                          selectedHistogram === 'rhythmScore' ? stats?.behavioral?.rhythmScore :
+                          selectedHistogram === 'handBalance' ? (stats?.behavioral ? Math.round(stats.behavioral.handBalance) : undefined) :
+                          selectedHistogram === 'homeRowAdvantage' ? (stats?.behavioral ? Math.round(stats.behavioral.homeRowAdvantage) : undefined) :
+                          undefined
+                        }
+                        average={
+                          selectedHistogram === 'wpm' ? cumulativeStats?.wpm :
+                          selectedHistogram === 'accuracy' ? cumulativeStats?.accuracy :
+                          selectedHistogram === 'consistency' ? cumulativeStats?.consistency :
+                          selectedHistogram === 'avgInterval' ? cumulativeStats?.avgInterval :
+                          selectedHistogram === 'flowRatio' ? cumulativeStats?.behavioral?.flowRatio :
+                          selectedHistogram === 'rhythmScore' ? cumulativeStats?.behavioral?.rhythmScore :
+                          selectedHistogram === 'handBalance' ? cumulativeStats?.behavioral?.handBalance :
+                          selectedHistogram === 'homeRowAdvantage' ? cumulativeStats?.behavioral?.homeRowAdvantage :
+                          undefined
+                        }
+                        smartZoom={histogramZoom}
+                        expanded={true}
+                        reversed={selectedHistogram === 'handBalance'}
+                        xAxisLabels={
+                          selectedHistogram === 'handBalance' ? { min: "← left faster", max: "right faster →" } :
+                          selectedHistogram === 'homeRowAdvantage' ? { min: "← away faster", max: "home faster →" } :
+                          null
+                        }
+                        formatValue={
+                          selectedHistogram === 'handBalance' 
+                            ? (val) => `${Math.abs(val)}% ${val > 0 ? 'left' : val < 0 ? 'right' : 'balanced'}`
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -5541,7 +5837,10 @@ function App() {
                   </div>
                   <div className="histograms-grid">
                     {globalHistograms.wpm && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'wpm' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'wpm' ? null : 'wpm')}
+                      >
                         <Tooltip content={TIPS.wpm}>
                           <span className="histogram-title">WPM</span>
                         </Tooltip>
@@ -5554,7 +5853,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.accuracy && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'accuracy' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'accuracy' ? null : 'accuracy')}
+                      >
                         <Tooltip content={TIPS.accuracy}>
                           <span className="histogram-title">Accuracy</span>
                         </Tooltip>
@@ -5567,7 +5869,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.consistency && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'consistency' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'consistency' ? null : 'consistency')}
+                      >
                         <Tooltip content={TIPS.consistency}>
                           <span className="histogram-title">Consistency</span>
                         </Tooltip>
@@ -5580,7 +5885,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.avgInterval && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'avgInterval' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'avgInterval' ? null : 'avgInterval')}
+                      >
                         <Tooltip content={TIPS.avgKeystroke}>
                           <span className="histogram-title">Keystroke Time</span>
                         </Tooltip>
@@ -5593,7 +5901,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.flowRatio && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'flowRatio' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'flowRatio' ? null : 'flowRatio')}
+                      >
                         <Tooltip content={TIPS.flowState}>
                           <span className="histogram-title">Flow State</span>
                         </Tooltip>
@@ -5606,7 +5917,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.rhythmScore && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'rhythmScore' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'rhythmScore' ? null : 'rhythmScore')}
+                      >
                         <Tooltip content={TIPS.rhythmScore}>
                           <span className="histogram-title">Rhythm</span>
                         </Tooltip>
@@ -5619,7 +5933,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.handBalance && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'handBalance' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'handBalance' ? null : 'handBalance')}
+                      >
                         <Tooltip content={TIPS.handBalance}>
                           <span className="histogram-title">Hand Balance</span>
                         </Tooltip>
@@ -5635,7 +5952,10 @@ function App() {
                       </div>
                     )}
                     {globalHistograms.homeRowAdvantage && (
-                      <div className="histogram-item">
+                      <div 
+                        className={`histogram-item ${selectedGlobalHistogram === 'homeRowAdvantage' ? 'selected' : ''}`}
+                        onClick={() => setSelectedGlobalHistogram(selectedGlobalHistogram === 'homeRowAdvantage' ? null : 'homeRowAdvantage')}
+                      >
                         <Tooltip content={TIPS.homeRow}>
                           <span className="histogram-title">Home Row</span>
                         </Tooltip>
@@ -5649,6 +5969,70 @@ function App() {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Expanded Global histogram view */}
+                  {selectedGlobalHistogram && globalHistograms[selectedGlobalHistogram] && (
+                    <div className="histogram-expanded-container">
+                      <div className="histogram-expanded-header">
+                        <Tooltip content={
+                          selectedGlobalHistogram === 'wpm' ? TIPS.wpm :
+                          selectedGlobalHistogram === 'accuracy' ? TIPS.accuracy :
+                          selectedGlobalHistogram === 'consistency' ? TIPS.consistency :
+                          selectedGlobalHistogram === 'avgInterval' ? TIPS.avgKeystroke :
+                          selectedGlobalHistogram === 'flowRatio' ? TIPS.flowState :
+                          selectedGlobalHistogram === 'rhythmScore' ? TIPS.rhythmScore :
+                          selectedGlobalHistogram === 'handBalance' ? TIPS.handBalance :
+                          selectedGlobalHistogram === 'homeRowAdvantage' ? TIPS.homeRow :
+                          null
+                        }>
+                          <span className="histogram-expanded-title">
+                            {selectedGlobalHistogram === 'wpm' && 'Words Per Minute'}
+                            {selectedGlobalHistogram === 'accuracy' && 'Accuracy'}
+                            {selectedGlobalHistogram === 'consistency' && 'Consistency'}
+                            {selectedGlobalHistogram === 'avgInterval' && 'Keystroke Time'}
+                            {selectedGlobalHistogram === 'flowRatio' && 'Flow State'}
+                            {selectedGlobalHistogram === 'rhythmScore' && 'Rhythm Score'}
+                            {selectedGlobalHistogram === 'handBalance' && 'Hand Balance'}
+                            {selectedGlobalHistogram === 'homeRowAdvantage' && 'Home Row Advantage'}
+                          </span>
+                        </Tooltip>
+                        <button 
+                          className="histogram-close-btn"
+                          onClick={() => setSelectedGlobalHistogram(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <SessionHistogram 
+                        data={globalHistogramToArray(globalHistograms[selectedGlobalHistogram], selectedGlobalHistogram)} 
+                        configKey={selectedGlobalHistogram}
+                        currentValue={
+                          selectedGlobalHistogram === 'wpm' ? (comparisonBase === "current" ? stats?.wpm : comparisonBase === "alltime" ? cumulativeStats?.wpm : undefined) :
+                          selectedGlobalHistogram === 'accuracy' ? (comparisonBase === "current" ? stats?.accuracy : comparisonBase === "alltime" ? cumulativeStats?.accuracy : undefined) :
+                          selectedGlobalHistogram === 'consistency' ? (comparisonBase === "current" ? stats?.consistency : comparisonBase === "alltime" ? cumulativeStats?.consistency : undefined) :
+                          selectedGlobalHistogram === 'avgInterval' ? (comparisonBase === "current" ? stats?.avgInterval : comparisonBase === "alltime" ? cumulativeStats?.avgInterval : undefined) :
+                          selectedGlobalHistogram === 'flowRatio' ? (comparisonBase === "current" ? stats?.behavioral?.flowRatio : comparisonBase === "alltime" ? cumulativeStats?.behavioral?.flowRatio : undefined) :
+                          selectedGlobalHistogram === 'rhythmScore' ? (comparisonBase === "current" ? stats?.behavioral?.rhythmScore : comparisonBase === "alltime" ? cumulativeStats?.behavioral?.rhythmScore : undefined) :
+                          selectedGlobalHistogram === 'handBalance' ? (comparisonBase === "current" && stats?.behavioral ? Math.round(stats.behavioral.handBalance) : comparisonBase === "alltime" && cumulativeStats?.behavioral ? Math.round(cumulativeStats.behavioral.handBalance) : undefined) :
+                          selectedGlobalHistogram === 'homeRowAdvantage' ? (comparisonBase === "current" && stats?.behavioral ? Math.round(stats.behavioral.homeRowAdvantage) : comparisonBase === "alltime" && cumulativeStats?.behavioral ? Math.round(cumulativeStats.behavioral.homeRowAdvantage) : undefined) :
+                          undefined
+                        }
+                        smartZoom={histogramZoom}
+                        expanded={true}
+                        reversed={selectedGlobalHistogram === 'handBalance'}
+                        xAxisLabels={
+                          selectedGlobalHistogram === 'handBalance' ? { min: "← left faster", max: "right faster →" } :
+                          selectedGlobalHistogram === 'homeRowAdvantage' ? { min: "← away faster", max: "home faster →" } :
+                          null
+                        }
+                        formatValue={
+                          selectedGlobalHistogram === 'handBalance' 
+                            ? (val) => `${Math.abs(val)}% ${val > 0 ? 'left' : val < 0 ? 'right' : 'balanced'}`
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
