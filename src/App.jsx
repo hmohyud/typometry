@@ -823,6 +823,208 @@ const TIPS = {
       <TipHint>Hover bars to see exact counts</TipHint>
     </>
   ),
+  commonTypos: (
+    <>
+      <TipTitle>Most Common Typos</TipTitle>
+      <TipText>
+        Shows which characters you most frequently mistype, aggregated across all users.
+      </TipText>
+      <TipText>
+        Format: expected → what was typed (count)
+      </TipText>
+      <TipHint>Use this to identify problem keys to practice</TipHint>
+    </>
+  ),
+  uselessStats: (
+    <>
+      <TipTitle>Useless Stats</TipTitle>
+      <TipText>
+        Fun but arguably not very useful metrics. Included because why not?
+      </TipText>
+      <TipHint>Don't take these too seriously</TipHint>
+    </>
+  ),
+  rowSpeed: (
+    <>
+      <TipTitle>Keyboard Row Speed</TipTitle>
+      <TipText>
+        Average keystroke time for each row of the keyboard.
+      </TipText>
+      <TipText>
+        Green border = faster, yellow = slower. Time shown in milliseconds.
+      </TipText>
+      <TipHint>Home row is usually fastest for touch typists</TipHint>
+    </>
+  ),
+  accuracyByType: (
+    <>
+      <TipTitle>Accuracy by Character Type</TipTitle>
+      <TipText>
+        Shows your accuracy broken down by character category: letters, numbers, punctuation, capitals, and spaces.
+      </TipText>
+      <TipText>
+        Bar color indicates accuracy: green = high, yellow = medium, red = low.
+      </TipText>
+      <TipHint>Most people struggle with punctuation and numbers</TipHint>
+    </>
+  ),
+  fastestTransitions: (
+    <>
+      <TipTitle>Globally Fastest Transitions</TipTitle>
+      <TipText>
+        The quickest finger-to-finger transitions recorded across all users.
+      </TipText>
+      <TipText>
+        These are typically comfortable letter combinations or muscle-memory patterns.
+      </TipText>
+    </>
+  ),
+  slowestTransitions: (
+    <>
+      <TipTitle>Globally Slowest Transitions</TipTitle>
+      <TipText>
+        The slowest finger-to-finger transitions recorded across all users.
+      </TipText>
+      <TipText>
+        Often involves reaching for uncommon keys or awkward finger movements.
+      </TipText>
+    </>
+  ),
+  allTimeFastest: (
+    <>
+      <TipTitle>All-Time Fastest</TipTitle>
+      <TipText>
+        Your personal fastest character transitions across all sessions.
+      </TipText>
+      <TipText>
+        These are your most fluid, muscle-memory combinations.
+      </TipText>
+    </>
+  ),
+  allTimeSlowest: (
+    <>
+      <TipTitle>All-Time Slowest</TipTitle>
+      <TipText>
+        Your personal slowest character transitions across all sessions.
+      </TipText>
+      <TipText>
+        May indicate awkward reaches or less practiced combinations.
+      </TipText>
+    </>
+  ),
+  globalAvgPause: (
+    <>
+      <TipTitle>Average Pause Duration</TipTitle>
+      <TipText>
+        Mean length of hesitations (pauses &gt;500ms) across all users.
+      </TipText>
+      <TipText>
+        Shorter pauses suggest more confident, fluid typing.
+      </TipText>
+    </>
+  ),
+  globalBurstLength: (
+    <>
+      <TipTitle>Average Burst Length</TipTitle>
+      <TipText>
+        Average number of consecutive fast keystrokes (&lt;100ms) per burst.
+      </TipText>
+      <TipText>
+        Longer bursts indicate sustained flow and muscle memory.
+      </TipText>
+    </>
+  ),
+  globalBurstCount: (
+    <>
+      <TipTitle>Total Bursts</TipTitle>
+      <TipText>
+        Average number of fast typing sequences per session.
+      </TipText>
+      <TipText>
+        More bursts suggest frequent periods of confident, rapid typing.
+      </TipText>
+    </>
+  ),
+  globalRhythm: (
+    <>
+      <TipTitle>Rhythm Score</TipTitle>
+      <TipText>
+        How consistent the timing is between keystrokes.
+      </TipText>
+      <TipText>
+        Higher scores mean more metronomic, even-paced typing.
+      </TipText>
+    </>
+  ),
+  globalHandBalance: (
+    <>
+      <TipTitle>Hand Balance</TipTitle>
+      <TipText>
+        Speed comparison between left and right hand keystrokes.
+      </TipText>
+      <TipText>
+        Most people have a slight dominant hand advantage.
+      </TipText>
+    </>
+  ),
+  globalHomeRow: (
+    <>
+      <TipTitle>Home Row Usage</TipTitle>
+      <TipText>
+        Percentage of keystrokes on the home row (ASDFGHJKL).
+      </TipText>
+      <TipText>
+        Touch typists tend to have higher home row usage.
+      </TipText>
+    </>
+  ),
+  globalHesitations: (
+    <>
+      <TipTitle>Hesitations</TipTitle>
+      <TipText>
+        Average number of pauses longer than 500ms per session.
+      </TipText>
+      <TipText>
+        Fewer hesitations indicate smoother, more confident typing.
+      </TipText>
+    </>
+  ),
+  globalErrorRate: (
+    <>
+      <TipTitle>Error Rate</TipTitle>
+      <TipText>
+        Average number of typing errors per session across all users.
+      </TipText>
+      <TipText>
+        Lower is better — indicates more accurate typing.
+      </TipText>
+    </>
+  ),
+  globalCorrectionRatio: (
+    <>
+      <TipTitle>Correction Ratio</TipTitle>
+      <TipText>
+        Average backspaces used per error.
+      </TipText>
+      <TipText>
+        ~1.0 = efficient (one backspace per error)
+        &gt;1.5 = over-correcting
+        &lt;1.0 = incomplete fixes
+      </TipText>
+    </>
+  ),
+  globalKeyboardAnalysis: (
+    <>
+      <TipTitle>Keyboard Analysis</TipTitle>
+      <TipText>
+        Heatmap showing average typing speed or accuracy for each key across all users.
+      </TipText>
+      <TipText>
+        Speed mode: Green = fast, Red = slow.
+        Accuracy mode: Green = accurate, Red = error-prone.
+      </TipText>
+    </>
+  ),
 };
 
 // Load/save helpers
@@ -1182,9 +1384,8 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
   // Find which bucket the current/average values fall into (in original indices)
   const getBucketIndex = (value) => {
     if (value === null || value === undefined || isNaN(value)) return -1;
-    // Round to nearest step for proper bucket alignment
-    const roundedValue = Math.round(value / config.step) * config.step;
-    const idx = Math.floor((roundedValue - config.min) / config.step);
+    // Use Math.round to match updateHistogram bucket assignment
+    const idx = Math.round((value - config.min) / config.step);
     return Math.max(0, Math.min(idx, validData.length - 1));
   };
   
@@ -1446,8 +1647,8 @@ const updateHistogram = (histograms, key, value) => {
     newHistograms[key] = new Array(bucketCount).fill(0);
   }
   
-  // Find the bucket for this value using simple math
-  const bucketIdx = Math.floor((value - config.min) / config.step);
+  // Find the bucket for this value using Math.round for proper alignment
+  const bucketIdx = Math.round((value - config.min) / config.step);
   const clampedIdx = Math.max(0, Math.min(bucketIdx, bucketCount - 1));
   
   newHistograms[key] = [...newHistograms[key]];
@@ -2808,9 +3009,10 @@ function App() {
     const consistency = STAT_ROUND.consistency(Math.max(0, (1 - Math.min(cv, 1)) * 100));
 
     const correctChars = data.filter((d) => d.correct).length;
-    const accuracy = data.length > 0 ? (correctChars / data.length) * 100 : 0;
+    // Exclude backspaces from character count
+    const charCount = data.filter((d) => !d.isBackspace).length;
+    const accuracy = charCount > 0 ? (correctChars / charCount) * 100 : 0;
 
-    const charCount = data.length;
     const minutes = totalTime / 60000;
     const wpm = minutes > 0 ? Math.round(charCount / 5 / minutes) : 0;
     const cpm = minutes > 0 ? Math.round(charCount / minutes) : 0;
@@ -3005,7 +3207,8 @@ function App() {
 
     // --- Backspace efficiency: backspaces per error ---
     const backspaceCount = rawEvents.filter((e) => e.isBackspace).length;
-    const errorCount = data.length - correctChars;
+    // Exclude backspaces from error count (they have correct: false but aren't typing errors)
+    const errorCount = data.filter((d) => !d.correct && !d.isBackspace).length;
     const backspaceEfficiency =
       errorCount > 0 ? Math.round((backspaceCount / errorCount) * 10) / 10 : 1;
 
@@ -5306,7 +5509,12 @@ function App() {
 
                 <div className="bigrams-container">
                   <div className="bigrams">
-                    <p className="bigram-label">all-time fastest</p>
+                    <div className="section-header-row compact">
+                      <p className="bigram-label">all-time fastest</p>
+                      <Tooltip content={TIPS.allTimeFastest}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
                     <div className="bigram-list">
                       {cumulativeStats.fastestBigrams.map(
                         ({ bigram, avg }, i) => (
@@ -5323,7 +5531,12 @@ function App() {
                     </div>
                   </div>
                   <div className="bigrams">
-                    <p className="bigram-label">all-time slowest</p>
+                    <div className="section-header-row compact">
+                      <p className="bigram-label">all-time slowest</p>
+                      <Tooltip content={TIPS.allTimeSlowest}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
                     <div className="bigram-list">
                       {cumulativeStats.slowestBigrams.map(
                         ({ bigram, avg }, i) => (
@@ -6086,7 +6299,12 @@ function App() {
               {keyAverages && Object.keys(keyAverages).length > 0 && (
                 <div className="keyboard-section">
                   <div className="keyboard-header">
-                    <h3>Keyboard Analysis (Global Average)</h3>
+                    <div className="section-header-row">
+                      <h3>Keyboard Analysis (Global Average)</h3>
+                      <Tooltip content={TIPS.globalKeyboardAnalysis}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
                     <div className="mini-toggles">
                       <button
                         className={`mini-toggle ${heatmapMode === "speed" ? "active" : ""}`}
@@ -6166,7 +6384,12 @@ function App() {
               {bigramAverages && Object.keys(bigramAverages).length > 0 && (
                 <div className="bigrams-container">
                   <div className="bigrams">
-                    <p className="bigram-label">globally fastest transitions</p>
+                    <div className="section-header-row compact">
+                      <p className="bigram-label">globally fastest transitions</p>
+                      <Tooltip content={TIPS.fastestTransitions}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
                     <div className="bigram-list">
                       {Object.entries(bigramAverages)
                         .filter(([_, data]) => data.total_occurrences >= 10)
@@ -6184,7 +6407,12 @@ function App() {
                     </div>
                   </div>
                   <div className="bigrams">
-                    <p className="bigram-label">globally slowest transitions</p>
+                    <div className="section-header-row compact">
+                      <p className="bigram-label">globally slowest transitions</p>
+                      <Tooltip content={TIPS.slowestTransitions}>
+                        <button className="help-btn" type="button" aria-label="Help">?</button>
+                      </Tooltip>
+                    </div>
                     <div className="bigram-list">
                       {Object.entries(bigramAverages)
                         .filter(([_, data]) => data.total_occurrences >= 10)
@@ -6211,261 +6439,279 @@ function App() {
                   <div className="behavioral-grid">
                     {/* Avg Hesitation Time - replaced backspaceEfficiency which wasn't recording */}
                     {behavioralAverages.avgHesitation && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">avg pause duration</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.int(behavioralAverages.avgHesitation.avg)}ms
-                          </span>
+                      <Tooltip content={TIPS.globalAvgPause}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">avg pause duration</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.int(behavioralAverages.avgHesitation.avg)}ms
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            average hesitation length
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.avgHesitation.avg}
+                            min={behavioralAverages.avgHesitation.min}
+                            max={behavioralAverages.avgHesitation.max}
+                            stdDev={behavioralAverages.avgHesitation.std_dev}
+                            lowerIsBetter={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          average hesitation length
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.avgHesitation.avg}
-                          min={behavioralAverages.avgHesitation.min}
-                          max={behavioralAverages.avgHesitation.max}
-                          stdDev={behavioralAverages.avgHesitation.std_dev}
-                          lowerIsBetter={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Burst Stats */}
                     {behavioralAverages.avgBurstLength && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">avg burst length</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.dec(behavioralAverages.avgBurstLength.avg)} chars
-                          </span>
+                      <Tooltip content={TIPS.globalBurstLength}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">avg burst length</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.dec(behavioralAverages.avgBurstLength.avg)} chars
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            consecutive fast keystrokes
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.avgBurstLength.avg}
+                            min={behavioralAverages.avgBurstLength.min}
+                            max={behavioralAverages.avgBurstLength.max}
+                            stdDev={behavioralAverages.avgBurstLength.std_dev}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          consecutive fast keystrokes
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.avgBurstLength.avg}
-                          min={behavioralAverages.avgBurstLength.min}
-                          max={behavioralAverages.avgBurstLength.max}
-                          stdDev={behavioralAverages.avgBurstLength.std_dev}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Burst Count */}
                     {behavioralAverages.burstCount && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">total bursts</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.int(behavioralAverages.burstCount.avg)}
-                          </span>
+                      <Tooltip content={TIPS.globalBurstCount}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">total bursts</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.int(behavioralAverages.burstCount.avg)}
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            avg fast typing sequences per session
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.burstCount.avg}
+                            min={behavioralAverages.burstCount.min}
+                            max={behavioralAverages.burstCount.max}
+                            stdDev={behavioralAverages.burstCount.std_dev}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          avg fast typing sequences per session
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.burstCount.avg}
-                          min={behavioralAverages.burstCount.min}
-                          max={behavioralAverages.burstCount.max}
-                          stdDev={behavioralAverages.burstCount.std_dev}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Rhythm Score */}
                     {behavioralAverages.rhythmScore && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">rhythm score</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.int(behavioralAverages.rhythmScore.avg)}%
-                          </span>
+                      <Tooltip content={TIPS.globalRhythm}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">rhythm score</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.int(behavioralAverages.rhythmScore.avg)}%
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            typing consistency
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.rhythmScore.avg}
+                            min={behavioralAverages.rhythmScore.min}
+                            max={behavioralAverages.rhythmScore.max}
+                            stdDev={behavioralAverages.rhythmScore.std_dev}
+                            isPercent={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          typing consistency
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.rhythmScore.avg}
-                          min={behavioralAverages.rhythmScore.min}
-                          max={behavioralAverages.rhythmScore.max}
-                          stdDev={behavioralAverages.rhythmScore.std_dev}
-                          isPercent={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Hand Balance */}
                     {behavioralAverages.handBalance && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">hand balance</span>
-                          <span className="behavioral-stat-value">
-                            {Math.abs(behavioralAverages.handBalance.avg) <= 10 ? 'balanced' :
-                             behavioralAverages.handBalance.avg > 10 ? 'right dominant' : 'left dominant'}
-                          </span>
+                      <Tooltip content={TIPS.globalHandBalance}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">hand balance</span>
+                            <span className="behavioral-stat-value">
+                              {Math.abs(behavioralAverages.handBalance.avg) <= 10 ? 'balanced' :
+                               behavioralAverages.handBalance.avg > 10 ? 'right dominant' : 'left dominant'}
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            {behavioralAverages.handBalance.avg > 0 ? '+' : ''}{fmt.int(behavioralAverages.handBalance.avg)}% {behavioralAverages.handBalance.avg > 0 ? 'right' : 'left'} advantage
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.handBalance.avg}
+                            min={behavioralAverages.handBalance.min}
+                            max={behavioralAverages.handBalance.max}
+                            stdDev={behavioralAverages.handBalance.std_dev}
+                            centered={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          {behavioralAverages.handBalance.avg > 0 ? '+' : ''}{fmt.int(behavioralAverages.handBalance.avg)}% {behavioralAverages.handBalance.avg > 0 ? 'right' : 'left'} advantage
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.handBalance.avg}
-                          min={behavioralAverages.handBalance.min}
-                          max={behavioralAverages.handBalance.max}
-                          stdDev={behavioralAverages.handBalance.std_dev}
-                          centered={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Home Row */}
                     {behavioralAverages.homeRowRatio && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">home row usage</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.int(behavioralAverages.homeRowRatio.avg * 100)}%
-                          </span>
+                      <Tooltip content={TIPS.globalHomeRow}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">home row usage</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.int(behavioralAverages.homeRowRatio.avg * 100)}%
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            keystrokes on home row
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.homeRowRatio.avg}
+                            min={behavioralAverages.homeRowRatio.min}
+                            max={behavioralAverages.homeRowRatio.max}
+                            stdDev={behavioralAverages.homeRowRatio.std_dev}
+                            isPercent={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          keystrokes on home row
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.homeRowRatio.avg}
-                          min={behavioralAverages.homeRowRatio.min}
-                          max={behavioralAverages.homeRowRatio.max}
-                          stdDev={behavioralAverages.homeRowRatio.std_dev}
-                          isPercent={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Total Hesitations */}
                     {behavioralAverages.hesitationCount && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">hesitations</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.int(behavioralAverages.hesitationCount.avg)}
-                          </span>
+                      <Tooltip content={TIPS.globalHesitations}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">hesitations</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.int(behavioralAverages.hesitationCount.avg)}
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            avg pauses &gt;500ms per session
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.hesitationCount.avg}
+                            min={behavioralAverages.hesitationCount.min}
+                            max={behavioralAverages.hesitationCount.max}
+                            stdDev={behavioralAverages.hesitationCount.std_dev}
+                            lowerIsBetter={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          avg pauses &gt;500ms per session
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.hesitationCount.avg}
-                          min={behavioralAverages.hesitationCount.min}
-                          max={behavioralAverages.hesitationCount.max}
-                          stdDev={behavioralAverages.hesitationCount.std_dev}
-                          lowerIsBetter={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Error Rate */}
                     {behavioralAverages.errorRate && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">error rate</span>
-                          <span className="behavioral-stat-value">
-                            {behavioralAverages.errorRate.avg.toFixed(1)}
-                          </span>
+                      <Tooltip content={TIPS.globalErrorRate}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">error rate</span>
+                            <span className="behavioral-stat-value">
+                              {behavioralAverages.errorRate.avg.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            avg errors per session
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.errorRate.avg}
+                            min={behavioralAverages.errorRate.min}
+                            max={behavioralAverages.errorRate.max}
+                            stdDev={behavioralAverages.errorRate.std_dev}
+                            lowerIsBetter={true}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          avg errors per session
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.errorRate.avg}
-                          min={behavioralAverages.errorRate.min}
-                          max={behavioralAverages.errorRate.max}
-                          stdDev={behavioralAverages.errorRate.std_dev}
-                          lowerIsBetter={true}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
 
                     {/* Backspace Efficiency */}
                     {behavioralAverages.backspaceEfficiency && behavioralAverages.backspaceEfficiency.avg > 0 && (
-                      <div className="behavioral-stat">
-                        <div className="behavioral-stat-header">
-                          <span className="behavioral-stat-label">correction ratio</span>
-                          <span className="behavioral-stat-value">
-                            {fmt.dec(behavioralAverages.backspaceEfficiency.avg)}
-                          </span>
+                      <Tooltip content={TIPS.globalCorrectionRatio}>
+                        <div className="behavioral-stat">
+                          <div className="behavioral-stat-header">
+                            <span className="behavioral-stat-label">correction ratio</span>
+                            <span className="behavioral-stat-value">
+                              {fmt.dec(behavioralAverages.backspaceEfficiency.avg)}
+                            </span>
+                          </div>
+                          <div className="behavioral-stat-detail">
+                            backspaces per error
+                          </div>
+                          <GlobalDistributionBar 
+                            value={behavioralAverages.backspaceEfficiency.avg}
+                            min={behavioralAverages.backspaceEfficiency.min}
+                            max={behavioralAverages.backspaceEfficiency.max}
+                            stdDev={behavioralAverages.backspaceEfficiency.std_dev}
+                          />
                         </div>
-                        <div className="behavioral-stat-detail">
-                          backspaces per error
-                        </div>
-                        <GlobalDistributionBar 
-                          value={behavioralAverages.backspaceEfficiency.avg}
-                          min={behavioralAverages.backspaceEfficiency.min}
-                          max={behavioralAverages.backspaceEfficiency.max}
-                          stdDev={behavioralAverages.backspaceEfficiency.std_dev}
-                        />
-                      </div>
+                      </Tooltip>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Lifetime Stats & Records */}
+              {/* Global Cumulative Stats & Records */}
               {((lifetimeStats && lifetimeStats.totalKeystrokes > 0) || (records && records.fastestWpm > 0)) && (
                 <div className="lifetime-section">
-                  <h3>Lifetime Statistics</h3>
+                  <h3>Community Totals</h3>
                   <div className="stat-grid secondary">
                     {lifetimeStats && lifetimeStats.totalKeystrokes > 0 && (
                       <>
-                        <Tooltip content="Total keystrokes recorded across all sessions">
+                        <Tooltip content="Total keystrokes recorded across all users">
                           <div className="stat small">
                             <span className="stat-value">{fmt.count(lifetimeStats.totalKeystrokes)}</span>
-                            <span className="stat-label">keystrokes</span>
+                            <span className="stat-label">total keystrokes</span>
                           </div>
                         </Tooltip>
-                        <Tooltip content="Total time spent typing">
+                        <Tooltip content="Total time spent typing by all users">
                           <div className="stat small">
                             <span className="stat-value">{fmt.dec(lifetimeStats.totalTypingHours, 1)}h</span>
-                            <span className="stat-label">typing time</span>
+                            <span className="stat-label">total typing time</span>
                           </div>
                         </Tooltip>
-                        <Tooltip content="Overall accuracy across all sessions">
+                        <Tooltip content="Overall accuracy across all users">
                           <div className="stat small">
                             <span className="stat-value">{fmt.dec(lifetimeStats.lifetimeAccuracy)}%</span>
-                            <span className="stat-label">lifetime accuracy</span>
+                            <span className="stat-label">global accuracy</span>
                           </div>
                         </Tooltip>
-                        <Tooltip content="Total errors made">
+                        <Tooltip content="Total errors made by all users">
                           <div className="stat small">
                             <span className="stat-value">{fmt.count(lifetimeStats.totalErrors)}</span>
-                            <span className="stat-label">errors</span>
+                            <span className="stat-label">total errors</span>
                           </div>
                         </Tooltip>
                       </>
                     )}
                     {records && records.fastestWpm > 0 && (
                       <>
-                        <Tooltip content="Fastest WPM ever recorded">
+                        <Tooltip content="Fastest WPM ever recorded by any user">
                           <div className="stat small highlight">
                             <span className="stat-value">{fmt.int(records.fastestWpm)}</span>
                             <span className="stat-label">🏆 best WPM</span>
                           </div>
                         </Tooltip>
-                        <Tooltip content="Longest streak of correct keystrokes">
+                        <Tooltip content="Longest streak of correct keystrokes by any user">
                           <div className="stat small highlight">
                             <span className="stat-value">{fmt.count(records.longestStreak)}</span>
                             <span className="stat-label">🔥 longest streak</span>
                           </div>
                         </Tooltip>
-                        <Tooltip content="Longest burst of fast keystrokes (<100ms)">
+                        <Tooltip content="Longest burst of fast keystrokes (<100ms) by any user">
                           <div className="stat small">
                             <span className="stat-value">{fmt.int(records.longestBurst)}</span>
                             <span className="stat-label">longest burst</span>
                           </div>
                         </Tooltip>
-                        {records.fastestKeystrokeMs > 0 && (
-                          <Tooltip content="Fastest single keystroke">
+                        {typingPatterns?.doubleLetter?.sampleSessions >= 5 && (
+                          <Tooltip content="Average time for double letters (like 'ee' or 'll')">
                             <div className="stat small">
-                              <span className="stat-value">{fmt.int(records.fastestKeystrokeMs)}ms</span>
-                              <span className="stat-label">fastest key</span>
+                              <span className="stat-value">{fmt.int(typingPatterns.doubleLetter.avgValue)}ms</span>
+                              <span className="stat-label">double letters</span>
                             </div>
                           </Tooltip>
                         )}
@@ -6495,7 +6741,12 @@ function App() {
                   
                   return (
                     <div className="accuracy-breakdown-section">
-                      <h3>Accuracy by Character Type</h3>
+                      <div className="section-header-row">
+                        <h3>Accuracy by Character Type</h3>
+                        <Tooltip content={TIPS.accuracyByType}>
+                          <button className="help-btn" type="button" aria-label="Help">?</button>
+                        </Tooltip>
+                      </div>
                       <div className="accuracy-type-grid">
                         {validTypes.map(charType => {
                           const data = accuracyByType[charType];
@@ -6556,7 +6807,12 @@ function App() {
                   
                   return (
                     <div className="row-performance-section">
-                      <h3>Keyboard Row Speed</h3>
+                      <div className="section-header-row">
+                        <h3>Keyboard Row Speed</h3>
+                        <Tooltip content={TIPS.rowSpeed}>
+                          <button className="help-btn" type="button" aria-label="Help">?</button>
+                        </Tooltip>
+                      </div>
                       <div className="keyboard-rows-visual">
                         {validRows.map(rowName => {
                           const data = rowPerformance[rowName];
@@ -6591,116 +6847,15 @@ function App() {
                 })()
               )}
 
-              {/* Typing Patterns */}
-              {typingPatterns && Object.keys(typingPatterns).length > 0 && (
-                (() => {
-                  // Check if we have any displayable patterns
-                  const hasDoubleLetter = typingPatterns.doubleLetter?.sampleSessions >= 5;
-                  const hasAlternating = typingPatterns.alternatingRatio?.sampleSessions >= 5;
-                  
-                  // Get best day from time patterns
-                  const days = Object.entries(timePatterns?.daily || {})
-                    .filter(([_, d]) => d.sampleSessions >= 3)
-                    .map(([d, data]) => ({ day: parseInt(d), ...data }));
-                  const bestDay = days.sort((a, b) => b.avgWpm - a.avgWpm)[0];
-                  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                  
-                  if (!hasDoubleLetter && !hasAlternating && !bestDay) return null;
-                  
-                  return (
-                    <div className="typing-patterns-section">
-                      <h3>Typing Patterns</h3>
-                      <div className="patterns-grid">
-                        {hasDoubleLetter && (
-                          <Tooltip content="Average time for double letters (like 'ee' or 'll')">
-                            <div className="pattern-item">
-                              <span className="pattern-label">Double Letters</span>
-                              <span className="pattern-value">{fmt.int(typingPatterns.doubleLetter.avgValue)}ms avg</span>
-                            </div>
-                          </Tooltip>
-                        )}
-                        {hasAlternating && (
-                          <Tooltip content="Percentage of keystrokes that alternate between hands">
-                            <div className="pattern-item">
-                              <span className="pattern-label">Hand Alternation</span>
-                              <span className="pattern-value">{fmt.int(typingPatterns.alternatingRatio.avgValue)}%</span>
-                            </div>
-                          </Tooltip>
-                        )}
-                        {bestDay && (
-                          <Tooltip content={`Users type fastest on ${dayNames[bestDay.day]}s globally`}>
-                            <div className="pattern-item">
-                              <span className="pattern-label">Best Day</span>
-                              <span className="pattern-value">{dayNames[bestDay.day]}</span>
-                            </div>
-                          </Tooltip>
-                        )}
-                        {/* Add a 4th item if we have 3 (to make grid even) */}
-                        {hasDoubleLetter && hasAlternating && bestDay && typingPatterns.doubleLetterCount?.sampleSessions >= 5 && (
-                          <Tooltip content="Average double letters per session">
-                            <div className="pattern-item">
-                              <span className="pattern-label">Doubles/Session</span>
-                              <span className="pattern-value">{fmt.dec(typingPatterns.doubleLetterCount.avgValue, 1)}</span>
-                            </div>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()
-              )}
-
-              {/* Time Patterns - Hour of Day Performance */}
-              {timePatterns && timePatterns.hourly && (
-                (() => {
-                  const hours = Object.entries(timePatterns.hourly || {})
-                    .filter(([_, d]) => d.sampleSessions >= 3)
-                    .map(([h, d]) => ({ hour: parseInt(h), ...d }));
-                  
-                  if (hours.length < 2) return null; // Need at least 2 hours to compare
-                  
-                  const sortedByWpm = [...hours].sort((a, b) => b.avgWpm - a.avgWpm);
-                  const bestHour = sortedByWpm[0];
-                  const worstHour = sortedByWpm[sortedByWpm.length - 1];
-                  
-                  const formatHour = (h) => {
-                    if (h === 0) return '12am';
-                    if (h < 12) return `${h}am`;
-                    if (h === 12) return '12pm';
-                    return `${h - 12}pm`;
-                  };
-                  
-                  // Only show if there's meaningful difference
-                  if (!bestHour || !worstHour || bestHour.hour === worstHour.hour) return null;
-                  
-                  return (
-                    <div className="time-patterns-section">
-                      <h3>Time of Day Performance</h3>
-                      <div className="time-patterns-content">
-                        <div className="time-insights">
-                          <div className="time-insight">
-                            <span className="insight-icon">⚡</span>
-                            <span className="insight-text">
-                              Fastest at <strong>{formatHour(bestHour.hour)}</strong> ({fmt.int(bestHour.avgWpm)} WPM avg)
-                            </span>
-                          </div>
-                          <div className="time-insight subtle">
-                            <span className="insight-icon">🐌</span>
-                            <span className="insight-text">
-                              Slowest at <strong>{formatHour(worstHour.hour)}</strong> ({fmt.int(worstHour.avgWpm)} WPM avg)
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()
-              )}
-
               {/* Error Confusion (Most Common Typos) */}
               {errorConfusion && errorConfusion.length > 0 && (
                 <div className="error-confusion-section">
-                  <h3>Most Common Typos</h3>
+                  <div className="section-header-row">
+                    <h3>Most Common Typos</h3>
+                    <Tooltip content={TIPS.commonTypos}>
+                      <button className="help-btn" type="button" aria-label="Help">?</button>
+                    </Tooltip>
+                  </div>
                   <div className="typo-list">
                     {errorConfusion.slice(0, 10).map((typo, i) => {
                       const displayChar = (char) => char === ' ' ? '␣' : char;
@@ -6718,6 +6873,102 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {/* Useless Stats (fun but low-value patterns) */}
+              {(typingPatterns && Object.keys(typingPatterns).length > 0) || (timePatterns && (timePatterns.daily || timePatterns.hourly)) ? (
+                (() => {
+                  // Check if we have any displayable patterns
+                  const hasDoubleCount = typingPatterns?.doubleLetterCount?.sampleSessions >= 5;
+                  const hasAlternating = typingPatterns?.alternatingRatio?.sampleSessions >= 5;
+                  
+                  // Get best day from time patterns
+                  const days = Object.entries(timePatterns?.daily || {})
+                    .filter(([_, d]) => d.sampleSessions >= 3)
+                    .map(([d, data]) => ({ day: parseInt(d), ...data }));
+                  const bestDay = days.length > 0 ? days.sort((a, b) => b.avgWpm - a.avgWpm)[0] : null;
+                  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                  
+                  // Get best/worst hours
+                  const hours = Object.entries(timePatterns?.hourly || {})
+                    .filter(([_, d]) => d.sampleSessions >= 3)
+                    .map(([h, d]) => ({ hour: parseInt(h), ...d }));
+                  const sortedByWpm = hours.length >= 2 ? [...hours].sort((a, b) => b.avgWpm - a.avgWpm) : [];
+                  const bestHour = sortedByWpm[0];
+                  const worstHour = sortedByWpm.length > 1 ? sortedByWpm[sortedByWpm.length - 1] : null;
+                  const formatHour = (h) => {
+                    if (h === 0) return '12am';
+                    if (h < 12) return `${h}am`;
+                    if (h === 12) return '12pm';
+                    return `${h - 12}pm`;
+                  };
+                  
+                  // Check if we have anything to show
+                  const hasTimeData = bestHour && worstHour && bestHour.hour !== worstHour.hour;
+                  const hasFastestKey = records && records.fastestKeystrokeMs > 0;
+                  if (!hasAlternating && !bestDay && !hasTimeData && !hasDoubleCount && !hasFastestKey) return null;
+                  
+                  return (
+                    <div className="typing-patterns-section">
+                      <div className="section-header-row">
+                        <h3>Useless Stats</h3>
+                        <Tooltip content={TIPS.uselessStats}>
+                          <button className="help-btn" type="button" aria-label="Help">?</button>
+                        </Tooltip>
+                      </div>
+                      <div className="patterns-grid">
+                        {hasFastestKey && (
+                          <Tooltip content="Fastest single keystroke by any user">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Fastest Key</span>
+                              <span className="pattern-value">{fmt.int(records.fastestKeystrokeMs)}ms</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {hasAlternating && (
+                          <Tooltip content="Percentage of keystrokes that alternate between hands">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Hand Alternation</span>
+                              <span className="pattern-value">{fmt.int(typingPatterns.alternatingRatio.avgValue)}%</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {hasDoubleCount && (
+                          <Tooltip content="Average double letters per session">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Doubles/Session</span>
+                              <span className="pattern-value">{fmt.dec(typingPatterns.doubleLetterCount.avgValue, 1)}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {bestDay && (
+                          <Tooltip content={`Users type fastest on ${dayNames[bestDay.day]}s (${fmt.int(bestDay.avgWpm)} WPM avg)`}>
+                            <div className="pattern-item">
+                              <span className="pattern-label">Best Day</span>
+                              <span className="pattern-value">{dayNames[bestDay.day]}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {hasTimeData && (
+                          <Tooltip content={`Peak typing speed at ${formatHour(bestHour.hour)}`}>
+                            <div className="pattern-item">
+                              <span className="pattern-label">Peak Hour</span>
+                              <span className="pattern-value">{formatHour(bestHour.hour)} <span className="pattern-detail">({fmt.int(bestHour.avgWpm)} WPM)</span></span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {hasTimeData && (
+                          <Tooltip content={`Slowest typing at ${formatHour(worstHour.hour)}`}>
+                            <div className="pattern-item">
+                              <span className="pattern-label">Slow Hour</span>
+                              <span className="pattern-value">{formatHour(worstHour.hour)} <span className="pattern-detail">({fmt.int(worstHour.avgWpm)} WPM)</span></span>
+                            </div>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : null}
             </>
           ) : null}
 
