@@ -255,4 +255,132 @@ export async function getGlobalHistograms() {
   return histograms
 }
 
+// ============================================================
+// NEW VIEWS - Extended statistics
+// ============================================================
+
+/**
+ * Get character breakdown (words, letters, numbers, punctuation, etc.)
+ */
+export async function getCharacterBreakdown() {
+  const { data, error } = await supabase
+    .from('character_breakdown_view')
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('Error fetching character breakdown:', error)
+    return null
+  }
+  return data
+}
+
+/**
+ * Get lifetime stats (total keystrokes, errors, time)
+ */
+export async function getLifetimeStats() {
+  const { data, error } = await supabase
+    .from('lifetime_stats_view')
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('Error fetching lifetime stats:', error)
+    return null
+  }
+  return data
+}
+
+/**
+ * Get records (fastest WPM, longest streak, etc.)
+ */
+export async function getRecords() {
+  const { data, error } = await supabase
+    .from('records_view')
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('Error fetching records:', error)
+    return null
+  }
+  return data
+}
+
+/**
+ * Get error confusion matrix (most common typos)
+ */
+export async function getErrorConfusion(limit = 50) {
+  const { data, error } = await supabase
+    .from('error_confusion_view')
+    .select('*')
+    .limit(limit)
+
+  if (error) {
+    console.error('Error fetching error confusion:', error)
+    return []
+  }
+  return data || []
+}
+
+/**
+ * Get accuracy by character type
+ */
+export async function getAccuracyByType() {
+  const { data, error } = await supabase
+    .from('accuracy_by_type_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching accuracy by type:', error)
+    return []
+  }
+  return data || []
+}
+
+/**
+ * Get row performance (top/home/bottom keyboard rows)
+ */
+export async function getRowPerformance() {
+  const { data, error } = await supabase
+    .from('row_performance_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching row performance:', error)
+    return []
+  }
+  return data || []
+}
+
+/**
+ * Get typing patterns (double letters, alternating hands)
+ */
+export async function getTypingPatterns() {
+  const { data, error } = await supabase
+    .from('typing_patterns_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching typing patterns:', error)
+    return []
+  }
+  return data || []
+}
+
+/**
+ * Get time patterns (performance by hour and day of week)
+ */
+export async function getTimePatterns() {
+  const { data, error } = await supabase
+    .from('time_patterns_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching time patterns:', error)
+    return []
+  }
+  return data || []
+}
+
 export default supabase

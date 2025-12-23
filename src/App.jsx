@@ -58,6 +58,23 @@ const fmt = {
   dec: (n, d = 1) => formatNumber(n, { decimals: d }),
 };
 
+// Unified stat rounding - use these everywhere for consistency
+// This ensures local stats and global stats match when comparing
+const STAT_ROUND = {
+  wpm: (v) => Math.round(v),                           // integer
+  accuracy: (v) => Math.round(v * 10) / 10,            // 1 decimal
+  consistency: (v) => Math.round(v * 10) / 10,         // 1 decimal
+  avgInterval: (v) => Math.round(v),                   // integer ms
+  flowRatio: (v) => Math.round(v),                     // integer %
+  rhythmScore: (v) => Math.round(v),                   // integer %
+  handBalance: (v) => Math.round(v),                   // integer %
+  homeRowAdvantage: (v) => Math.round(v),              // integer %
+  stdDev: (v) => Math.round(v),                        // integer
+  backspaceEfficiency: (v) => Math.round(v * 10) / 10, // 1 decimal
+  distance: (v) => Math.round(v * 100) / 100,          // 2 decimals
+  time: (v) => Math.round(v * 10) / 10,                // 1 decimal seconds
+};
+
 // Flatten all paragraphs into one pool with indices
 const ALL_PARAGRAPHS = Object.values(sentences).flat();
 
@@ -2250,6 +2267,15 @@ function App() {
     transitionAverages,
     behavioralAverages,
     keyAverages,
+    // New extended stats
+    characterBreakdown,
+    lifetimeStats,
+    records,
+    errorConfusion,
+    accuracyByType,
+    rowPerformance,
+    typingPatterns,
+    timePatterns,
     submitStats: submitToSupabase, 
     resetUserId,
     compareToGlobal,
@@ -2395,7 +2421,7 @@ function App() {
     const wpm = minutes > 0 ? Math.round(totalChars / 5 / minutes) : 0;
     const accuracy =
       totalChars > 0
-        ? Math.round(((totalChars - totalErrors) / totalChars) * 1000) / 10
+        ? ((totalChars - totalErrors) / totalChars) * 100
         : 0;
 
     // Aggregate counts
@@ -2548,8 +2574,8 @@ function App() {
     const avgRecoveryPenalty = Math.round(weightedAvg("recoveryPenalty"));
     const avgCapitalPenalty = Math.round(weightedAvg("capitalPenalty"));
     const avgPunctuationPenalty = Math.round(weightedAvg("punctuationPenalty"));
-    const avgHandBalance = Math.round(weightedAvg("handBalance"));
-    const avgHomeRowAdvantage = Math.round(weightedAvg("homeRowAdvantage"));
+    const avgHandBalance = STAT_ROUND.handBalance(weightedAvg("handBalance"));
+    const avgHomeRowAdvantage = STAT_ROUND.homeRowAdvantage(weightedAvg("homeRowAdvantage"));
     const avgNumberRowPenalty = Math.round(weightedAvg("numberRowPenalty"));
     const avgBackspaceEfficiency =
       Math.round(weightedAvg("backspaceEfficiency") * 10) / 10;
@@ -2715,14 +2741,14 @@ function App() {
       sessions: history.length,
       totalChars,
       totalErrors,
-      totalTime: Math.round(totalTime / 1000),
-      wpm,
-      accuracy,
-      consistency: Math.round(avgConsistency * 10) / 10,
+      totalTime: STAT_ROUND.time(totalTime / 1000),
+      wpm: STAT_ROUND.wpm(wpm),
+      accuracy: STAT_ROUND.accuracy(accuracy),
+      consistency: STAT_ROUND.consistency(avgConsistency),
       avgErrors: Math.round(avgErrors * 10) / 10,
-      avgInterval: Math.round(avgInterval),
+      avgInterval: STAT_ROUND.avgInterval(avgInterval),
       avgWordInterval: Math.round(avgWordInterval),
-      avgDistance: Math.round(avgDistance * 100) / 100,
+      avgDistance: STAT_ROUND.distance(avgDistance),
       slowestBigrams,
       fastestBigrams,
       mostAccurateBigrams,
@@ -2736,8 +2762,8 @@ function App() {
       behavioral: {
         momentum: Math.round(avgMomentum * 10) / 10,
         momentumLabel,
-        flowRatio: avgFlowRatio,
-        rhythmScore: avgRhythmScore,
+        flowRatio: STAT_ROUND.flowRatio(avgFlowRatio),
+        rhythmScore: STAT_ROUND.rhythmScore(avgRhythmScore),
         fatiguePercent: avgFatiguePercent,
         fatigueLabel,
         maxBurst: maxBurstEver,
@@ -2779,7 +2805,7 @@ function App() {
 
     // Consistency score
     const cv = avgInterval > 0 ? stdDev / avgInterval : 0;
-    const consistency = Math.max(0, Math.round((1 - Math.min(cv, 1)) * 1000) / 10);
+    const consistency = STAT_ROUND.consistency(Math.max(0, (1 - Math.min(cv, 1)) * 100));
 
     const correctChars = data.filter((d) => d.correct).length;
     const accuracy = data.length > 0 ? (correctChars / data.length) * 100 : 0;
@@ -2864,7 +2890,7 @@ function App() {
     );
     const flowRatio =
       intervals.length > 0
-        ? Math.round((flowKeystrokes.length / intervals.length) * 100)
+        ? STAT_ROUND.flowRatio((flowKeystrokes.length / intervals.length) * 100)
         : 0;
 
     // --- Fatigue: speed difference between first and second half ---
@@ -2999,7 +3025,7 @@ function App() {
       const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
       rhythmScore =
         avgInterval > 0
-          ? Math.max(0, Math.round((1 - avgDiff / avgInterval) * 100))
+          ? STAT_ROUND.rhythmScore(Math.max(0, (1 - avgDiff / avgInterval) * 100))
           : 0;
     }
 
@@ -3028,7 +3054,7 @@ function App() {
     const rightAvg = rightCount > 0 ? rightTotal / rightCount : avgInterval;
     const handBalance =
       leftAvg > 0 && rightAvg > 0
-        ? Math.round((rightAvg / leftAvg) * 100 - 100)
+        ? STAT_ROUND.handBalance((rightAvg / leftAvg) * 100 - 100)
         : 0;
 
     let dominantHand = "balanced";
@@ -3049,7 +3075,7 @@ function App() {
     });
     const homeRowAvg = homeCount > 0 ? homeTotal / homeCount : avgInterval;
     const homeRowAdvantage =
-      avgInterval > 0 ? Math.round((1 - homeRowAvg / avgInterval) * 100) : 0;
+      avgInterval > 0 ? STAT_ROUND.homeRowAdvantage((1 - homeRowAvg / avgInterval) * 100) : 0;
 
     // --- Number row comfort ---
     const numberRow = "1234567890";
@@ -3368,18 +3394,18 @@ function App() {
     const fastest = sortedIntervals[0] || 0;
 
     return {
-      wpm,
+      wpm: STAT_ROUND.wpm(wpm),
       cpm,
-      accuracy: Math.round(accuracy * 10) / 10,
-      avgInterval: Math.round(avgInterval),
-      stdDev: Math.round(stdDev),
+      accuracy: STAT_ROUND.accuracy(accuracy),
+      avgInterval: STAT_ROUND.avgInterval(avgInterval),
+      stdDev: STAT_ROUND.stdDev(stdDev),
       consistency,
       slowestBigrams,
       fastestBigrams,
       mostAccurateBigrams,
       leastAccurateBigrams,
       impressiveBigrams,
-      totalTime: Math.round((totalTime / 1000) * 10) / 10,
+      totalTime: STAT_ROUND.time(totalTime / 1000),
       charCount,
       errorCount,
       intervals,
@@ -3393,7 +3419,7 @@ function App() {
       wordIntervals,
       avgWordInterval: Math.round(avgWordInterval),
       distances,
-      avgDistance: Math.round(avgDistance * 100) / 100,
+      avgDistance: STAT_ROUND.distance(avgDistance),
       bigrams: bigramAvgs,
       // Counts
       counts: {
@@ -3526,6 +3552,18 @@ function App() {
       setRawKeyEvents((prev) => [...prev, rawEvent]);
 
       if (e.key === "Backspace") {
+        // Add backspace to keystrokeData so it gets submitted to Supabase
+        const backspaceKeystroke = {
+          key: "Backspace",
+          expected: null,
+          correct: false,
+          interval: lastKeystrokeTime.current !== null ? now - lastKeystrokeTime.current : null,
+          timestamp: now - startTime.current,
+          position: typed.length,
+          isBackspace: true,
+        };
+        setKeystrokeData((prev) => [...prev, backspaceKeystroke]);
+        lastKeystrokeTime.current = now;
         setTyped((prev) => prev.slice(0, -1));
         return;
       }
@@ -3710,10 +3748,10 @@ function App() {
     }
     if (comparisonBase === "global" && globalAverages && globalAverages.total_sessions > 0) {
       return {
-        wpm: Math.round(globalAverages.avg_wpm),
-        accuracy: Math.round(globalAverages.avg_accuracy * 10) / 10,
-        consistency: Math.round(globalAverages.avg_consistency * 10) / 10,
-        avgInterval: Math.round(globalAverages.avg_interval),
+        wpm: STAT_ROUND.wpm(globalAverages.avg_wpm),
+        accuracy: STAT_ROUND.accuracy(globalAverages.avg_accuracy),
+        consistency: STAT_ROUND.consistency(globalAverages.avg_consistency),
+        avgInterval: STAT_ROUND.avgInterval(globalAverages.avg_interval),
         sessions: globalAverages.total_sessions,
         label: "global",
       };
@@ -3749,8 +3787,16 @@ function App() {
     resetTest(true);
     setCumulativeStats(null);
     setCompletedCount(0);
+    setViewingPastStats(false);
+    setStatsView("current");
     // Generate new anonymous user ID
     resetUserId();
+    // Scroll to top and focus after state updates
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    // Ensure focus after React re-renders
+    setTimeout(() => {
+      containerRef.current?.focus();
+    }, 50);
   };
 
   const startClearHold = () => {
@@ -6337,6 +6383,338 @@ function App() {
                         />
                       </div>
                     )}
+
+                    {/* Backspace Efficiency */}
+                    {behavioralAverages.backspaceEfficiency && behavioralAverages.backspaceEfficiency.avg > 0 && (
+                      <div className="behavioral-stat">
+                        <div className="behavioral-stat-header">
+                          <span className="behavioral-stat-label">correction ratio</span>
+                          <span className="behavioral-stat-value">
+                            {fmt.dec(behavioralAverages.backspaceEfficiency.avg)}
+                          </span>
+                        </div>
+                        <div className="behavioral-stat-detail">
+                          backspaces per error
+                        </div>
+                        <GlobalDistributionBar 
+                          value={behavioralAverages.backspaceEfficiency.avg}
+                          min={behavioralAverages.backspaceEfficiency.min}
+                          max={behavioralAverages.backspaceEfficiency.max}
+                          stdDev={behavioralAverages.backspaceEfficiency.std_dev}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Lifetime Stats & Records */}
+              {((lifetimeStats && lifetimeStats.totalKeystrokes > 0) || (records && records.fastestWpm > 0)) && (
+                <div className="lifetime-section">
+                  <h3>Lifetime Statistics</h3>
+                  <div className="stat-grid secondary">
+                    {lifetimeStats && lifetimeStats.totalKeystrokes > 0 && (
+                      <>
+                        <Tooltip content="Total keystrokes recorded across all sessions">
+                          <div className="stat small">
+                            <span className="stat-value">{fmt.count(lifetimeStats.totalKeystrokes)}</span>
+                            <span className="stat-label">keystrokes</span>
+                          </div>
+                        </Tooltip>
+                        <Tooltip content="Total time spent typing">
+                          <div className="stat small">
+                            <span className="stat-value">{fmt.dec(lifetimeStats.totalTypingHours, 1)}h</span>
+                            <span className="stat-label">typing time</span>
+                          </div>
+                        </Tooltip>
+                        <Tooltip content="Overall accuracy across all sessions">
+                          <div className="stat small">
+                            <span className="stat-value">{fmt.dec(lifetimeStats.lifetimeAccuracy)}%</span>
+                            <span className="stat-label">lifetime accuracy</span>
+                          </div>
+                        </Tooltip>
+                        <Tooltip content="Total errors made">
+                          <div className="stat small">
+                            <span className="stat-value">{fmt.count(lifetimeStats.totalErrors)}</span>
+                            <span className="stat-label">errors</span>
+                          </div>
+                        </Tooltip>
+                      </>
+                    )}
+                    {records && records.fastestWpm > 0 && (
+                      <>
+                        <Tooltip content="Fastest WPM ever recorded">
+                          <div className="stat small highlight">
+                            <span className="stat-value">{fmt.int(records.fastestWpm)}</span>
+                            <span className="stat-label">🏆 best WPM</span>
+                          </div>
+                        </Tooltip>
+                        <Tooltip content="Longest streak of correct keystrokes">
+                          <div className="stat small highlight">
+                            <span className="stat-value">{fmt.count(records.longestStreak)}</span>
+                            <span className="stat-label">🔥 longest streak</span>
+                          </div>
+                        </Tooltip>
+                        <Tooltip content="Longest burst of fast keystrokes (<100ms)">
+                          <div className="stat small">
+                            <span className="stat-value">{fmt.int(records.longestBurst)}</span>
+                            <span className="stat-label">longest burst</span>
+                          </div>
+                        </Tooltip>
+                        {records.fastestKeystrokeMs > 0 && (
+                          <Tooltip content="Fastest single keystroke">
+                            <div className="stat small">
+                              <span className="stat-value">{fmt.int(records.fastestKeystrokeMs)}ms</span>
+                              <span className="stat-label">fastest key</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Accuracy by Character Type */}
+              {accuracyByType && Object.keys(accuracyByType).length > 0 && (
+                (() => {
+                  const validTypes = ['letters', 'numbers', 'punctuation', 'capitals', 'spaces']
+                    .filter(t => accuracyByType[t]?.sampleSessions >= 5);
+                  if (validTypes.length === 0) return null;
+                  
+                  // Interpolate between red and green based on accuracy
+                  const getAccuracyColor = (pct) => {
+                    // Map 70-100% to 0-1 (below 70% is just red)
+                    const t = Math.max(0, Math.min(1, (pct - 70) / 30));
+                    // Red (error) to Green (correct)
+                    const r = Math.round(224 - (224 - 145) * t); // 224 -> 145
+                    const g = Math.round(108 + (216 - 108) * t); // 108 -> 216
+                    const b = Math.round(117 - (117 - 145) * t); // 117 -> 145
+                    return `rgb(${r}, ${g}, ${b})`;
+                  };
+                  
+                  return (
+                    <div className="accuracy-breakdown-section">
+                      <h3>Accuracy by Character Type</h3>
+                      <div className="accuracy-type-grid">
+                        {validTypes.map(charType => {
+                          const data = accuracyByType[charType];
+                          // Handle both decimal (0.95) and percentage (95) formats
+                          const accuracyPct = data.avgAccuracy <= 1 ? data.avgAccuracy * 100 : data.avgAccuracy;
+                          return (
+                            <div key={charType} className="accuracy-type-item">
+                              <div className="accuracy-type-header">
+                                <span className="accuracy-type-label">{charType}</span>
+                                <span className="accuracy-type-value">{fmt.dec(accuracyPct)}%</span>
+                              </div>
+                              <div className="accuracy-type-bar">
+                                <div 
+                                  className="accuracy-type-fill"
+                                  style={{ 
+                                    width: `${Math.min(100, accuracyPct)}%`,
+                                    backgroundColor: getAccuracyColor(accuracyPct)
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Row Performance */}
+              {rowPerformance && Object.keys(rowPerformance).length > 0 && (
+                (() => {
+                  const validRows = ['topRow', 'homeRow', 'bottomRow']
+                    .filter(r => rowPerformance[r]?.sampleSessions >= 5);
+                  if (validRows.length === 0) return null;
+                  
+                  // Keyboard row layouts
+                  const rowLayouts = {
+                    topRow: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                    homeRow: ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+                    bottomRow: ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+                  };
+                  
+                  // Get min/max for color scaling
+                  const allTimes = validRows.map(r => rowPerformance[r].avgIntervalMs);
+                  const minTime = Math.min(...allTimes);
+                  const maxTime = Math.max(...allTimes);
+                  
+                  const getRowColor = (time) => {
+                    if (maxTime === minTime) return 'var(--accent)';
+                    const t = (time - minTime) / (maxTime - minTime);
+                    // Green (fast) to yellow (slow)
+                    const r = Math.round(145 + (226 - 145) * t);
+                    const g = Math.round(216 - (216 - 183) * t);
+                    const b = Math.round(145 - (145 - 20) * t);
+                    return `rgb(${r}, ${g}, ${b})`;
+                  };
+                  
+                  return (
+                    <div className="row-performance-section">
+                      <h3>Keyboard Row Speed</h3>
+                      <div className="keyboard-rows-visual">
+                        {validRows.map(rowName => {
+                          const data = rowPerformance[rowName];
+                          const keys = rowLayouts[rowName];
+                          const offset = rowName === 'homeRow' ? 0.5 : rowName === 'bottomRow' ? 1.5 : 0;
+                          
+                          return (
+                            <div key={rowName} className="keyboard-row-item">
+                              <span className="keyboard-row-label">
+                                {rowName === 'topRow' ? 'Top Row' : rowName === 'homeRow' ? 'Home Row' : 'Bottom Row'}
+                              </span>
+                              <div className="keyboard-row-keys" style={{ paddingLeft: `${offset * 1.2}rem` }}>
+                                {keys.map(key => (
+                                  <span 
+                                    key={key} 
+                                    className="keyboard-row-key"
+                                    style={{ borderColor: getRowColor(data.avgIntervalMs) }}
+                                  >
+                                    {key}
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="keyboard-row-time" style={{ color: getRowColor(data.avgIntervalMs) }}>
+                                {fmt.int(data.avgIntervalMs)}ms
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Typing Patterns */}
+              {typingPatterns && Object.keys(typingPatterns).length > 0 && (
+                (() => {
+                  // Check if we have any displayable patterns
+                  const hasDoubleLetter = typingPatterns.doubleLetter?.sampleSessions >= 5;
+                  const hasAlternating = typingPatterns.alternatingRatio?.sampleSessions >= 5;
+                  
+                  // Get best day from time patterns
+                  const days = Object.entries(timePatterns?.daily || {})
+                    .filter(([_, d]) => d.sampleSessions >= 3)
+                    .map(([d, data]) => ({ day: parseInt(d), ...data }));
+                  const bestDay = days.sort((a, b) => b.avgWpm - a.avgWpm)[0];
+                  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                  
+                  if (!hasDoubleLetter && !hasAlternating && !bestDay) return null;
+                  
+                  return (
+                    <div className="typing-patterns-section">
+                      <h3>Typing Patterns</h3>
+                      <div className="patterns-grid">
+                        {hasDoubleLetter && (
+                          <Tooltip content="Average time for double letters (like 'ee' or 'll')">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Double Letters</span>
+                              <span className="pattern-value">{fmt.int(typingPatterns.doubleLetter.avgValue)}ms avg</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {hasAlternating && (
+                          <Tooltip content="Percentage of keystrokes that alternate between hands">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Hand Alternation</span>
+                              <span className="pattern-value">{fmt.int(typingPatterns.alternatingRatio.avgValue)}%</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {bestDay && (
+                          <Tooltip content={`Users type fastest on ${dayNames[bestDay.day]}s globally`}>
+                            <div className="pattern-item">
+                              <span className="pattern-label">Best Day</span>
+                              <span className="pattern-value">{dayNames[bestDay.day]}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {/* Add a 4th item if we have 3 (to make grid even) */}
+                        {hasDoubleLetter && hasAlternating && bestDay && typingPatterns.doubleLetterCount?.sampleSessions >= 5 && (
+                          <Tooltip content="Average double letters per session">
+                            <div className="pattern-item">
+                              <span className="pattern-label">Doubles/Session</span>
+                              <span className="pattern-value">{fmt.dec(typingPatterns.doubleLetterCount.avgValue, 1)}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Time Patterns - Hour of Day Performance */}
+              {timePatterns && timePatterns.hourly && (
+                (() => {
+                  const hours = Object.entries(timePatterns.hourly || {})
+                    .filter(([_, d]) => d.sampleSessions >= 3)
+                    .map(([h, d]) => ({ hour: parseInt(h), ...d }));
+                  
+                  if (hours.length < 2) return null; // Need at least 2 hours to compare
+                  
+                  const sortedByWpm = [...hours].sort((a, b) => b.avgWpm - a.avgWpm);
+                  const bestHour = sortedByWpm[0];
+                  const worstHour = sortedByWpm[sortedByWpm.length - 1];
+                  
+                  const formatHour = (h) => {
+                    if (h === 0) return '12am';
+                    if (h < 12) return `${h}am`;
+                    if (h === 12) return '12pm';
+                    return `${h - 12}pm`;
+                  };
+                  
+                  // Only show if there's meaningful difference
+                  if (!bestHour || !worstHour || bestHour.hour === worstHour.hour) return null;
+                  
+                  return (
+                    <div className="time-patterns-section">
+                      <h3>Time of Day Performance</h3>
+                      <div className="time-patterns-content">
+                        <div className="time-insights">
+                          <div className="time-insight">
+                            <span className="insight-icon">⚡</span>
+                            <span className="insight-text">
+                              Fastest at <strong>{formatHour(bestHour.hour)}</strong> ({fmt.int(bestHour.avgWpm)} WPM avg)
+                            </span>
+                          </div>
+                          <div className="time-insight subtle">
+                            <span className="insight-icon">🐌</span>
+                            <span className="insight-text">
+                              Slowest at <strong>{formatHour(worstHour.hour)}</strong> ({fmt.int(worstHour.avgWpm)} WPM avg)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Error Confusion (Most Common Typos) */}
+              {errorConfusion && errorConfusion.length > 0 && (
+                <div className="error-confusion-section">
+                  <h3>Most Common Typos</h3>
+                  <div className="typo-list">
+                    {errorConfusion.slice(0, 10).map((typo, i) => {
+                      const displayChar = (char) => char === ' ' ? '␣' : char;
+                      return (
+                        <div key={i} className="typo-item">
+                          <span className="typo-pair">
+                            <code className="typo-expected">{displayChar(typo.expected)}</code>
+                            <span className="typo-arrow">→</span>
+                            <code className="typo-typed">{displayChar(typo.typed)}</code>
+                          </span>
+                          <span className="typo-count">{fmt.count(typo.count)}×</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

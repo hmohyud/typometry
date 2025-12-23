@@ -10,12 +10,17 @@
   --bg-tertiary: #242424;
   --text: #d4d4d4;
   --text-muted: #525252;
+  --text-secondary: #a3a3a3;
+  --text-primary: #e5e5e5;
   --accent: #e2b714;
   --accent-dim: rgba(226, 183, 20, 0.6);
   --correct: #91d891;
   --incorrect: #e85c5c;
   --current-bg: rgba(226, 183, 20, 0.15);
   --fast: #6ecf6e;
+  --good: #98c379;
+  --warn: #e5c07b;
+  --error: #e06c75;
 }
 
 body {
@@ -2823,4 +2828,312 @@ footer {
   .ranking-grid {
     grid-template-columns: repeat(4, 1fr);
   }
+}
+
+/* ============================================
+   NEW GLOBAL STATS SECTIONS
+   ============================================ */
+
+/* Lifetime Stats Section */
+.lifetime-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.lifetime-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.stat.highlight .stat-label {
+  color: var(--accent);
+}
+
+/* Accuracy by Character Type */
+.accuracy-breakdown-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.accuracy-breakdown-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.accuracy-type-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accuracy-type-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.accuracy-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accuracy-type-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.accuracy-type-value {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.accuracy-type-bar {
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.accuracy-type-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Row Performance Section */
+.row-performance-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.row-performance-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.keyboard-rows-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.keyboard-row-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.keyboard-row-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  width: 5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.keyboard-row-keys {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.keyboard-row-key {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  border: 1px solid var(--text-muted);
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+.keyboard-row-time {
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  min-width: 4rem;
+  text-align: right;
+}
+
+/* Typing Patterns Section */
+.typing-patterns-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.typing-patterns-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.patterns-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.pattern-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.pattern-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.pattern-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Time Patterns Section */
+.time-patterns-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.time-patterns-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.time-patterns-content {
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.time-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.time-insight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.time-insight.subtle {
+  opacity: 0.7;
+}
+
+.insight-icon {
+  font-size: 1rem;
+}
+
+.insight-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.insight-text strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Error Confusion Section */
+.error-confusion-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.error-confusion-section h3 {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: lowercase;
+}
+
+.typo-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 500px) {
+  .typo-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.typo-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.typo-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.typo-expected {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--good);
+  background: transparent;
+  padding: 0;
+}
+
+.typo-arrow {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.typo-typed {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--error);
+  background: transparent;
+  padding: 0;
+}
+
+.typo-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }

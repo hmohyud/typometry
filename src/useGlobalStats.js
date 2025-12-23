@@ -11,7 +11,16 @@ import {
   getUserStats,
   getGlobalHistograms,
   calculatePercentile,
-  resetUserId as resetSupabaseUserId
+  resetUserId as resetSupabaseUserId,
+  // New fetchers
+  getCharacterBreakdown,
+  getLifetimeStats,
+  getRecords,
+  getErrorConfusion,
+  getAccuracyByType,
+  getRowPerformance,
+  getTypingPatterns,
+  getTimePatterns,
 } from './supabase'
 
 export function useGlobalStats() {
@@ -25,13 +34,40 @@ export function useGlobalStats() {
   const [sessionCount, setSessionCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // New state for extended stats
+  const [characterBreakdown, setCharacterBreakdown] = useState(null)
+  const [lifetimeStats, setLifetimeStats] = useState(null)
+  const [records, setRecords] = useState(null)
+  const [errorConfusion, setErrorConfusion] = useState(null)
+  const [accuracyByType, setAccuracyByType] = useState(null)
+  const [rowPerformance, setRowPerformance] = useState(null)
+  const [typingPatterns, setTypingPatterns] = useState(null)
+  const [timePatterns, setTimePatterns] = useState(null)
 
   const fetchStats = useCallback(async () => {
     try {
       setLoading(true)
       
       // Fetch all stats in parallel
-      const [stats, bigrams, fingers, transitions, behavioral, keys, histograms] = await Promise.all([
+      const [
+        stats, 
+        bigrams, 
+        fingers, 
+        transitions, 
+        behavioral, 
+        keys, 
+        histograms,
+        // New fetches
+        charBreakdown,
+        lifetime,
+        recs,
+        errConfusion,
+        accByType,
+        rowPerf,
+        typPatterns,
+        timePatts,
+      ] = await Promise.all([
         getSessionStats(),
         getBigramStats(200),
         getFingerStats(),
@@ -39,6 +75,15 @@ export function useGlobalStats() {
         getBehavioralStats(),
         getKeyStats(),
         getGlobalHistograms(),
+        // New fetches
+        getCharacterBreakdown(),
+        getLifetimeStats(),
+        getRecords(),
+        getErrorConfusion(50),
+        getAccuracyByType(),
+        getRowPerformance(),
+        getTypingPatterns(),
+        getTimePatterns(),
       ])
 
       if (stats) {
@@ -135,6 +180,119 @@ export function useGlobalStats() {
           }
         })
         setKeyAverages(keyObj)
+      }
+
+      // Set new extended stats
+      if (charBreakdown) {
+        setCharacterBreakdown({
+          totalWords: parseInt(charBreakdown.total_words) || 0,
+          correctWords: parseInt(charBreakdown.correct_words) || 0,
+          totalLetters: parseInt(charBreakdown.total_letters) || 0,
+          correctLetters: parseInt(charBreakdown.correct_letters) || 0,
+          totalNumbers: parseInt(charBreakdown.total_numbers) || 0,
+          correctNumbers: parseInt(charBreakdown.correct_numbers) || 0,
+          totalPunctuation: parseInt(charBreakdown.total_punctuation) || 0,
+          correctPunctuation: parseInt(charBreakdown.correct_punctuation) || 0,
+          totalCapitals: parseInt(charBreakdown.total_capitals) || 0,
+          correctCapitals: parseInt(charBreakdown.correct_capitals) || 0,
+          totalSpaces: parseInt(charBreakdown.total_spaces) || 0,
+          correctSpaces: parseInt(charBreakdown.correct_spaces) || 0,
+        })
+      }
+
+      if (lifetime) {
+        setLifetimeStats({
+          totalKeystrokes: parseInt(lifetime.total_keystrokes) || 0,
+          totalErrors: parseInt(lifetime.total_errors) || 0,
+          totalBackspaces: parseInt(lifetime.total_backspaces) || 0,
+          totalTypingTimeMs: parseInt(lifetime.total_typing_time_ms) || 0,
+          totalTypingHours: parseFloat(lifetime.total_typing_hours) || 0,
+          lifetimeAccuracy: parseFloat(lifetime.lifetime_accuracy) || 0,
+        })
+      }
+
+      if (recs) {
+        setRecords({
+          fastestWpm: parseFloat(recs.fastest_wpm) || 0,
+          longestStreak: parseInt(recs.longest_streak) || 0,
+          longestBurst: parseInt(recs.longest_burst) || 0,
+          fastestKeystrokeMs: parseFloat(recs.fastest_keystroke_ms) || 0,
+          totalSessions: parseInt(recs.total_sessions) || 0,
+        })
+      }
+
+      if (errConfusion && errConfusion.length > 0) {
+        // Convert to array of { expected, typed, count }
+        const confusionArr = errConfusion.map(row => ({
+          expected: row.expected,
+          typed: row.typed,
+          count: parseInt(row.occurrences) || 0,
+        }))
+        setErrorConfusion(confusionArr)
+      }
+
+      if (accByType && accByType.length > 0) {
+        const accObj = {}
+        accByType.forEach(stat => {
+          accObj[stat.char_type] = {
+            avgAccuracy: parseFloat(stat.avg_accuracy) || 0,
+            stdDev: parseFloat(stat.accuracy_std_dev) || 0,
+            minAccuracy: parseFloat(stat.min_accuracy) || 0,
+            maxAccuracy: parseFloat(stat.max_accuracy) || 0,
+            sampleSessions: parseInt(stat.sample_sessions) || 0,
+          }
+        })
+        setAccuracyByType(accObj)
+      }
+
+      if (rowPerf && rowPerf.length > 0) {
+        const rowObj = {}
+        rowPerf.forEach(stat => {
+          rowObj[stat.row_name] = {
+            avgIntervalMs: parseFloat(stat.avg_interval_ms) || 0,
+            stdDev: parseFloat(stat.std_dev) || 0,
+            minValue: parseFloat(stat.min_value) || 0,
+            maxValue: parseFloat(stat.max_value) || 0,
+            sampleSessions: parseInt(stat.sample_sessions) || 0,
+          }
+        })
+        setRowPerformance(rowObj)
+      }
+
+      if (typPatterns && typPatterns.length > 0) {
+        const patternObj = {}
+        typPatterns.forEach(stat => {
+          patternObj[stat.pattern_name] = {
+            avgValue: parseFloat(stat.avg_value) || 0,
+            stdDev: parseFloat(stat.std_dev) || 0,
+            minValue: parseFloat(stat.min_value) || 0,
+            maxValue: parseFloat(stat.max_value) || 0,
+            sampleSessions: parseInt(stat.sample_sessions) || 0,
+          }
+        })
+        setTypingPatterns(patternObj)
+      }
+
+      if (timePatts && timePatts.length > 0) {
+        // Separate hourly and daily patterns
+        const hourly = {}
+        const daily = {}
+        timePatts.forEach(stat => {
+          if (stat.pattern_type === 'hourly') {
+            hourly[stat.time_value] = {
+              avgWpm: parseFloat(stat.avg_wpm) || 0,
+              stdDev: parseFloat(stat.wpm_std_dev) || 0,
+              sampleSessions: parseInt(stat.sample_sessions) || 0,
+            }
+          } else if (stat.pattern_type === 'daily') {
+            daily[stat.time_value] = {
+              avgWpm: parseFloat(stat.avg_wpm) || 0,
+              stdDev: parseFloat(stat.wpm_std_dev) || 0,
+              sampleSessions: parseInt(stat.sample_sessions) || 0,
+            }
+          }
+        })
+        setTimePatterns({ hourly, daily })
       }
 
     } catch (err) {
@@ -288,6 +446,16 @@ export function useGlobalStats() {
     transitionAverages,
     keyAverages,
     sessionCount,
+    
+    // New extended data
+    characterBreakdown,
+    lifetimeStats,
+    records,
+    errorConfusion,
+    accuracyByType,
+    rowPerformance,
+    typingPatterns,
+    timePatterns,
     
     // State
     loading,
