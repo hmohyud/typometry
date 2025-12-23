@@ -623,6 +623,71 @@ h1 {
   font-style: italic;
 }
 
+.archetype-breakdown {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.breakdown-title {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+  text-align: center;
+}
+
+.breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.breakdown-item {
+  display: grid;
+  grid-template-columns: 100px 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.breakdown-bar-container {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.breakdown-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.breakdown-name {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breakdown-stats {
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.breakdown-conf {
+  color: var(--text-dimmer);
+  font-size: 0.65rem;
+}
+
 .profile-strength {
   display: flex;
   align-items: center;
@@ -992,7 +1057,6 @@ h1 {
   border-radius: 4px;
   padding: 6px 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transform: translateX(-50%);
   white-space: nowrap;
 }
 

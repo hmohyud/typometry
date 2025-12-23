@@ -312,11 +312,17 @@ const TIPS = {
   consistency: (
     <>
       <TipTitle>Consistency</TipTitle>
-      <TipText>How steady your typing speed is throughout the text.</TipText>
       <TipText>
-        Based on the coefficient of variation of your keystroke intervals.
+        Measures how uniform your typing rhythm is — do you type at a steady pace
+        or with lots of speed variation?
       </TipText>
-      <TipHint>Higher % = more even, metronomic typing</TipHint>
+      <TipText>
+        100% = perfectly metronomic (every keystroke takes the same time)
+      </TipText>
+      <TipText>
+        Lower scores mean your typing speed varies more between keystrokes.
+      </TipText>
+      <TipHint>Based on coefficient of variation: 100% - (stdDev / avg × 100)</TipHint>
     </>
   ),
   time: (
@@ -1212,8 +1218,8 @@ const SessionHistogram = ({ data, configKey, currentValue, average, smartZoom = 
             <div 
               className="histogram-tooltip"
               style={{
-                left: mousePos.x,
-                top: mousePos.y - 45,
+                left: mousePos.x + 12,
+                top: mousePos.y - 50,
                 position: 'fixed',
               }}
             >
@@ -5053,6 +5059,69 @@ function App() {
                       </Tooltip>
                     </div>
 
+                    {/* Archetype Breakdown */}
+                    {cumulativeStats.history && cumulativeStats.history.length > 1 && (() => {
+                      // Count archetypes from history
+                      const archetypeCounts = {};
+                      let totalWithArchetype = 0;
+                      cumulativeStats.history.forEach(session => {
+                        const arch = session.behavioral?.archetype;
+                        if (arch) {
+                          archetypeCounts[arch] = (archetypeCounts[arch] || 0) + 1;
+                          totalWithArchetype++;
+                        }
+                      });
+                      
+                      if (totalWithArchetype < 2) return null;
+                      
+                      // Sort by count descending
+                      const sorted = Object.entries(archetypeCounts)
+                        .sort((a, b) => b[1] - a[1]);
+                      
+                      // Calculate avg confidence per archetype
+                      const archetypeConfidence = {};
+                      cumulativeStats.history.forEach(session => {
+                        const arch = session.behavioral?.archetype;
+                        const conf = session.behavioral?.confidenceScore;
+                        if (arch && conf !== undefined) {
+                          if (!archetypeConfidence[arch]) {
+                            archetypeConfidence[arch] = { sum: 0, count: 0 };
+                          }
+                          archetypeConfidence[arch].sum += conf;
+                          archetypeConfidence[arch].count++;
+                        }
+                      });
+                      
+                      return (
+                        <div className="archetype-breakdown">
+                          <span className="breakdown-title">session breakdown</span>
+                          <div className="breakdown-list">
+                            {sorted.map(([archetype, count]) => {
+                              const pct = Math.round((count / totalWithArchetype) * 100);
+                              const avgConf = archetypeConfidence[archetype] 
+                                ? Math.round(archetypeConfidence[archetype].sum / archetypeConfidence[archetype].count)
+                                : null;
+                              return (
+                                <div key={archetype} className="breakdown-item">
+                                  <div className="breakdown-bar-container">
+                                    <div 
+                                      className="breakdown-bar" 
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <span className="breakdown-name">{archetype}</span>
+                                  <span className="breakdown-stats">
+                                    {pct}% ({count})
+                                    {avgConf !== null && <span className="breakdown-conf"> · {avgConf}% avg</span>}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <h3 className="behavioral-header">
                       Typing Profile (All Time)
                     </h3>
@@ -5322,7 +5391,7 @@ function App() {
               
               {/* Primary stats with comparison */}
               <div className="stat-grid primary">
-                <Tooltip content="Average WPM across all users">
+                <Tooltip content={TIPS.wpm}>
                   <div className="stat">
                     <span className="stat-value">
                       {fmt.int(globalAverages.avg_wpm)}
@@ -5344,7 +5413,7 @@ function App() {
                     <span className="stat-label">avg wpm</span>
                   </div>
                 </Tooltip>
-                <Tooltip content="Average accuracy across all users">
+                <Tooltip content={TIPS.accuracy}>
                   <div className="stat">
                     <span className="stat-value">
                       {fmt.dec(globalAverages.avg_accuracy)}%
@@ -5366,7 +5435,7 @@ function App() {
                     <span className="stat-label">avg accuracy</span>
                   </div>
                 </Tooltip>
-                <Tooltip content="Average consistency across all users">
+                <Tooltip content={TIPS.consistency}>
                   <div className="stat">
                     <span className="stat-value">
                       {fmt.dec(globalAverages.avg_consistency)}%
@@ -5388,7 +5457,7 @@ function App() {
                     <span className="stat-label">avg consistency</span>
                   </div>
                 </Tooltip>
-                <Tooltip content="Average keystroke interval across all users">
+                <Tooltip content={TIPS.avgKeystroke}>
                   <div className="stat">
                     <span className="stat-value">
                       {fmt.int(globalAverages.avg_interval)}ms

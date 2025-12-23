@@ -197,7 +197,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
           </div>
           <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <span><span style={{ color: getSpeedColor(hoveredStats.avgInterval || 0), fontWeight: 500 }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg speed</span>
-            <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors || 0} errors)</span>
+            <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors ?? Math.round((hoveredStats.count || 0) * (1 - (hoveredStats.accuracy || 1)))} errors)</span>
             <span><span style={{ color: 'var(--text)' }}>{hoveredStats.count || 0}</span> presses</span>
           </div>
         </div>
