@@ -1458,8 +1458,15 @@ footer {
 .finger-hands-right > .tooltip-wrapper,
 .chord-header .tooltip-wrapper,
 .keyboard-header-right .tooltip-wrapper,
-.histograms-header-row .tooltip-wrapper {
+.histograms-header-row .tooltip-wrapper,
+.graph-card .tooltip-wrapper,
+.bigrams > .tooltip-wrapper {
   display: block;
+}
+
+/* Inline tooltips in finger-hands-avg need inline display */
+.finger-hands-avg .tooltip-wrapper {
+  display: inline;
 }
 
 .tooltip {

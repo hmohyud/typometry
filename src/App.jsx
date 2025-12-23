@@ -1025,6 +1025,10 @@ const TIPS = {
       </TipText>
     </>
   ),
+  speedOverTime: "Shows how your typing speed changed throughout this paragraph. Upward trend = speeding up, downward = slowing down.",
+  intervalDistribution: "Distribution of time between keystrokes. Tighter clusters indicate more consistent rhythm.",
+  sessionFastestTransitions: "Your quickest two-letter combinations in this session. Distance shows how far apart the keys are on the keyboard.",
+  sessionSlowestTransitions: "Your slowest two-letter combinations. Often caused by awkward finger movements or hesitation.",
 };
 
 // Load/save helpers
@@ -4549,7 +4553,12 @@ function App() {
               {/* Keyboard Visualizations */}
               <div className="keyboard-section">
                 <div className="keyboard-header">
-                  <h3>Keyboard Analysis</h3>
+                  <div className="section-header-row">
+                    <h3>Keyboard Analysis</h3>
+                    <Tooltip content={TIPS.keyboardHeatmap}>
+                      <button className="help-btn" type="button" aria-label="Help">?</button>
+                    </Tooltip>
+                  </div>
                   <div className="keyboard-header-right">
                     <div className="heatmap-toggle">
                       <button
@@ -4569,9 +4578,6 @@ function App() {
                         Accuracy
                       </button>
                     </div>
-                    <Tooltip content={TIPS.keyboardHeatmap}>
-                      <button className="help-btn" type="button" aria-label="Help">?</button>
-                    </Tooltip>
                   </div>
                 </div>
                 <KeyboardHeatmap keyStats={stats.keyStats} mode={heatmapMode} />
@@ -4605,7 +4611,9 @@ function App() {
 
               <div className="graphs-section">
                 <div className="graph-card">
-                  <p className="graph-label">speed over time</p>
+                  <Tooltip content={TIPS.speedOverTime}>
+                    <p className="graph-label">speed over time</p>
+                  </Tooltip>
                   <Sparkline
                     data={stats.speedOverTime}
                     width={280}
@@ -4613,7 +4621,9 @@ function App() {
                   />
                 </div>
                 <div className="graph-card">
-                  <p className="graph-label">interval distribution</p>
+                  <Tooltip content={TIPS.intervalDistribution}>
+                    <p className="graph-label">interval distribution</p>
+                  </Tooltip>
                   <Histogram data={stats.intervals} width={280} height={50} />
                 </div>
               </div>
@@ -4647,7 +4657,9 @@ function App() {
 
               <div className="bigrams-container">
                 <div className="bigrams">
-                  <p className="bigram-label">fastest transitions</p>
+                  <Tooltip content={TIPS.sessionFastestTransitions}>
+                    <p className="bigram-label">fastest transitions</p>
+                  </Tooltip>
                   <div className="bigram-list">
                     {stats.fastestBigrams.map(
                       ({ bigram, avg, distance }, i) => (
@@ -4672,7 +4684,9 @@ function App() {
                   </div>
                 </div>
                 <div className="bigrams">
-                  <p className="bigram-label">slowest transitions</p>
+                  <Tooltip content={TIPS.sessionSlowestTransitions}>
+                    <p className="bigram-label">slowest transitions</p>
+                  </Tooltip>
                   <div className="bigram-list">
                     {stats.slowestBigrams.map(
                       ({ bigram, avg, distance }, i) => (
@@ -5449,7 +5463,12 @@ function App() {
                   Object.keys(cumulativeStats.keyStats).length > 0 && (
                     <div className="keyboard-section">
                       <div className="keyboard-header">
-                        <h3>Keyboard Analysis (All Time)</h3>
+                        <div className="section-header-row">
+                          <h3>Keyboard Analysis (All Time)</h3>
+                          <Tooltip content={TIPS.keyboardHeatmap}>
+                            <button className="help-btn" type="button" aria-label="Help">?</button>
+                          </Tooltip>
+                        </div>
                         <div className="keyboard-header-right">
                           <div className="mini-toggles">
                             <button
@@ -5469,9 +5488,6 @@ function App() {
                               Accuracy
                             </button>
                           </div>
-                          <Tooltip content={TIPS.keyboardHeatmap}>
-                            <button className="help-btn" type="button" aria-label="Help">?</button>
-                          </Tooltip>
                         </div>
                       </div>
                       <KeyboardHeatmap
