@@ -4086,18 +4086,31 @@ function App() {
       </header>
 
       <main className="typing-area">
-        <div className="text-display">
-          {renderText()}
+        <div className={`text-display ${viewingPastStats ? 'locked' : ''}`}>
+          <div className="text-content">
+            {renderText()}
+          </div>
+          {viewingPastStats && (
+            <div className="text-lock-overlay">
+              <div className="lock-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <span className="lock-hint">shift+enter to resume</span>
+            </div>
+          )}
         </div>
 
         <div className="typing-hint-container">
           <p
             className="hint"
             style={{
-              visibility: !isActive && !isComplete ? "visible" : "hidden",
+              visibility: !isActive && !isComplete && !viewingPastStats ? "visible" : "hidden",
             }}
           >
-            {viewingPastStats ? "shift+enter to resume..." : "start typing..."}
+            start typing...
           </p>
           {isActive && !isComplete && (
             <div className="live-stats">

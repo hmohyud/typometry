@@ -327,6 +327,46 @@ h1 {
   user-select: none;
   white-space: pre-wrap;
   word-break: break-word;
+  position: relative;
+}
+
+.text-content {
+  transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+.text-display.locked .text-content {
+  filter: blur(3px);
+  opacity: 0.6;
+}
+
+.text-lock-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 10;
+  pointer-events: none;
+  padding: 1rem 1.5rem;
+  background: rgba(15, 15, 15, 0.85);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.lock-icon {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.lock-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
 }
 
 .char {
