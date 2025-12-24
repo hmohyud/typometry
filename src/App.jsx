@@ -6818,7 +6818,7 @@ function App() {
               {/* Keyboard Row Speed - derived from keyAverages */}
               {keyAverages && Object.keys(keyAverages).length > 0 && (
                 (() => {
-                  // Define row configurations
+                  // Define row configurations (offsets match real keyboard stagger)
                   const rowDefs = {
                     numberRow: { 
                       label: 'Number Row', 
@@ -6830,19 +6830,19 @@ function App() {
                       label: 'Top Row', 
                       keys: 'qwertyuiop[]\\QWERTYUIOP{}|',
                       displayKeys: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-                      offset: 0 
+                      offset: 0.5 
                     },
                     homeRow: { 
                       label: 'Home Row', 
                       keys: "asdfghjkl;'ASDFGHJKL:\"",
                       displayKeys: ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-                      offset: 0.5 
+                      offset: 0.75 
                     },
                     bottomRow: { 
                       label: 'Bottom Row', 
                       keys: 'zxcvbnm,./ZXCVBNM<>?',
                       displayKeys: ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
-                      offset: 1.5 
+                      offset: 1.25 
                     }
                   };
                   
