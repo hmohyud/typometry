@@ -6815,21 +6815,66 @@ function App() {
               )}
 
               {/* Row Performance */}
-              {rowPerformance && Object.keys(rowPerformance).length > 0 && (
+              {/* Keyboard Row Speed - derived from keyAverages */}
+              {keyAverages && Object.keys(keyAverages).length > 0 && (
                 (() => {
-                  const validRows = ['topRow', 'homeRow', 'bottomRow']
-                    .filter(r => rowPerformance[r]?.sampleSessions >= 5);
-                  if (validRows.length === 0) return null;
-                  
-                  // Keyboard row layouts
-                  const rowLayouts = {
-                    topRow: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-                    homeRow: ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-                    bottomRow: ['Z', 'X', 'C', 'V', 'B', 'N', 'M']
+                  // Define row configurations
+                  const rowDefs = {
+                    numberRow: { 
+                      label: 'Number Row', 
+                      keys: '`1234567890-=~!@#$%^&*()_+',
+                      displayKeys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+                      offset: 0 
+                    },
+                    topRow: { 
+                      label: 'Top Row', 
+                      keys: 'qwertyuiop[]\\QWERTYUIOP{}|',
+                      displayKeys: ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                      offset: 0 
+                    },
+                    homeRow: { 
+                      label: 'Home Row', 
+                      keys: "asdfghjkl;'ASDFGHJKL:\"",
+                      displayKeys: ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+                      offset: 0.5 
+                    },
+                    bottomRow: { 
+                      label: 'Bottom Row', 
+                      keys: 'zxcvbnm,./ZXCVBNM<>?',
+                      displayKeys: ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+                      offset: 1.5 
+                    }
                   };
                   
+                  // Calculate average speed for each row from keyAverages
+                  const rowSpeeds = {};
+                  Object.entries(rowDefs).forEach(([rowName, def]) => {
+                    let totalTime = 0;
+                    let totalCount = 0;
+                    
+                    for (const char of def.keys) {
+                      const stats = keyAverages[char];
+                      if (stats && stats.avgInterval > 0 && stats.count > 0) {
+                        totalTime += stats.avgInterval * stats.count;
+                        totalCount += stats.count;
+                      }
+                    }
+                    
+                    if (totalCount >= 10) {
+                      rowSpeeds[rowName] = {
+                        avgIntervalMs: totalTime / totalCount,
+                        count: totalCount
+                      };
+                    }
+                  });
+                  
+                  const validRows = ['numberRow', 'topRow', 'homeRow', 'bottomRow']
+                    .filter(r => rowSpeeds[r]);
+                  
+                  if (validRows.length === 0) return null;
+                  
                   // Get min/max for color scaling
-                  const allTimes = validRows.map(r => rowPerformance[r].avgIntervalMs);
+                  const allTimes = validRows.map(r => rowSpeeds[r].avgIntervalMs);
                   const minTime = Math.min(...allTimes);
                   const maxTime = Math.max(...allTimes);
                   
@@ -6853,17 +6898,16 @@ function App() {
                       </div>
                       <div className="keyboard-rows-visual">
                         {validRows.map(rowName => {
-                          const data = rowPerformance[rowName];
-                          const keys = rowLayouts[rowName];
-                          const offset = rowName === 'homeRow' ? 0.5 : rowName === 'bottomRow' ? 1.5 : 0;
+                          const data = rowSpeeds[rowName];
+                          const def = rowDefs[rowName];
                           
                           return (
                             <div key={rowName} className="keyboard-row-item">
                               <span className="keyboard-row-label">
-                                {rowName === 'topRow' ? 'Top Row' : rowName === 'homeRow' ? 'Home Row' : 'Bottom Row'}
+                                {def.label}
                               </span>
-                              <div className="keyboard-row-keys" style={{ paddingLeft: `${offset * 1.2}rem` }}>
-                                {keys.map(key => (
+                              <div className="keyboard-row-keys" style={{ paddingLeft: `${def.offset * 1.2}rem` }}>
+                                {def.displayKeys.map(key => (
                                   <span 
                                     key={key} 
                                     className="keyboard-row-key"

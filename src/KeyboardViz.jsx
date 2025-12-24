@@ -9,6 +9,14 @@ const KEYBOARD_ROWS = [
   [' ']
 ]
 
+// Shift mapping - base key -> shifted key
+const SHIFT_MAP = {
+  '`': '~', '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+  '6': '^', '7': '&', '8': '*', '9': '(', '0': ')', '-': '_', '=': '+',
+  '[': '{', ']': '}', '\\': '|', ';': ':', "'": '"',
+  ',': '<', '.': '>', '/': '?'
+}
+
 const ROW_OFFSETS = [0, 0.5, 0.75, 1.25, 3.5]
 const KEY_WIDTH = 32
 const KEY_HEIGHT = 32
@@ -26,6 +34,10 @@ KEYBOARD_ROWS.forEach((row, rowIndex) => {
       width
     }
     KEY_COORDS[key.toUpperCase()] = KEY_COORDS[key]
+    // Also map shifted symbols to their base key position
+    if (SHIFT_MAP[key]) {
+      KEY_COORDS[SHIFT_MAP[key]] = KEY_COORDS[key]
+    }
     x += width + KEY_GAP
   })
 })
@@ -41,40 +53,95 @@ const interpolateColor = (value, min, max, coldColor, hotColor) => {
   return `rgb(${r}, ${g}, ${b})`
 }
 
-export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
+export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = null }) => {
   const [hoveredKey, setHoveredKey] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [showShiftLayer, setShowShiftLayer] = useState(false)
+  
+  // Organize stats by base key with shifted variants
+  const organizedStats = useMemo(() => {
+    if (!keyStats || Object.keys(keyStats).length === 0) return {}
+    
+    const organized = {}
+    
+    KEYBOARD_ROWS.flat().forEach(baseKey => {
+      if (baseKey === ' ') {
+        const spaceStats = keyStats[' '] || keyStats['space']
+        if (spaceStats) {
+          organized[' '] = { base: spaceStats, shifted: null, shiftedChar: null }
+        }
+        return
+      }
+      
+      const isLetter = /^[a-z]$/.test(baseKey)
+      const shiftedChar = isLetter ? baseKey.toUpperCase() : SHIFT_MAP[baseKey]
+      
+      const baseStats = keyStats[baseKey] || keyStats[baseKey.toLowerCase()]
+      // Only get shifted stats for symbols, not letters (letters are stored lowercase)
+      const shiftedStats = isLetter 
+        ? null  // Letters don't have separate uppercase tracking
+        : (shiftedChar ? keyStats[shiftedChar] : null)
+      
+      if (baseStats || shiftedStats) {
+        organized[baseKey] = {
+          base: baseStats,
+          shifted: shiftedStats,
+          shiftedChar
+        }
+      }
+    })
+    
+    return organized
+  }, [keyStats])
+  
+  // Check if any shifted data exists
+  const hasAnyShiftedData = useMemo(() => {
+    return Object.values(organizedStats).some(s => s.shifted)
+  }, [organizedStats])
   
   const { colors } = useMemo(() => {
-    if (!keyStats || Object.keys(keyStats).length === 0) {
+    if (!organizedStats || Object.keys(organizedStats).length === 0) {
       return { colors: {} }
     }
     
-    const values = Object.values(keyStats).map(s => 
+    // Get stats for current layer
+    const currentLayerStats = {}
+    Object.entries(organizedStats).forEach(([key, data]) => {
+      // Space uses base stats in both layers
+      const useBaseStats = !showShiftLayer || key === ' '
+      const stats = useBaseStats ? data.base : data.shifted
+      if (stats) {
+        currentLayerStats[key] = stats
+      }
+    })
+    
+    if (Object.keys(currentLayerStats).length === 0) return { colors: {} }
+    
+    const values = Object.values(currentLayerStats).map(s => 
       mode === 'speed' ? s.avgInterval : (s.accuracy !== undefined ? s.accuracy : 1)
-    )
+    ).filter(v => v > 0)
+    
+    if (values.length === 0) return { colors: {} }
+    
     const max = Math.max(...values)
     const min = Math.min(...values)
     
     const cols = {}
-    Object.entries(keyStats).forEach(([key, stats]) => {
+    Object.entries(currentLayerStats).forEach(([key, stats]) => {
       const val = mode === 'speed' ? stats.avgInterval : (stats.accuracy !== undefined ? stats.accuracy : 1)
-      // For speed: slower (high value) = red, faster (low value) = green
-      // For accuracy: high accuracy = green, low accuracy = red
       let coldColor, hotColor
       if (mode === 'speed') {
-        coldColor = 'rgb(110, 207, 110)'  // green for fast (low ms)
-        hotColor = 'rgb(232, 92, 92)'     // red for slow (high ms)
+        coldColor = 'rgb(110, 207, 110)'
+        hotColor = 'rgb(232, 92, 92)'
       } else {
-        // Accuracy: low value (0) = red, high value (1) = green
-        coldColor = 'rgb(232, 92, 92)'    // red for low accuracy
-        hotColor = 'rgb(110, 207, 110)'   // green for high accuracy
+        coldColor = 'rgb(232, 92, 92)'
+        hotColor = 'rgb(110, 207, 110)'
       }
-      cols[key.toLowerCase()] = interpolateColor(val, min, max, coldColor, hotColor)
+      cols[key] = interpolateColor(val, min, max, coldColor, hotColor)
     })
     
     return { colors: cols }
-  }, [keyStats, mode])
+  }, [organizedStats, mode, showShiftLayer])
 
   const totalWidth = 14 * (KEY_WIDTH + KEY_GAP)
   const totalHeight = 5 * (KEY_HEIGHT + KEY_GAP)
@@ -87,7 +154,6 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
     })
   }
   
-  // Get color for a value on the green-red scale
   const getSpeedColor = (avgInterval) => {
     if (!keyStats || Object.keys(keyStats).length === 0) return 'var(--text)'
     const speeds = Object.values(keyStats).map(s => s.avgInterval).filter(v => v > 0)
@@ -96,7 +162,6 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
     const max = Math.max(...speeds)
     if (max === min) return 'rgb(110, 207, 110)'
     const ratio = (avgInterval - min) / (max - min)
-    // Green (fast) to red (slow)
     if (ratio < 0.5) {
       const r = Math.round(110 + 122 * ratio * 2)
       const g = Math.round(207 - 24 * ratio * 2)
@@ -111,7 +176,6 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
   }
   
   const getAccuracyColor = (accuracy) => {
-    // Green (high accuracy) to red (low accuracy)
     if (accuracy >= 0.95) return 'rgb(110, 207, 110)'
     if (accuracy >= 0.9) return 'rgb(180, 195, 80)'
     if (accuracy >= 0.8) return 'rgb(226, 183, 20)'
@@ -119,7 +183,10 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
     return 'rgb(232, 92, 92)'
   }
   
-  const hoveredStats = hoveredKey ? (keyStats?.[hoveredKey] || keyStats?.[hoveredKey.toLowerCase()]) : null
+  const hoveredData = hoveredKey ? organizedStats[hoveredKey] : null
+  const hoveredStats = hoveredData 
+    ? ((!showShiftLayer || hoveredKey === ' ') ? hoveredData.base : hoveredData.shifted) 
+    : null
 
   return (
     <div className="keyboard-viz">
@@ -134,11 +201,31 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
           let x = ROW_OFFSETS[rowIndex] * (KEY_WIDTH + KEY_GAP)
           return row.map((key, keyIndex) => {
             const width = key === ' ' ? KEY_WIDTH * 6 + KEY_GAP * 5 : KEY_WIDTH
-            const bgColor = colors[key.toLowerCase()] || 'var(--bg-tertiary)'
             const keyX = x
             x += width + KEY_GAP
             
-            const label = key === ' ' ? 'space' : key
+            const keyY = rowIndex * (KEY_HEIGHT + KEY_GAP)
+            const keyData = organizedStats[key]
+            const isLetter = /^[a-z]$/.test(key)
+            const shiftedChar = isLetter ? key.toUpperCase() : SHIFT_MAP[key]
+            
+            // Get stats and color for current layer
+            // Space uses base stats in both layers (same key)
+            const useBaseStats = !showShiftLayer || key === ' '
+            const currentStats = keyData ? (useBaseStats ? keyData.base : keyData.shifted) : null
+            const bgColor = currentStats ? (colors[key] || 'var(--bg-tertiary)') : 'var(--bg-tertiary)'
+            const hasData = !!currentStats
+            
+            // Display character based on layer
+            // Letters show blank in shift layer (no separate tracking)
+            // Space shows on both layers
+            let label = key === ' ' ? 'space' : key
+            if (showShiftLayer && key !== ' ') {
+              label = isLetter ? '' : (shiftedChar || key)
+            }
+            
+            // For shift layer, letters have no data but space does
+            const isBlankInShiftLayer = showShiftLayer && isLetter
             
             return (
               <g 
@@ -148,33 +235,36 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
               >
                 <rect
                   x={keyX}
-                  y={rowIndex * (KEY_HEIGHT + KEY_GAP)}
+                  y={keyY}
                   width={width}
                   height={KEY_HEIGHT}
                   rx={4}
                   fill={bgColor}
                   stroke="var(--bg-secondary)"
                   strokeWidth={1}
+                  opacity={isBlankInShiftLayer ? 0.3 : (hasData ? 1 : 0.5)}
                 />
-                <text
-                  x={keyX + width / 2}
-                  y={rowIndex * (KEY_HEIGHT + KEY_GAP) + KEY_HEIGHT / 2 + 1}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={key === ' ' ? 10 : 12}
-                  fill="var(--text)"
-                  opacity={0.8}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {label}
-                </text>
+                {label && (
+                  <text
+                    x={keyX + width / 2}
+                    y={keyY + KEY_HEIGHT / 2 + 1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={key === ' ' ? 10 : 12}
+                    fill="var(--text)"
+                    opacity={hasData ? 0.9 : 0.4}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {label}
+                  </text>
+                )}
               </g>
             )
           })
         })}
       </svg>
       
-      {/* Mouse-following tooltip */}
+      {/* Tooltip */}
       {hoveredKey && hoveredStats && (
         <div 
           className="keyboard-key-tooltip"
@@ -185,20 +275,21 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
             background: 'rgba(30, 33, 36, 0.95)',
             border: '1px solid #444',
             borderRadius: '6px',
-            padding: '0.4rem 0.6rem',
+            padding: '0.5rem 0.7rem',
             pointerEvents: 'none',
             zIndex: 100,
             whiteSpace: 'nowrap',
             fontSize: '0.75rem',
           }}
         >
-          <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text)' }}>
-            {hoveredKey === ' ' ? 'space' : hoveredKey}
+          <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text)' }}>
+            {hoveredKey === ' ' ? 'space' : (showShiftLayer ? (hoveredData?.shiftedChar || hoveredKey) : hoveredKey)}
           </div>
+          
           <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <span><span style={{ color: getSpeedColor(hoveredStats.avgInterval || 0), fontWeight: 500 }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg speed</span>
-            <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accurate ({hoveredStats.errors ?? Math.round((hoveredStats.count || 0) * (1 - (hoveredStats.accuracy || 1)))} errors)</span>
-            <span><span style={{ color: 'var(--text)' }}>{hoveredStats.count || 0}</span> presses</span>
+            <span><span style={{ color: getSpeedColor(hoveredStats.avgInterval || 0), fontWeight: 500 }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg</span>
+            <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accuracy</span>
+            <span style={{ opacity: 0.7 }}>{hoveredStats.count || 0} presses</span>
           </div>
         </div>
       )}
@@ -209,6 +300,17 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed' }) => {
           background: 'linear-gradient(to right, rgb(110, 207, 110), rgb(232, 92, 92))'
         }} />
         <span className="legend-label">{mode === 'speed' ? 'slow' : 'error-prone'}</span>
+        
+        {/* Shift layer toggle */}
+        {hasAnyShiftedData && (
+          <button 
+            className={`shift-layer-toggle ${showShiftLayer ? 'active' : ''}`}
+            onClick={() => setShowShiftLayer(!showShiftLayer)}
+            title={showShiftLayer ? 'Show base keys' : 'Show shifted keys'}
+          >
+            ⇧
+          </button>
+        )}
       </div>
     </div>
   )
