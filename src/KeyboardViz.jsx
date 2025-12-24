@@ -436,7 +436,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
           </g>
         ))}
       </svg>
-      <p className="flow-label">{label} transitions</p>
+      <p className="flow-label" style={{ color }}>{label} transitions</p>
     </div>
   )
 }

@@ -1136,14 +1136,9 @@ const CharTypeBreakdown = ({
     <div className="accuracy-breakdown-section">
       <div className="section-header-row">
         <h3>By Character Type</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <Tooltip content={showSpeed ? TIPS.speedByType : TIPS.accuracyByType}>
-            <button className="help-btn" type="button" aria-label="Help">
-              ?
-            </button>
-          </Tooltip>
+        <div className="header-controls">
           {hasSpeedData && (
-            <div className="heatmap-toggle">
+            <div className="mini-toggle-group">
               <button
                 className={`mini-toggle ${showSpeed ? "active" : ""}`}
                 onClick={() => setShowSpeed(true)}
@@ -1158,6 +1153,11 @@ const CharTypeBreakdown = ({
               </button>
             </div>
           )}
+          <Tooltip content={showSpeed ? TIPS.speedByType : TIPS.accuracyByType}>
+            <button className="help-btn" type="button" aria-label="Help">
+              ?
+            </button>
+          </Tooltip>
         </div>
       </div>
       <div className="accuracy-type-grid">
@@ -5136,18 +5136,7 @@ function App() {
                 {/* Keyboard Visualizations */}
                 <div className="keyboard-section">
                   <div className="keyboard-header">
-                    <div className="section-header-row">
-                      <h3>Keyboard Analysis</h3>
-                      <Tooltip content={TIPS.keyboardHeatmap}>
-                        <button
-                          className="help-btn"
-                          type="button"
-                          aria-label="Help"
-                        >
-                          ?
-                        </button>
-                      </Tooltip>
-                    </div>
+                    <h3>Keyboard Analysis</h3>
                     <div className="keyboard-header-right">
                       <div className="heatmap-toggle">
                         <button
@@ -5167,6 +5156,15 @@ function App() {
                           Accuracy
                         </button>
                       </div>
+                      <Tooltip content={TIPS.keyboardHeatmap}>
+                        <button
+                          className="help-btn"
+                          type="button"
+                          aria-label="Help"
+                        >
+                          ?
+                        </button>
+                      </Tooltip>
                     </div>
                   </div>
                   <KeyboardHeatmap
@@ -5924,6 +5922,18 @@ function App() {
                           />
                           <span>smart zoom</span>
                         </label>
+                      </div>
+                      <div className="histograms-header-right">
+                        <div className="histogram-legend">
+                          <span className="legend-item">
+                            <span className="legend-swatch normal"></span>your
+                            sessions
+                          </span>
+                          <span className="legend-item">
+                            <span className="legend-swatch current"></span>this
+                            paragraph
+                          </span>
+                        </div>
                         <Tooltip content={TIPS.sessionDistributions}>
                           <button
                             className="help-btn"
@@ -5933,16 +5943,6 @@ function App() {
                             ?
                           </button>
                         </Tooltip>
-                      </div>
-                      <div className="histogram-legend">
-                        <span className="legend-item">
-                          <span className="legend-swatch normal"></span>your
-                          sessions
-                        </span>
-                        <span className="legend-item">
-                          <span className="legend-swatch current"></span>this
-                          paragraph
-                        </span>
                       </div>
                     </div>
                     <div className="histograms-grid">
@@ -6407,18 +6407,7 @@ function App() {
                   Object.keys(cumulativeStats.keyStats).length > 0 && (
                     <div className="keyboard-section">
                       <div className="keyboard-header">
-                        <div className="section-header-row">
-                          <h3>Keyboard Analysis (All Time)</h3>
-                          <Tooltip content={TIPS.keyboardHeatmap}>
-                            <button
-                              className="help-btn"
-                              type="button"
-                              aria-label="Help"
-                            >
-                              ?
-                            </button>
-                          </Tooltip>
-                        </div>
+                        <h3>Keyboard Analysis (All Time)</h3>
                         <div className="keyboard-header-right">
                           <div className="heatmap-toggle">
                             <button
@@ -6438,6 +6427,15 @@ function App() {
                               Accuracy
                             </button>
                           </div>
+                          <Tooltip content={TIPS.keyboardHeatmap}>
+                            <button
+                              className="help-btn"
+                              type="button"
+                              aria-label="Help"
+                            >
+                              ?
+                            </button>
+                          </Tooltip>
                         </div>
                       </div>
                       <KeyboardHeatmap
@@ -7292,6 +7290,24 @@ function App() {
                             />
                             <span>smart zoom</span>
                           </label>
+                        </div>
+                        <div className="histograms-header-right">
+                          <div className="histogram-legend">
+                            <span className="legend-item">
+                              <span className="legend-swatch normal"></span>all
+                              users
+                            </span>
+                            {comparisonBase !== "none" && (
+                              <span className="legend-item">
+                                <span className="legend-swatch current"></span>
+                                {comparisonBase === "current"
+                                  ? "this paragraph"
+                                  : comparisonBase === "alltime"
+                                  ? "your average"
+                                  : ""}
+                              </span>
+                            )}
+                          </div>
                           <Tooltip content={TIPS.sessionDistributions}>
                             <button
                               className="help-btn"
@@ -7301,22 +7317,6 @@ function App() {
                               ?
                             </button>
                           </Tooltip>
-                        </div>
-                        <div className="histogram-legend">
-                          <span className="legend-item">
-                            <span className="legend-swatch normal"></span>all
-                            users
-                          </span>
-                          {comparisonBase !== "none" && (
-                            <span className="legend-item">
-                              <span className="legend-swatch current"></span>
-                              {comparisonBase === "current"
-                                ? "this paragraph"
-                                : comparisonBase === "alltime"
-                                ? "your average"
-                                : ""}
-                            </span>
-                          )}
                         </div>
                       </div>
                       <div className="histograms-grid">
@@ -7800,18 +7800,7 @@ function App() {
                 {keyAverages && Object.keys(keyAverages).length > 0 && (
                   <div className="keyboard-section">
                     <div className="keyboard-header">
-                      <div className="section-header-row">
-                        <h3>Keyboard Analysis (Global Average)</h3>
-                        <Tooltip content={TIPS.globalKeyboardAnalysis}>
-                          <button
-                            className="help-btn"
-                            type="button"
-                            aria-label="Help"
-                          >
-                            ?
-                          </button>
-                        </Tooltip>
-                      </div>
+                      <h3>Keyboard Analysis (Global Average)</h3>
                       <div className="keyboard-header-right">
                         <div className="heatmap-toggle">
                           <button
@@ -7831,6 +7820,15 @@ function App() {
                             Accuracy
                           </button>
                         </div>
+                        <Tooltip content={TIPS.globalKeyboardAnalysis}>
+                          <button
+                            className="help-btn"
+                            type="button"
+                            aria-label="Help"
+                          >
+                            ?
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
                     <KeyboardHeatmap
@@ -8917,6 +8915,28 @@ function App() {
                                 </div>
                               </Tooltip>
                             )}
+                            {/* Random future date - truly useless stat */}
+                            {(() => {
+                              // Seeded random based on user's total keystrokes for consistency
+                              const seed = lifetimeStats?.totalKeystrokes || 12345;
+                              const daysToAdd = 30 + (seed % 335); // 30-365 days in the future
+                              const futureDate = new Date();
+                              futureDate.setDate(futureDate.getDate() + daysToAdd);
+                              const daysUntil = Math.ceil((futureDate - new Date()) / (1000 * 60 * 60 * 24));
+                              const dateStr = futureDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                              return (
+                                <Tooltip content={`Days until ${dateStr}. Why this date? No reason. It's completely arbitrary.`}>
+                                  <div className="pattern-item">
+                                    <span className="pattern-label">
+                                      Days Until ???
+                                    </span>
+                                    <span className="pattern-value">
+                                      {daysUntil}
+                                    </span>
+                                  </div>
+                                </Tooltip>
+                              );
+                            })()}
                           </div>
                         </div>
                       );

@@ -325,20 +325,25 @@ h1 {
 
 .flow-viz {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
 }
 
 .flow-viz svg {
   max-width: 100%;
   height: auto;
+  flex-shrink: 0;
 }
 
 .flow-label {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  text-align: center;
-  margin-top: 0.25rem;
+  font-size: 0.55rem;
+  text-align: left;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 
 /* Typing area */
@@ -954,6 +959,12 @@ h1 {
 }
 
 .histograms-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.histograms-header-right {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1678,6 +1689,10 @@ footer {
   
   .keyboard-flows {
     grid-template-columns: 1fr;
+  }
+  
+  .flow-viz {
+    justify-content: flex-start;
   }
   
   .keyboard-viz svg {
@@ -3141,6 +3156,7 @@ footer {
 
 .section-header-row.compact {
   margin-bottom: 0.5rem;
+  justify-content: space-between;
 }
 
 .section-header-row.compact .bigram-label {
