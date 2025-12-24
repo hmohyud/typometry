@@ -2529,6 +2529,7 @@ function App() {
       setKeystrokeData([]);
       setRawKeyEvents([]);
       setStats(null);
+      setViewingPastStats(false);
       lastKeystrokeTime.current = null;
       startTime.current = null;
       containerRef.current?.focus();
@@ -4123,7 +4124,11 @@ function App() {
         {isComplete && (
           <div className={`complete-hint-container ${showFixedHint ? 'faded' : ''}`} ref={completeHintRef}>
             <p className="complete-hint">
-              <span className="checkmark">✓</span> complete · <kbd>shift</kbd>+<kbd>enter</kbd> for next
+              {viewingPastStats ? (
+                <><kbd>shift</kbd>+<kbd>enter</kbd> to resume</>
+              ) : (
+                <><span className="checkmark">✓</span> complete · <kbd>shift</kbd>+<kbd>enter</kbd> for next</>
+              )}
             </p>
           </div>
         )}
@@ -4132,7 +4137,11 @@ function App() {
       {/* Fixed floating hint when scrolled past the main hint */}
       {isComplete && (
         <div className={`fixed-hint ${showFixedHint ? 'visible' : ''}`}>
-          <kbd>shift</kbd>+<kbd>enter</kbd> for next
+          {viewingPastStats ? (
+            <><kbd>shift</kbd>+<kbd>enter</kbd> to resume</>
+          ) : (
+            <><kbd>shift</kbd>+<kbd>enter</kbd> for next</>
+          )}
         </div>
       )}
 
