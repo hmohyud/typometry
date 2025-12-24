@@ -2113,15 +2113,15 @@ footer {
 /* Subtle pulse animation to indicate circles are interactive */
 @keyframes finger-glow {
   0%, 100% { 
-    filter: drop-shadow(0 0 0px transparent);
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.15));
   }
   50% { 
-    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
   }
 }
 
 .finger-hand-svg circle {
-  animation: finger-glow 3s ease-in-out infinite;
+  animation: finger-glow 2.5s ease-in-out infinite;
 }
 
 .finger-hands-legend {
@@ -2878,6 +2878,18 @@ footer {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.75rem 1rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  cursor: default;
+}
+
+.behavioral-stat:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.behavioral-stat:hover .behavioral-stat-label {
+  color: var(--text-secondary);
 }
 
 .behavioral-stat-header {
@@ -2973,13 +2985,25 @@ footer {
 .accuracy-type-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.25rem;
 }
 
 .accuracy-type-item {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  cursor: default;
+}
+
+.accuracy-type-item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.accuracy-type-item:hover .accuracy-type-label {
+  color: var(--text);
 }
 
 .accuracy-type-header {
@@ -3011,6 +3035,10 @@ footer {
   height: 100%;
   border-radius: 2px;
   transition: width 0.3s ease;
+}
+
+.accuracy-type-grid .tooltip-wrapper {
+  display: block;
 }
 
 /* Row Performance Section */
@@ -3131,6 +3159,17 @@ footer {
   padding: 0.6rem 0.75rem;
   background: var(--bg-secondary);
   border-radius: 6px;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  cursor: default;
+}
+
+.pattern-item:hover {
+  background: var(--bg-tertiary);
+  transform: translateY(-1px);
+}
+
+.pattern-item:hover .pattern-label {
+  color: var(--text-secondary);
 }
 
 .pattern-label {

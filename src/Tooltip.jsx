@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { createPortal } from 'react-dom'
 
 // Tooltip component for wrapping any element
-export const Tooltip = ({ children, content, delay = 400 }) => {
+export const Tooltip = ({ children, content, delay = 400, align = 'center', followMouse = false }) => {
   const [isVisible, setIsVisible] = useState(false)
   const [coords, setCoords] = useState({ x: 0, y: 0 })
   const triggerRef = useRef(null)
   const tooltipRef = useRef(null)
   const timeoutRef = useRef(null)
+  const mousePos = useRef({ x: 0, y: 0 })
 
   const showTooltip = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -21,44 +22,68 @@ export const Tooltip = ({ children, content, delay = 400 }) => {
     setIsVisible(false)
   }
 
+  const handleMouseMove = (e) => {
+    if (followMouse) {
+      mousePos.current = { x: e.clientX, y: e.clientY }
+      if (isVisible) {
+        updateTooltipPosition()
+      }
+    }
+  }
+
+  const updateTooltipPosition = () => {
+    const tooltipEl = tooltipRef.current
+    if (!tooltipEl) return
+    
+    const tooltipRect = tooltipEl.getBoundingClientRect()
+    const padding = 12
+    
+    let x, y
+    
+    if (followMouse) {
+      // Position relative to mouse
+      x = mousePos.current.x + 12
+      y = mousePos.current.y - tooltipRect.height - 8
+      
+      // If would go above viewport, show below mouse
+      if (y < padding) {
+        y = mousePos.current.y + 20
+      }
+    } else {
+      // Position relative to trigger element
+      const triggerRect = triggerRef.current?.getBoundingClientRect()
+      if (!triggerRect) return
+      
+      if (align === 'left') {
+        x = triggerRect.left
+      } else {
+        x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2)
+      }
+      y = triggerRect.top - tooltipRect.height - 10
+      
+      if (y < padding) {
+        y = triggerRect.bottom + 10
+      }
+    }
+    
+    // Keep within viewport horizontally
+    if (x < padding) x = padding
+    if (x + tooltipRect.width > window.innerWidth - padding) {
+      x = window.innerWidth - tooltipRect.width - padding
+    }
+    
+    setCoords({ x, y })
+  }
+
   useEffect(() => {
     if (isVisible && triggerRef.current) {
-      const updatePosition = () => {
-        const triggerRect = triggerRef.current.getBoundingClientRect()
-        const tooltipEl = tooltipRef.current
-        
-        if (!tooltipEl) return
-        
-        const tooltipRect = tooltipEl.getBoundingClientRect()
-        
-        // Center horizontally on trigger
-        let x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2)
-        // Position above trigger
-        let y = triggerRect.top - tooltipRect.height - 10
-        
-        // Keep within viewport horizontally
-        const padding = 12
-        if (x < padding) x = padding
-        if (x + tooltipRect.width > window.innerWidth - padding) {
-          x = window.innerWidth - tooltipRect.width - padding
-        }
-        
-        // If would go above viewport, show below
-        if (y < padding) {
-          y = triggerRect.bottom + 10
-        }
-        
-        setCoords({ x, y })
-      }
-      
-      // Initial position
-      requestAnimationFrame(updatePosition)
+      requestAnimationFrame(updateTooltipPosition)
     }
     
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [isVisible])
+  }, [isVisible, align, followMouse])
 
   if (!content) return children
 
@@ -69,6 +94,7 @@ export const Tooltip = ({ children, content, delay = 400 }) => {
         className="tooltip-wrapper"
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
+        onMouseMove={handleMouseMove}
         onTouchStart={showTooltip}
         onTouchEnd={hideTooltip}
       >
