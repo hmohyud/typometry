@@ -325,6 +325,7 @@ export async function getErrorConfusion(limit = 50) {
 
 /**
  * Get accuracy by character type
+ * Returns object keyed by char_type for easy lookup
  */
 export async function getAccuracyByType() {
   const { data, error } = await supabase
@@ -333,9 +334,55 @@ export async function getAccuracyByType() {
 
   if (error) {
     console.error('Error fetching accuracy by type:', error)
-    return []
+    return null
   }
-  return data || []
+  
+  if (!data || data.length === 0) return null
+  
+  // Convert to object keyed by char_type
+  const accuracyByType = {}
+  data.forEach(row => {
+    accuracyByType[row.char_type] = {
+      avgAccuracy: parseFloat(row.avg_accuracy) / 100 || 0, // Convert percentage to decimal
+      sampleSessions: row.sample_sessions || 0,
+      stdDev: parseFloat(row.accuracy_std_dev) || 0,
+      minAccuracy: parseFloat(row.min_accuracy) || 0,
+      maxAccuracy: parseFloat(row.max_accuracy) || 0,
+    }
+  })
+  
+  return accuracyByType
+}
+
+/**
+ * Get speed by character type (letters, numbers, punctuation, capitals, spaces, symbols)
+ * Returns object keyed by char_type for easy lookup
+ */
+export async function getSpeedByType() {
+  const { data, error } = await supabase
+    .from('speed_by_type_view')
+    .select('*')
+
+  if (error) {
+    console.error('Error fetching speed by type:', error)
+    return null
+  }
+  
+  if (!data || data.length === 0) return null
+  
+  // Convert to object keyed by char_type
+  const speedByType = {}
+  data.forEach(row => {
+    speedByType[row.char_type] = {
+      avgInterval: parseFloat(row.avg_interval) || 0,
+      sampleSessions: row.sample_sessions || 0,
+      stdDev: parseFloat(row.interval_std_dev) || 0,
+      minInterval: parseFloat(row.min_interval) || 0,
+      maxInterval: parseFloat(row.max_interval) || 0,
+    }
+  })
+  
+  return speedByType
 }
 
 /**

@@ -77,10 +77,8 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
       const shiftedChar = isLetter ? baseKey.toUpperCase() : SHIFT_MAP[baseKey]
       
       const baseStats = keyStats[baseKey] || keyStats[baseKey.toLowerCase()]
-      // Only get shifted stats for symbols, not letters (letters are stored lowercase)
-      const shiftedStats = isLetter 
-        ? null  // Letters don't have separate uppercase tracking
-        : (shiftedChar ? keyStats[shiftedChar] : null)
+      // For letters, check for uppercase version; for symbols, check shifted symbol
+      const shiftedStats = shiftedChar ? keyStats[shiftedChar] : null
       
       if (baseStats || shiftedStats) {
         organized[baseKey] = {
@@ -217,15 +215,15 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
             const hasData = !!currentStats
             
             // Display character based on layer
-            // Letters show blank in shift layer (no separate tracking)
+            // Now letters show uppercase in shift layer (capitals are tracked)
             // Space shows on both layers
             let label = key === ' ' ? 'space' : key
             if (showShiftLayer && key !== ' ') {
-              label = isLetter ? '' : (shiftedChar || key)
+              label = shiftedChar || key
             }
             
-            // For shift layer, letters have no data but space does
-            const isBlankInShiftLayer = showShiftLayer && isLetter
+            // Keys without shift data show dimmed
+            const noShiftData = showShiftLayer && !keyData?.shifted && key !== ' '
             
             return (
               <g 
@@ -242,7 +240,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
                   fill={bgColor}
                   stroke="var(--bg-secondary)"
                   strokeWidth={1}
-                  opacity={isBlankInShiftLayer ? 0.3 : (hasData ? 1 : 0.5)}
+                  opacity={noShiftData ? 0.3 : (hasData ? 1 : 0.5)}
                 />
                 {label && (
                   <text

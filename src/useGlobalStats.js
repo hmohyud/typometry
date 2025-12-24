@@ -18,6 +18,7 @@ import {
   getRecords,
   getErrorConfusion,
   getAccuracyByType,
+  getSpeedByType,
   getRowPerformance,
   getTypingPatterns,
   getTimePatterns,
@@ -41,6 +42,7 @@ export function useGlobalStats() {
   const [records, setRecords] = useState(null)
   const [errorConfusion, setErrorConfusion] = useState(null)
   const [accuracyByType, setAccuracyByType] = useState(null)
+  const [speedByType, setSpeedByType] = useState(null)
   const [rowPerformance, setRowPerformance] = useState(null)
   const [typingPatterns, setTypingPatterns] = useState(null)
   const [timePatterns, setTimePatterns] = useState(null)
@@ -64,6 +66,7 @@ export function useGlobalStats() {
         recs,
         errConfusion,
         accByType,
+        spdByType,
         rowPerf,
         typPatterns,
         timePatts,
@@ -81,6 +84,7 @@ export function useGlobalStats() {
         getRecords(),
         getErrorConfusion(50),
         getAccuracyByType(),
+        getSpeedByType(),
         getRowPerformance(),
         getTypingPatterns(),
         getTimePatterns(),
@@ -231,18 +235,14 @@ export function useGlobalStats() {
         setErrorConfusion(confusionArr)
       }
 
-      if (accByType && accByType.length > 0) {
-        const accObj = {}
-        accByType.forEach(stat => {
-          accObj[stat.char_type] = {
-            avgAccuracy: parseFloat(stat.avg_accuracy) || 0,
-            stdDev: parseFloat(stat.accuracy_std_dev) || 0,
-            minAccuracy: parseFloat(stat.min_accuracy) || 0,
-            maxAccuracy: parseFloat(stat.max_accuracy) || 0,
-            sampleSessions: parseInt(stat.sample_sessions) || 0,
-          }
-        })
-        setAccuracyByType(accObj)
+      // accuracyByType now returns an object directly from supabase.js
+      if (accByType) {
+        setAccuracyByType(accByType)
+      }
+
+      // speedByType returns an object directly from supabase.js
+      if (spdByType) {
+        setSpeedByType(spdByType)
       }
 
       if (rowPerf && rowPerf.length > 0) {
@@ -453,6 +453,7 @@ export function useGlobalStats() {
     records,
     errorConfusion,
     accuracyByType,
+    speedByType,
     rowPerformance,
     typingPatterns,
     timePatterns,

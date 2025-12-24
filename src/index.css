@@ -241,6 +241,20 @@ h1 {
   color: var(--accent);
 }
 
+.mini-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 0.15rem;
+}
+
+.mini-toggle-group .mini-toggle {
+  font-size: 0.65rem;
+  padding: 0.2rem 0.4rem;
+}
+
 .keyboard-viz {
   display: flex;
   flex-direction: column;
@@ -3116,6 +3130,13 @@ footer {
 
 .section-header-row h3 {
   margin-bottom: 0;
+}
+
+.section-header-row .header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .section-header-row.compact {

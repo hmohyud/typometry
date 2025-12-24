@@ -2777,6 +2777,7 @@ function App() {
   const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global'
   const [comparisonBase, setComparisonBase] = useState("none"); // 'none' | 'alltime' | 'global' | 'current'
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
+  const [rowSpeedShiftMode, setRowSpeedShiftMode] = useState(false); // false = base keys, true = shifted keys
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [showFixedHint, setShowFixedHint] = useState(false);
@@ -2825,6 +2826,7 @@ function App() {
     records,
     errorConfusion,
     accuracyByType,
+    speedByType,
     rowPerformance,
     typingPatterns,
     timePatterns,
@@ -3810,11 +3812,11 @@ function App() {
         ? distances.reduce((a, b) => a + b, 0) / distances.length
         : 0;
 
-    // Per-key statistics for heatmap
+    // Per-key statistics for heatmap (preserve case for capitals)
     const keyStats = {};
     data.forEach((d) => {
       if (d.expected && d.interval) {
-        const key = d.expected.toLowerCase();
+        const key = d.expected; // Preserve original case
         if (!keyStats[key]) {
           keyStats[key] = { times: [], count: 0, correct: 0, errors: 0 };
         }
@@ -8399,34 +8401,14 @@ function App() {
                         },
                       };
 
-                      // Derive symbols accuracy and all speeds from keyAverages
-                      let symbolsAccuracyData = null;
-                      const typeSpeeds = {};
-
-                      if (keyAverages && Object.keys(keyAverages).length > 0) {
-                        // Symbols accuracy
-                        const symbolChars = "@#$%^&*_+=[]{}|<>`~";
-                        let totalCount = 0;
-                        let correctCount = 0;
-
-                        for (const char of symbolChars) {
-                          const stats = keyAverages[char];
-                          if (stats && stats.count > 0) {
-                            totalCount += stats.count;
-                            correctCount +=
-                              stats.correct ||
-                              Math.round(stats.count * (stats.accuracy || 1));
-                          }
-                        }
-
-                        if (totalCount >= 10) {
-                          symbolsAccuracyData = {
-                            avgAccuracy: correctCount / totalCount,
-                            sampleSessions: totalCount,
-                          };
-                        }
-
-                        // Calculate speeds for all types
+                      // Use speedByType from hook if available, otherwise derive from keyAverages
+                      let typeSpeeds = {};
+                      
+                      if (speedByType && Object.keys(speedByType).length > 0) {
+                        // Use pre-computed speeds from database
+                        typeSpeeds = { ...speedByType };
+                      } else if (keyAverages && Object.keys(keyAverages).length > 0) {
+                        // Fallback: derive speeds from keyAverages
                         Object.entries(charTypeInfo).forEach(
                           ([typeName, info]) => {
                             let totalTime = 0;
@@ -8447,18 +8429,15 @@ function App() {
                             if (totalCnt >= 10) {
                               typeSpeeds[typeName] = {
                                 avgInterval: totalTime / totalCnt,
-                                count: totalCnt,
+                                sampleSessions: totalCnt,
                               };
                             }
                           }
                         );
                       }
 
-                      // Combine database accuracy types with derived symbols
+                      // accuracyByType now includes symbols from the database
                       const allAccuracyTypes = { ...accuracyByType };
-                      if (symbolsAccuracyData) {
-                        allAccuracyTypes.symbols = symbolsAccuracyData;
-                      }
 
                       const validAccuracyTypes = [
                         "letters",
@@ -8467,12 +8446,12 @@ function App() {
                         "symbols",
                         "capitals",
                         "spaces",
-                      ].filter(
-                        (t) =>
-                          allAccuracyTypes[t]?.sampleSessions >= 5 ||
-                          (t === "symbols" &&
-                            allAccuracyTypes[t]?.sampleSessions >= 10)
-                      );
+                      ].filter((t) => {
+                        const sessions = allAccuracyTypes[t]?.sampleSessions || 0;
+                        // Lower threshold for rare types like numbers/symbols
+                        const threshold = (t === "symbols" || t === "numbers") ? 1 : 3;
+                        return sessions >= threshold;
+                      });
 
                       const validSpeedTypes = [
                         "letters",
@@ -8481,7 +8460,14 @@ function App() {
                         "symbols",
                         "capitals",
                         "spaces",
-                      ].filter((t) => typeSpeeds[t]);
+                      ].filter((t) => {
+                        const data = typeSpeeds[t];
+                        if (!data) return false;
+                        // Show if we have any data with reasonable sample size
+                        const sessions = data.sampleSessions || data.count || 0;
+                        const threshold = (t === "symbols" || t === "numbers") ? 1 : 3;
+                        return sessions >= threshold;
+                      });
 
                       if (
                         validAccuracyTypes.length === 0 &&
@@ -8539,87 +8525,73 @@ function App() {
                 {keyAverages &&
                   Object.keys(keyAverages).length > 0 &&
                   (() => {
-                    // Define row configurations (offsets match real keyboard stagger)
+                    // Define row configurations for base and shifted keys
                     const rowDefs = {
                       numberRow: {
                         label: "Number Row",
-                        keys: "`1234567890-=~!@#$%^&*()_+",
-                        displayKeys: [
-                          "1",
-                          "2",
-                          "3",
-                          "4",
-                          "5",
-                          "6",
-                          "7",
-                          "8",
-                          "9",
-                          "0",
-                        ],
+                        baseKeys: "`1234567890-=",
+                        shiftedKeys: "~!@#$%^&*()_+",
+                        baseDisplay: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+                        shiftedDisplay: ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
                         offset: 0,
                       },
                       topRow: {
                         label: "Top Row",
-                        keys: "qwertyuiop[]\\QWERTYUIOP{}|",
-                        displayKeys: [
-                          "Q",
-                          "W",
-                          "E",
-                          "R",
-                          "T",
-                          "Y",
-                          "U",
-                          "I",
-                          "O",
-                          "P",
-                        ],
+                        baseKeys: "qwertyuiop[]\\",
+                        shiftedKeys: "QWERTYUIOP{}|",
+                        baseDisplay: ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                        shiftedDisplay: ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
                         offset: 0.5,
                       },
                       homeRow: {
                         label: "Home Row",
-                        keys: "asdfghjkl;'ASDFGHJKL:\"",
-                        displayKeys: [
-                          "A",
-                          "S",
-                          "D",
-                          "F",
-                          "G",
-                          "H",
-                          "J",
-                          "K",
-                          "L",
-                        ],
+                        baseKeys: "asdfghjkl;'",
+                        shiftedKeys: "ASDFGHJKL:\"",
+                        baseDisplay: ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+                        shiftedDisplay: ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
                         offset: 0.75,
                       },
                       bottomRow: {
                         label: "Bottom Row",
-                        keys: "zxcvbnm,./ZXCVBNM<>?",
-                        displayKeys: ["Z", "X", "C", "V", "B", "N", "M"],
+                        baseKeys: "zxcvbnm,./",
+                        shiftedKeys: "ZXCVBNM<>?",
+                        baseDisplay: ["z", "x", "c", "v", "b", "n", "m"],
+                        shiftedDisplay: ["Z", "X", "C", "V", "B", "N", "M"],
                         offset: 1.25,
                       },
                     };
 
                     // Calculate average speed for each row from keyAverages
-                    const rowSpeeds = {};
-                    Object.entries(rowDefs).forEach(([rowName, def]) => {
-                      let totalTime = 0;
-                      let totalCount = 0;
+                    const calculateRowSpeeds = (useShifted) => {
+                      const speeds = {};
+                      Object.entries(rowDefs).forEach(([rowName, def]) => {
+                        let totalTime = 0;
+                        let totalCount = 0;
+                        const keys = useShifted ? def.shiftedKeys : def.baseKeys;
 
-                      for (const char of def.keys) {
-                        const stats = keyAverages[char];
-                        if (stats && stats.avgInterval > 0 && stats.count > 0) {
-                          totalTime += stats.avgInterval * stats.count;
-                          totalCount += stats.count;
+                        for (const char of keys) {
+                          const stats = keyAverages[char];
+                          if (stats && stats.avgInterval > 0 && stats.count > 0) {
+                            totalTime += stats.avgInterval * stats.count;
+                            totalCount += stats.count;
+                          }
                         }
-                      }
 
-                      if (totalCount >= 10) {
-                        rowSpeeds[rowName] = {
-                          avgIntervalMs: totalTime / totalCount,
-                          count: totalCount,
-                        };
-                      }
-                    });
+                        if (totalCount >= 5) {
+                          speeds[rowName] = {
+                            avgIntervalMs: totalTime / totalCount,
+                            count: totalCount,
+                          };
+                        }
+                      });
+                      return speeds;
+                    };
+
+                    const baseSpeeds = calculateRowSpeeds(false);
+                    const shiftedSpeeds = calculateRowSpeeds(true);
+                    
+                    const rowSpeeds = rowSpeedShiftMode ? shiftedSpeeds : baseSpeeds;
+                    const hasShiftedData = Object.keys(shiftedSpeeds).length > 0;
 
                     const validRows = [
                       "numberRow",
@@ -8628,14 +8600,14 @@ function App() {
                       "bottomRow",
                     ].filter((r) => rowSpeeds[r]);
 
-                    if (validRows.length === 0) return null;
+                    if (validRows.length === 0 && !hasShiftedData) return null;
 
                     // Get min/max for color scaling
                     const allTimes = validRows.map(
                       (r) => rowSpeeds[r].avgIntervalMs
                     );
-                    const minTime = Math.min(...allTimes);
-                    const maxTime = Math.max(...allTimes);
+                    const minTime = allTimes.length > 0 ? Math.min(...allTimes) : 100;
+                    const maxTime = allTimes.length > 0 ? Math.max(...allTimes) : 200;
 
                     const getRowColor = (time) => {
                       if (maxTime === minTime) return "var(--accent)";
@@ -8651,20 +8623,39 @@ function App() {
                       <div className="row-performance-section">
                         <div className="section-header-row">
                           <h3>Keyboard Row Speed</h3>
-                          <Tooltip content={TIPS.rowSpeed}>
-                            <button
-                              className="help-btn"
-                              type="button"
-                              aria-label="Help"
-                            >
-                              ?
-                            </button>
-                          </Tooltip>
+                          <div className="header-controls">
+                            {hasShiftedData && (
+                              <div className="mini-toggle-group">
+                                <button
+                                  className={`mini-toggle ${!rowSpeedShiftMode ? "active" : ""}`}
+                                  onClick={() => setRowSpeedShiftMode(false)}
+                                >
+                                  Base
+                                </button>
+                                <button
+                                  className={`mini-toggle ${rowSpeedShiftMode ? "active" : ""}`}
+                                  onClick={() => setRowSpeedShiftMode(true)}
+                                >
+                                  ⇧ Shift
+                                </button>
+                              </div>
+                            )}
+                            <Tooltip content={TIPS.rowSpeed}>
+                              <button
+                                className="help-btn"
+                                type="button"
+                                aria-label="Help"
+                              >
+                                ?
+                              </button>
+                            </Tooltip>
+                          </div>
                         </div>
                         <div className="keyboard-rows-visual">
-                          {validRows.map((rowName) => {
+                          {validRows.length > 0 ? validRows.map((rowName) => {
                             const data = rowSpeeds[rowName];
                             const def = rowDefs[rowName];
+                            const displayKeys = rowSpeedShiftMode ? def.shiftedDisplay : def.baseDisplay;
 
                             return (
                               <div key={rowName} className="keyboard-row-item">
@@ -8677,7 +8668,7 @@ function App() {
                                     paddingLeft: `${def.offset * 1.2}rem`,
                                   }}
                                 >
-                                  {def.displayKeys.map((key) => (
+                                  {displayKeys.map((key) => (
                                     <span
                                       key={key}
                                       className="keyboard-row-key"
@@ -8701,7 +8692,11 @@ function App() {
                                 </span>
                               </div>
                             );
-                          })}
+                          }) : (
+                            <div className="no-data-message" style={{ padding: '1rem', opacity: 0.6, textAlign: 'center' }}>
+                              No {rowSpeedShiftMode ? 'shifted' : 'base'} key data yet
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
