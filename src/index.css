@@ -1475,6 +1475,15 @@ footer {
   background: rgba(232, 92, 92, 0.1);
 }
 
+.race-lock-indicator {
+  font-size: 0.75rem;
+  color: var(--accent);
+  padding: 0.5rem 1rem;
+  border: 1px dashed var(--accent);
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
 /* Hold to clear button */
 .hold-btn {
   position: relative;
@@ -3440,6 +3449,109 @@ footer {
 }
 
 /* History Browser */
+/* Combined History Browser */
+.combined-history-browser {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.history-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--text-dim);
+}
+
+.history-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.history-tab:hover {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+
+.history-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.history-tab svg {
+  opacity: 0.7;
+}
+
+.history-tab.active svg {
+  opacity: 1;
+}
+
+.tab-count {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  background: var(--text-dim);
+  border-radius: 8px;
+  color: var(--bg);
+}
+
+.history-tab.active .tab-count {
+  background: var(--accent);
+}
+
+.history-empty {
+  padding: 2rem;
+  text-align: center;
+}
+
+.history-empty p {
+  color: var(--text-muted);
+  margin: 0.25rem 0;
+}
+
+.history-empty .hint {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.history-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--bg);
+}
+
+.list-count {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.clear-btn {
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+
+.clear-btn:hover {
+  color: var(--error);
+}
+
+/* Legacy history-browser styles for backward compat */
 .history-browser {
   background: var(--bg-secondary);
   border-radius: 8px;
@@ -3646,6 +3758,28 @@ footer {
 .detail-date {
   font-size: 0.75rem;
   color: var(--text-dim);
+}
+
+.practice-again-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--bg);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.practice-again-btn:hover {
+  opacity: 0.85;
+}
+
+.history-detail-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .history-paragraph-section {
@@ -3858,4 +3992,215 @@ footer {
 .share-race-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* Race Detail View - Enhanced */
+.race-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(145, 200, 145, 0.08) 100%);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.race-detail-hero .hero-position {
+  display: flex;
+  align-items: baseline;
+}
+
+.race-detail-hero .position-num {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  line-height: 1;
+}
+
+.race-detail-hero .position-suffix {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-left: 0.1rem;
+}
+
+.race-detail-hero .hero-stats {
+  display: flex;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.race-detail-hero .hero-stat {
+  text-align: center;
+}
+
+.race-detail-hero .hero-stat .stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+}
+
+.race-detail-hero .hero-stat .stat-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+/* Race results list - detailed version */
+.race-results-list.detailed {
+  gap: 0;
+}
+
+.race-result-item {
+  border-bottom: 1px solid var(--bg);
+}
+
+.race-result-item:last-child {
+  border-bottom: none;
+}
+
+.race-result-row.clickable {
+  cursor: pointer;
+}
+
+.race-result-row.clickable:hover {
+  background: var(--bg-tertiary);
+}
+
+.race-result-item.you .race-result-row {
+  background: rgba(145, 200, 145, 0.1);
+  border-left: 3px solid var(--accent);
+}
+
+.race-results-list.detailed .race-result-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.race-results-list.detailed .result-pos {
+  width: 1.5rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.race-results-list.detailed .result-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.race-results-list.detailed .result-name {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+
+.race-result-item.you .result-name {
+  color: var(--accent);
+}
+
+.result-bar {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.result-bar-fill {
+  height: 100%;
+  background: var(--text-dim);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.race-result-item.you .result-bar-fill {
+  background: var(--accent);
+}
+
+.race-result-item:first-child .result-bar-fill {
+  background: var(--accent);
+}
+
+.race-results-list.detailed .result-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.race-results-list.detailed .result-wpm {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 2.5rem;
+}
+
+.race-results-list.detailed .result-acc {
+  color: var(--text-muted);
+  min-width: 2.5rem;
+}
+
+.race-results-list.detailed .result-time {
+  color: var(--text-dim);
+  min-width: 3rem;
+}
+
+.expand-icon {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  width: 1rem;
+  text-align: center;
+}
+
+.racer-word-speeds {
+  padding: 0.75rem;
+  background: var(--bg);
+  border-top: 1px solid var(--bg-secondary);
+}
+
+/* Race detail stats grid */
+.history-stats-grid.race-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.race-detail-actions {
+  margin-top: 1.5rem;
+}
+
+.race-detail-actions .share-race-btn {
+  margin-top: 0;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .race-detail-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+  }
+  
+  .race-detail-hero .hero-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .race-detail-hero .hero-stat .stat-value {
+    font-size: 1.1rem;
+  }
+  
+  .history-stats-grid.race-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .race-results-list.detailed .result-time {
+    display: none;
+  }
 }

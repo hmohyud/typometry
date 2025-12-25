@@ -206,25 +206,33 @@ export function useRace() {
             r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
           );
           
-          // If host, update raceData and check if all finished
+          // If host, update raceData
           if (isHostRef.current && raceDataRef.current) {
             raceDataRef.current.racers = raceDataRef.current.racers.map(r =>
               r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
             );
+          }
+          
+          // Calculate progressive stats with whoever has finished so far
+          const finishedRacers = updatedRacers.filter(r => r.finished);
+          const allFinished = updatedRacers.every(r => r.finished);
+          
+          if (finishedRacers.length > 0) {
+            const results = [...finishedRacers]
+              .sort((a, b) => b.wpm - a.wpm)
+              .map((r, i) => ({ ...r, position: i + 1 }));
             
-            // Check if all finished
-            const allFinished = updatedRacers.every(r => r.finished);
-            if (allFinished) {
-              const results = [...updatedRacers]
-                .sort((a, b) => b.wpm - a.wpm)
-                .map((r, i) => ({ ...r, position: i + 1 }));
+            // Calculate progressive race stats
+            const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+            raceStats.racerCount = updatedRacers.length;
+            raceStats.finishedCount = finishedRacers.length;
+            raceStats.isComplete = allFinished;
 
-              // Broadcast results (use setTimeout to avoid state update conflicts)
+            // If all finished and we're host, broadcast final results
+            if (allFinished && isHostRef.current) {
               setTimeout(() => {
                 broadcast('race_finished', { results });
               }, 50);
-
-              const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
 
               return {
                 ...prev,
@@ -234,6 +242,13 @@ export function useRace() {
                 raceStats,
               };
             }
+
+            return { 
+              ...prev, 
+              racers: updatedRacers,
+              results, // Update results progressively
+              raceStats, // Update stats progressively
+            };
           }
           
           return { ...prev, racers: updatedRacers };
@@ -741,16 +756,22 @@ export function useRace() {
         );
       }
 
-      // Check if all finished (host will broadcast results)
+      // Calculate stats immediately with whoever has finished
+      const finishedRacers = updatedRacers.filter(r => r.finished);
       const allFinished = updatedRacers.every(r => r.finished);
+      
+      const results = [...finishedRacers]
+        .sort((a, b) => b.wpm - a.wpm)
+        .map((r, i) => ({ ...r, position: i + 1 }));
+
+      const raceStats = calculateRaceStats(results, myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+      raceStats.racerCount = updatedRacers.length;
+      raceStats.finishedCount = finishedRacers.length;
+      raceStats.isComplete = allFinished;
+
+      // If all finished and we're host, broadcast final results
       if (allFinished && isHostRef.current) {
-        const results = [...updatedRacers]
-          .sort((a, b) => b.wpm - a.wpm)
-          .map((r, i) => ({ ...r, position: i + 1 }));
-
         broadcast('race_finished', { results });
-
-        const raceStats = calculateRaceStats(results, myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
 
         return {
           ...prev,
@@ -762,7 +783,13 @@ export function useRace() {
         };
       }
 
-      return { ...prev, racers: updatedRacers, myFinished: true };
+      return { 
+        ...prev, 
+        racers: updatedRacers, 
+        myFinished: true,
+        results,
+        raceStats, // Show stats immediately
+      };
     });
   }, [broadcast, calculateRaceStats]);
 

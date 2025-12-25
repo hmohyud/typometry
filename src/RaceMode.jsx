@@ -311,7 +311,10 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, 
             <span className="result-place">
               {index === 0 ? '1st' : index === 1 ? '2nd' : index === 2 ? '3rd' : `${index + 1}th`}
             </span>
-            <span className="result-name">{racer.name}</span>
+            <span className="result-name">
+              {racer.name}
+              {racer.id === myId && <span className="you-tag">you</span>}
+            </span>
             <span className="result-wpm">{Math.round(racer.wpm)}</span>
             <span className="result-accuracy">{Math.round(racer.accuracy)}%</span>
             <span className="result-time">{formatTime(racer.time)}</span>
@@ -417,7 +420,10 @@ function WordSpeedMap({ results, paragraph, myId }) {
             key={racer.id} 
             className={`speed-map-row ${racer.id === myId ? 'you' : ''}`}
           >
-            <span className="speed-map-label">{racer.name}</span>
+            <span className="speed-map-label">
+              {racer.name}
+              {racer.id === myId && <span className="you-tag">you</span>}
+            </span>
             <div className="speed-map-words">
               {words.map((word, i) => (
                 <span 
@@ -476,6 +482,8 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
     fastestTime,
     slowestTime,
     racerCount,
+    finishedCount,
+    isComplete,
     myWpmVsAvg,
     paragraph,
   } = raceStats;
@@ -493,18 +501,26 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
   const runnerUp = allResults[1];
   const marginOfVictory = runnerUp ? winner.wpm - runnerUp.wpm : 0;
   const marginTime = runnerUp ? runnerUp.time - winner.time : 0;
-  const myPercentile = myResult ? Math.round((1 - (myResult.position - 1) / racerCount) * 100) : 0;
+  const myPercentile = myResult ? Math.round((1 - (myResult.position - 1) / (finishedCount || racerCount)) * 100) : 0;
   const wpmPerChar = myResult ? (myResult.wpm / 60 * 5) : 0; // chars per second approximation
   
   // Head to head (for 2 player races)
   const isHeadToHead = racerCount === 2;
   const opponent = isHeadToHead ? allResults.find(r => r.id !== myResult?.id) : null;
+  
+  // Waiting for others indicator
+  const stillWaiting = finishedCount && racerCount && finishedCount < racerCount;
 
   return (
     <div className="pvp-stats">
       {/* Header */}
       <div className="pvp-header">
-        {shareUrl && (
+        {stillWaiting && (
+          <span className="waiting-indicator">
+            waiting for {racerCount - finishedCount} more...
+          </span>
+        )}
+        {shareUrl && !stillWaiting && (
           <button className="pvp-share" onClick={handleShare}>
             {copied ? 'copied!' : 'share'}
           </button>
@@ -520,6 +536,7 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
             <span className="position-suffix">
               {myResult.position === 1 ? 'st' : myResult.position === 2 ? 'nd' : myResult.position === 3 ? 'rd' : 'th'}
             </span>
+            {stillWaiting && <span className="provisional">(provisional)</span>}
           </div>
           <div className="pvp-main-stats">
             <div className="main-stat">
@@ -663,7 +680,10 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
             >
               <span className="standing-pos">{index + 1}</span>
               <div className="standing-info">
-                <span className="standing-name">{racer.name}</span>
+                <span className="standing-name">
+                  {racer.name}
+                  {racer.id === myResult?.id && <span className="you-tag">you</span>}
+                </span>
                 <div className="standing-bar">
                   <div className="standing-fill" style={{ width: `${barWidth}%` }} />
                 </div>

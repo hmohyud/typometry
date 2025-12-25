@@ -1213,16 +1213,19 @@ const SentenceFlow = ({ wordSpeeds, avgWpm, showTooltips = true }) => {
 };
 
 // History Browser - clickable list of past sessions
-const HistoryBrowser = ({ history, paragraphs, onSelect, selectedId, onClose }) => {
-  if (!history || history.length === 0) {
-    return (
-      <div className="history-browser empty">
-        <p>no history yet</p>
-        <p className="hint">complete a paragraph to see it here</p>
-      </div>
-    );
-  }
-
+const CombinedHistoryBrowser = ({ 
+  history, 
+  raceHistory, 
+  paragraphs, 
+  onSelectSession, 
+  onSelectRace, 
+  selectedSessionId, 
+  selectedRaceId,
+  onClearSessions,
+  onClearRaces,
+}) => {
+  const [tab, setTab] = useState('sessions'); // 'sessions' | 'races'
+  
   const formatDate = (ts) => {
     const date = new Date(ts);
     const now = new Date();
@@ -1240,65 +1243,9 @@ const HistoryBrowser = ({ history, paragraphs, onSelect, selectedId, onClose }) 
   };
 
   const getPreview = (entry) => {
-    const para = paragraphs[entry.paragraphIndex];
+    const para = entry.paragraph || paragraphs[entry.paragraphIndex];
     if (!para) return '...';
     return para.substring(0, 50) + (para.length > 50 ? '...' : '');
-  };
-
-  return (
-    <div className="history-browser">
-      <div className="history-browser-header">
-        <h3>session history</h3>
-        <button className="close-btn" onClick={onClose}>×</button>
-      </div>
-      <div className="history-list">
-        {history.slice().reverse().map((entry, i) => (
-          <div 
-            key={entry.timestamp} 
-            className={`history-item ${selectedId === entry.timestamp ? 'selected' : ''}`}
-            onClick={() => onSelect(entry)}
-          >
-            <div className="history-item-main">
-              <span className="history-preview">{getPreview(entry)}</span>
-              <span className="history-date">{formatDate(entry.timestamp)}</span>
-            </div>
-            <div className="history-item-stats">
-              <span className="history-wpm">{Math.round(entry.wpm)} wpm</span>
-              <span className="history-acc">{Math.round(entry.accuracy)}%</span>
-              <span className="history-time">{(entry.totalTime / 1000).toFixed(1)}s</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Race History Browser - clickable list of past races
-const RaceHistoryBrowser = ({ races, onSelect, selectedId, onClose, onClearAll }) => {
-  if (!races || races.length === 0) {
-    return (
-      <div className="history-browser empty">
-        <p>no race history yet</p>
-        <p className="hint">complete a race to see it here</p>
-      </div>
-    );
-  }
-
-  const formatDate = (ts) => {
-    const date = new Date(ts);
-    const now = new Date();
-    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays === 1) {
-      return 'yesterday';
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString(undefined, { weekday: 'short' });
-    } else {
-      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    }
   };
 
   const getPositionSuffix = (pos) => {
@@ -1308,53 +1255,160 @@ const RaceHistoryBrowser = ({ races, onSelect, selectedId, onClose, onClearAll }
     return 'th';
   };
 
+  const sessionCount = history?.length || 0;
+  const raceCount = raceHistory?.length || 0;
+
   return (
-    <div className="history-browser race-history">
-      <div className="history-browser-header">
-        <h3>race history</h3>
-        <div className="header-actions">
-          {onClearAll && (
-            <button className="clear-all-btn" onClick={onClearAll}>clear all</button>
-          )}
-          <button className="close-btn" onClick={onClose}>×</button>
-        </div>
+    <div className="combined-history-browser">
+      {/* Tab Header */}
+      <div className="history-tabs">
+        <button 
+          className={`history-tab ${tab === 'sessions' ? 'active' : ''}`}
+          onClick={() => setTab('sessions')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          Sessions {sessionCount > 0 && <span className="tab-count">{sessionCount}</span>}
+        </button>
+        <button 
+          className={`history-tab ${tab === 'races' ? 'active' : ''}`}
+          onClick={() => setTab('races')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+            <line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
+          Races {raceCount > 0 && <span className="tab-count">{raceCount}</span>}
+        </button>
       </div>
-      <div className="history-list">
-        {races.map((race) => (
-          <div 
-            key={race.raceId} 
-            className={`history-item race-item ${selectedId === race.raceId ? 'selected' : ''}`}
-            onClick={() => onSelect(race)}
-          >
-            <div className="history-item-main">
-              <div className="race-position">
-                {race.myResult && (
-                  <span className={`position-badge p${race.myResult.position}`}>
-                    {race.myResult.position}{getPositionSuffix(race.myResult.position)}
-                  </span>
+
+      {/* Sessions Tab */}
+      {tab === 'sessions' && (
+        <>
+          {sessionCount === 0 ? (
+            <div className="history-empty">
+              <p>no sessions yet</p>
+              <p className="hint">complete a paragraph to see it here</p>
+            </div>
+          ) : (
+            <>
+              <div className="history-list-header">
+                <span className="list-count">{sessionCount} session{sessionCount !== 1 ? 's' : ''}</span>
+                {onClearSessions && (
+                  <button className="clear-btn" onClick={onClearSessions}>clear all</button>
                 )}
-                <span className="race-opponents">vs {race.racerCount - 1} other{race.racerCount > 2 ? 's' : ''}</span>
               </div>
-              <span className="history-date">{formatDate(race.timestamp)}</span>
+              <div className="history-list">
+                {history.slice().reverse().map((entry) => (
+                  <div 
+                    key={entry.timestamp} 
+                    className={`history-item ${selectedSessionId === entry.timestamp ? 'selected' : ''}`}
+                    onClick={() => onSelectSession(entry)}
+                  >
+                    <div className="history-item-main">
+                      <span className="history-preview">{getPreview(entry)}</span>
+                      <span className="history-date">{formatDate(entry.timestamp)}</span>
+                    </div>
+                    <div className="history-item-stats">
+                      <span className="history-wpm">{Math.round(entry.wpm)} wpm</span>
+                      <span className="history-acc">{Math.round(entry.accuracy)}%</span>
+                      <span className="history-time">{(entry.totalTime / 1000).toFixed(1)}s</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Races Tab */}
+      {tab === 'races' && (
+        <>
+          {raceCount === 0 ? (
+            <div className="history-empty">
+              <p>no races yet</p>
+              <p className="hint">complete a race to see it here</p>
             </div>
-            <div className="history-item-stats">
-              {race.myResult && (
-                <>
-                  <span className="history-wpm">{Math.round(race.myResult.wpm)} wpm</span>
-                  <span className="history-acc">{Math.round(race.myResult.accuracy)}%</span>
-                </>
-              )}
-              <span className="race-avg">avg: {Math.round(race.avgWpm)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ) : (
+            <>
+              <div className="history-list-header">
+                <span className="list-count">{raceCount} race{raceCount !== 1 ? 's' : ''}</span>
+                {onClearRaces && (
+                  <button className="clear-btn" onClick={onClearRaces}>clear all</button>
+                )}
+              </div>
+              <div className="history-list">
+                {raceHistory.map((race) => (
+                  <div 
+                    key={race.raceId} 
+                    className={`history-item race-item ${selectedRaceId === race.raceId ? 'selected' : ''}`}
+                    onClick={() => onSelectRace(race)}
+                  >
+                    <div className="history-item-main">
+                      <div className="race-position">
+                        {race.myResult && (
+                          <span className={`position-badge p${race.myResult.position}`}>
+                            {race.myResult.position}{getPositionSuffix(race.myResult.position)}
+                          </span>
+                        )}
+                        <span className="race-opponents">vs {race.racerCount - 1} other{race.racerCount > 2 ? 's' : ''}</span>
+                      </div>
+                      <span className="history-date">{formatDate(race.timestamp)}</span>
+                    </div>
+                    <div className="history-item-stats">
+                      {race.myResult && (
+                        <>
+                          <span className="history-wpm">{Math.round(race.myResult.wpm)} wpm</span>
+                          <span className="history-acc">{Math.round(race.myResult.accuracy)}%</span>
+                        </>
+                      )}
+                      <span className="race-avg">avg: {Math.round(race.avgWpm)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 };
 
+// Keep these for backward compatibility but mark as deprecated
+const HistoryBrowser = ({ history, paragraphs, onSelect, selectedId, onClose, onClearAll }) => {
+  return (
+    <CombinedHistoryBrowser 
+      history={history}
+      raceHistory={[]}
+      paragraphs={paragraphs}
+      onSelectSession={onSelect}
+      onSelectRace={() => {}}
+      selectedSessionId={selectedId}
+    />
+  );
+};
+
+const RaceHistoryBrowser = ({ races, onSelect, selectedId, onClose, onClearAll }) => {
+  return (
+    <CombinedHistoryBrowser 
+      history={[]}
+      raceHistory={races}
+      paragraphs={[]}
+      onSelectSession={() => {}}
+      onSelectRace={onSelect}
+      selectedRaceId={selectedId}
+    />
+  );
+};
+
 // History Detail View - shows full stats for a past session
-const HistoryDetailView = ({ entry, paragraph, onBack, fmt }) => {
+const HistoryDetailView = ({ entry, paragraph, onBack, onPracticeAgain, fmt }) => {
   if (!entry) return null;
 
   const formatTime = (ms) => {
@@ -1369,9 +1423,16 @@ const HistoryDetailView = ({ entry, paragraph, onBack, fmt }) => {
     <div className="history-detail">
       <div className="history-detail-header">
         <button className="back-btn" onClick={onBack}>← back</button>
-        <span className="detail-date">
-          {new Date(entry.timestamp).toLocaleString()}
-        </span>
+        <div className="header-actions">
+          {onPracticeAgain && (
+            <button className="practice-again-btn" onClick={() => onPracticeAgain(entry)}>
+              practice again
+            </button>
+          )}
+          <span className="detail-date">
+            {new Date(entry.timestamp).toLocaleString()}
+          </span>
+        </div>
       </div>
 
       {/* Paragraph with sentence flow */}
@@ -1444,6 +1505,237 @@ const HistoryDetailView = ({ entry, paragraph, onBack, fmt }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Race Detail View - shows full stats for a past race
+const RaceDetailView = ({ race, onBack, fmt }) => {
+  const [copiedShare, setCopiedShare] = useState(false);
+  const [expandedRacer, setExpandedRacer] = useState(null);
+  
+  if (!race) return null;
+
+  const formatTime = (ms) => {
+    const seconds = ms / 1000;
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = (seconds % 60).toFixed(1);
+    return `${mins}m ${secs}s`;
+  };
+  
+  const handleCopyShare = () => {
+    if (race.shareUrl) {
+      navigator.clipboard.writeText(race.shareUrl);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
+    }
+  };
+  
+  // Create word speed data for sentence flow from paragraph and racer's wordSpeeds
+  const createWordSpeedsData = (racer) => {
+    if (!racer.wordSpeeds || racer.wordSpeeds.length === 0 || !race.paragraph) return null;
+    
+    const words = race.paragraph.split(/\s+/).filter(w => w.length > 0);
+    return words.map((word, i) => ({
+      word,
+      wpm: racer.wordSpeeds[i] || 0,
+      time: 0,
+      errors: 0,
+    }));
+  };
+
+  return (
+    <div className="race-history-detail">
+      <div className="history-detail-header">
+        <button className="back-btn" onClick={onBack}>← back</button>
+        <span className="detail-date">
+          {new Date(race.timestamp).toLocaleString()}
+        </span>
+      </div>
+      
+      {/* Your Result Hero */}
+      {race.myResult && (
+        <div className="race-detail-hero">
+          <div className="hero-position">
+            <span className="position-num">{race.myResult.position}</span>
+            <span className="position-suffix">
+              {race.myResult.position === 1 ? 'st' : race.myResult.position === 2 ? 'nd' : race.myResult.position === 3 ? 'rd' : 'th'}
+            </span>
+          </div>
+          <div className="hero-stats">
+            <div className="hero-stat">
+              <span className="stat-value">{fmt.int(race.myResult.wpm)}</span>
+              <span className="stat-label">wpm</span>
+            </div>
+            <div className="hero-stat">
+              <span className="stat-value">{fmt.dec(race.myResult.accuracy, 1)}%</span>
+              <span className="stat-label">accuracy</span>
+            </div>
+            <div className="hero-stat">
+              <span className="stat-value">{formatTime(race.myResult.time)}</span>
+              <span className="stat-label">time</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Paragraph with flow visualization */}
+      <div className="history-paragraph-section">
+        <h4>paragraph</h4>
+        {race.myResult?.wordSpeeds && race.myResult.wordSpeeds.length > 0 ? (
+          <SentenceFlow 
+            wordSpeeds={createWordSpeedsData(race.myResult)} 
+            avgWpm={race.myResult.wpm} 
+          />
+        ) : (
+          <div className="history-paragraph-text">{race.paragraph}</div>
+        )}
+      </div>
+      
+      {/* All Results with expandable word speeds */}
+      <div className="race-results-section">
+        <h4>standings</h4>
+        <div className="race-results-list detailed">
+          {race.allResults?.map((racer, i) => {
+            const isYou = racer.id === race.myResult?.id;
+            const isExpanded = expandedRacer === racer.id;
+            const hasWordSpeeds = racer.wordSpeeds && racer.wordSpeeds.length > 0;
+            const barWidth = race.wpmSpread > 0 
+              ? ((racer.wpm - race.slowestWpm) / race.wpmSpread) * 100 
+              : 100;
+            
+            return (
+              <div key={racer.id} className={`race-result-item ${isYou ? 'you' : ''}`}>
+                <div 
+                  className={`race-result-row ${hasWordSpeeds ? 'clickable' : ''}`}
+                  onClick={() => hasWordSpeeds && setExpandedRacer(isExpanded ? null : racer.id)}
+                >
+                  <span className="result-pos">{i + 1}</span>
+                  <div className="result-info">
+                    <span className="result-name">{racer.name}{isYou && ' (you)'}</span>
+                    <div className="result-bar">
+                      <div className="result-bar-fill" style={{ width: `${barWidth}%` }} />
+                    </div>
+                  </div>
+                  <div className="result-stats">
+                    <span className="result-wpm">{Math.round(racer.wpm)}</span>
+                    <span className="result-acc">{Math.round(racer.accuracy)}%</span>
+                    <span className="result-time">{formatTime(racer.time)}</span>
+                  </div>
+                  {hasWordSpeeds && (
+                    <span className="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                  )}
+                </div>
+                {isExpanded && hasWordSpeeds && (
+                  <div className="racer-word-speeds">
+                    <SentenceFlow 
+                      wordSpeeds={createWordSpeedsData(racer)} 
+                      avgWpm={racer.wpm}
+                      showTooltips={true}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      
+      {/* Competition Stats */}
+      <div className="history-stats-grid race-stats">
+        <div className="history-stat">
+          <span className="stat-value">{fmt.dec(race.avgWpm, 0)}</span>
+          <span className="stat-label">avg wpm</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{fmt.int(race.wpmSpread)}</span>
+          <span className="stat-label">spread</span>
+        </div>
+        {race.wpmStdDev !== undefined && (
+          <div className="history-stat">
+            <span className="stat-value">{fmt.dec(race.wpmStdDev, 1)}</span>
+            <span className="stat-label">σ</span>
+          </div>
+        )}
+        {race.marginWpm > 0 && (
+          <div className="history-stat">
+            <span className="stat-value">{fmt.dec(race.marginWpm, 1)}</span>
+            <span className="stat-label">margin</span>
+          </div>
+        )}
+        {race.marginTime > 0 && (
+          <div className="history-stat">
+            <span className="stat-value">{(race.marginTime / 1000).toFixed(1)}s</span>
+            <span className="stat-label">time gap</span>
+          </div>
+        )}
+        <div className="history-stat">
+          <span className="stat-value">{race.racerCount}</span>
+          <span className="stat-label">racers</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{race.charCount || race.paragraph?.length || 0}</span>
+          <span className="stat-label">chars</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{race.wordCount || Math.round((race.paragraph?.length || 0) / 5)}</span>
+          <span className="stat-label">words</span>
+        </div>
+      </div>
+      
+      {/* Accuracy Stats */}
+      {race.avgAccuracy && (
+        <div className="history-stats-grid">
+          <div className="history-stat">
+            <span className="stat-value">{fmt.dec(race.avgAccuracy, 1)}%</span>
+            <span className="stat-label">avg accuracy</span>
+          </div>
+          {race.bestAccuracy && (
+            <div className="history-stat">
+              <span className="stat-value">{fmt.dec(race.bestAccuracy, 1)}%</span>
+              <span className="stat-label">best</span>
+            </div>
+          )}
+          {race.worstAccuracy && (
+            <div className="history-stat">
+              <span className="stat-value">{fmt.dec(race.worstAccuracy, 1)}%</span>
+              <span className="stat-label">worst</span>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Time Stats */}
+      {race.avgTime && (
+        <div className="history-stats-grid">
+          <div className="history-stat">
+            <span className="stat-value">{formatTime(race.avgTime)}</span>
+            <span className="stat-label">avg time</span>
+          </div>
+          {race.fastestTime && (
+            <div className="history-stat">
+              <span className="stat-value">{formatTime(race.fastestTime)}</span>
+              <span className="stat-label">fastest</span>
+            </div>
+          )}
+          {race.slowestTime && (
+            <div className="history-stat">
+              <span className="stat-value">{formatTime(race.slowestTime)}</span>
+              <span className="stat-label">slowest</span>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Actions */}
+      <div className="race-detail-actions">
+        {race.shareUrl && (
+          <button className="share-race-btn" onClick={handleCopyShare}>
+            {copiedShare ? 'copied!' : 'copy share link'}
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -3226,6 +3518,11 @@ function App() {
 
   const resetTest = useCallback(
     (forceNew = false) => {
+      // Don't reset during any active race state
+      if (isInRace) {
+        return;
+      }
+      
       let indices = completedIndices;
       if (forceNew) {
         indices = [];
@@ -3257,7 +3554,7 @@ function App() {
       startTime.current = null;
       containerRef.current?.focus();
     },
-    [completedIndices]
+    [completedIndices, isInRace, raceState.status]
   );
 
   // Load cumulative stats on mount
@@ -3315,6 +3612,14 @@ function App() {
       const alreadySaved = existingHistory.some(r => r.raceId === raceState.raceStats.raceId);
       if (alreadySaved) return;
       
+      // Compute derived stats
+      const allWpms = raceState.raceStats.allResults.map(r => r.wpm);
+      const allAccuracies = raceState.raceStats.allResults.map(r => r.accuracy);
+      const allTimes = raceState.raceStats.allResults.map(r => r.time);
+      const wpmStdDev = allWpms.length > 1 
+        ? Math.sqrt(allWpms.reduce((sum, w) => sum + Math.pow(w - raceState.raceStats.avgWpm, 2), 0) / allWpms.length)
+        : 0;
+      
       const raceEntry = {
         raceId: raceState.raceStats.raceId || `race_${Date.now()}`,
         timestamp: Date.now(),
@@ -3323,9 +3628,31 @@ function App() {
         racerCount: raceState.raceStats.racerCount,
         myResult: raceState.raceStats.myResult,
         allResults: raceState.raceStats.allResults,
+        // Averages
         avgWpm: raceState.raceStats.avgWpm,
-        avgAccuracy: raceState.raceStats.avgAccuracy,
+        avgAccuracy: raceState.raceStats.avgAccuracy || allAccuracies.reduce((a, b) => a + b, 0) / allAccuracies.length,
+        avgTime: raceState.raceStats.avgTime || allTimes.reduce((a, b) => a + b, 0) / allTimes.length,
+        // Spreads
         wpmSpread: raceState.raceStats.wpmSpread,
+        wpmStdDev,
+        // Extremes
+        fastestWpm: Math.max(...allWpms),
+        slowestWpm: Math.min(...allWpms),
+        bestAccuracy: Math.max(...allAccuracies),
+        worstAccuracy: Math.min(...allAccuracies),
+        fastestTime: Math.min(...allTimes),
+        slowestTime: Math.max(...allTimes),
+        // Competition
+        marginWpm: raceState.raceStats.allResults.length > 1 
+          ? raceState.raceStats.allResults[0].wpm - raceState.raceStats.allResults[1].wpm 
+          : 0,
+        marginTime: raceState.raceStats.allResults.length > 1 
+          ? raceState.raceStats.allResults[1].time - raceState.raceStats.allResults[0].time 
+          : 0,
+        // Character stats
+        charCount: raceState.raceStats.paragraph?.length || 0,
+        wordCount: Math.round((raceState.raceStats.paragraph?.length || 0) / 5),
+        // Share URL
         shareUrl: generateShareUrl(),
       };
       
@@ -4566,8 +4893,8 @@ function App() {
       }
 
       if (isComplete) {
-        // Shift+Enter to restart
-        if (e.key === "Enter" && e.shiftKey) {
+        // Shift+Enter to restart - but not during a race
+        if (e.key === "Enter" && e.shiftKey && !isInRace) {
           e.preventDefault();
           resetTest();
         }
@@ -4743,6 +5070,7 @@ function App() {
         const historyEntry = {
           timestamp: Date.now(),
           paragraphIndex: currentIndex,
+          paragraph: currentText, // Store the actual paragraph text
           charCount: finalStats.charCount,
           errorCount: finalStats.errorCount,
           totalTime,
@@ -5352,33 +5680,21 @@ function App() {
                           }`}
                           onClick={() => setStatsView("race")}
                         >
-                          race
+                          Race
                         </button>
                       )}
                       <button
                         className={`toggle-btn ${
-                          statsView === "history" ? "active" : ""
+                          statsView === "history" || statsView === "race-history" ? "active" : ""
                         }`}
                         onClick={() => {
                           setStatsView("history");
                           setSelectedHistoryEntry(null);
+                          setSelectedRaceEntry(null);
                         }}
                       >
-                        📋
+                        History
                       </button>
-                      {raceHistory.length > 0 && (
-                        <button
-                          className={`toggle-btn ${
-                            statsView === "race-history" ? "active" : ""
-                          }`}
-                          onClick={() => {
-                            setStatsView("race-history");
-                            setSelectedRaceEntry(null);
-                          }}
-                        >
-                          🏁
-                        </button>
-                      )}
                     </div>
                     <div className="stats-header-right">
                       {(hasGlobalStats || hasAllTimeStats) && (
@@ -9543,97 +9859,53 @@ function App() {
                 fmt={fmt}
                 shareUrl={generateShareUrl()}
               />
-            ) : statsView === "history" ? (
-              /* Session history view */
+            ) : statsView === "history" || statsView === "race-history" ? (
+              /* Combined history view */
               selectedHistoryEntry ? (
                 <HistoryDetailView
                   entry={selectedHistoryEntry}
-                  paragraph={ALL_PARAGRAPHS[selectedHistoryEntry.paragraphIndex]}
+                  paragraph={selectedHistoryEntry.paragraph || ALL_PARAGRAPHS[selectedHistoryEntry.paragraphIndex]}
                   onBack={() => setSelectedHistoryEntry(null)}
+                  onPracticeAgain={(entry) => {
+                    const para = entry.paragraph || ALL_PARAGRAPHS[entry.paragraphIndex];
+                    if (para) {
+                      setCurrentText(para);
+                      setCurrentIndex(entry.paragraphIndex);
+                      setTyped('');
+                      setIsComplete(false);
+                      setIsActive(false);
+                      setStats(null);
+                      setKeystrokeData([]);
+                      setRawKeyEvents([]);
+                      startTime.current = null;
+                      lastKeystrokeTime.current = null;
+                      setSelectedHistoryEntry(null);
+                      setStatsView("current");
+                    }
+                  }}
+                  fmt={fmt}
+                />
+              ) : selectedRaceEntry ? (
+                <RaceDetailView
+                  race={selectedRaceEntry}
+                  onBack={() => setSelectedRaceEntry(null)}
                   fmt={fmt}
                 />
               ) : (
-                <HistoryBrowser
+                <CombinedHistoryBrowser
                   history={loadFromStorage(STORAGE_KEYS.HISTORY, [])}
+                  raceHistory={raceHistory}
                   paragraphs={ALL_PARAGRAPHS}
-                  onSelect={(entry) => setSelectedHistoryEntry(entry)}
-                  selectedId={selectedHistoryEntry?.timestamp}
-                  onClose={() => setStatsView("current")}
-                />
-              )
-            ) : statsView === "race-history" ? (
-              /* Race history view */
-              selectedRaceEntry ? (
-                <div className="race-history-detail">
-                  <div className="history-detail-header">
-                    <button className="back-btn" onClick={() => setSelectedRaceEntry(null)}>← back</button>
-                    <span className="detail-date">
-                      {new Date(selectedRaceEntry.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                  
-                  {/* Paragraph */}
-                  <div className="history-paragraph-section">
-                    <h4>paragraph</h4>
-                    <div className="history-paragraph-text">{selectedRaceEntry.paragraph}</div>
-                  </div>
-                  
-                  {/* Results */}
-                  <div className="race-results-section">
-                    <h4>results</h4>
-                    <div className="race-results-list">
-                      {selectedRaceEntry.allResults?.map((racer, i) => (
-                        <div 
-                          key={racer.id} 
-                          className={`race-result-row ${racer.id === selectedRaceEntry.myResult?.id ? 'you' : ''}`}
-                        >
-                          <span className="result-pos">{i + 1}</span>
-                          <span className="result-name">{racer.name}</span>
-                          <span className="result-wpm">{Math.round(racer.wpm)} wpm</span>
-                          <span className="result-acc">{Math.round(racer.accuracy)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Stats */}
-                  <div className="history-stats-grid">
-                    <div className="history-stat">
-                      <span className="stat-value">{Math.round(selectedRaceEntry.avgWpm)}</span>
-                      <span className="stat-label">avg wpm</span>
-                    </div>
-                    <div className="history-stat">
-                      <span className="stat-value">{Math.round(selectedRaceEntry.wpmSpread)}</span>
-                      <span className="stat-label">wpm spread</span>
-                    </div>
-                    <div className="history-stat">
-                      <span className="stat-value">{selectedRaceEntry.racerCount}</span>
-                      <span className="stat-label">racers</span>
-                    </div>
-                  </div>
-                  
-                  {/* Share button */}
-                  {selectedRaceEntry.shareUrl && (
-                    <button 
-                      className="share-race-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedRaceEntry.shareUrl);
-                      }}
-                    >
-                      copy share link
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <RaceHistoryBrowser
-                  races={raceHistory}
-                  onSelect={(race) => setSelectedRaceEntry(race)}
-                  selectedId={selectedRaceEntry?.raceId}
-                  onClose={() => setStatsView("current")}
-                  onClearAll={() => {
+                  onSelectSession={(entry) => setSelectedHistoryEntry(entry)}
+                  onSelectRace={(race) => setSelectedRaceEntry(race)}
+                  selectedSessionId={selectedHistoryEntry?.timestamp}
+                  selectedRaceId={selectedRaceEntry?.raceId}
+                  onClearSessions={() => {
+                    saveToStorage(STORAGE_KEYS.HISTORY, []);
+                  }}
+                  onClearRaces={() => {
                     saveToStorage(STORAGE_KEYS.RACE_HISTORY, []);
                     setRaceHistory([]);
-                    setStatsView("current");
                   }}
                 />
               )
@@ -9694,13 +9966,15 @@ function App() {
         )}
 
         <footer>
-          <button
-            className="reset-btn"
-            onClick={() => resetTest()}
-            title="shift+enter"
-          >
-            next
-          </button>
+          {!isInRace && (
+            <button
+              className="reset-btn"
+              onClick={() => resetTest()}
+              title="shift+enter"
+            >
+              next
+            </button>
+          )}
           {!isInRace && !isComplete && (
             <button
               className="reset-btn pvp-btn"
@@ -9725,38 +9999,45 @@ function App() {
               race a friend
             </button>
           )}
-          <button
-            className="reset-btn danger hold-btn"
-            onMouseDown={startClearHold}
-            onMouseUp={cancelClearHold}
-            onMouseLeave={cancelClearHold}
-            onTouchStart={startClearHold}
-            onTouchEnd={cancelClearHold}
-          >
-            <span className="hold-btn-text">
-              <span
-                style={{
-                  visibility: clearHoldProgress > 0 ? "hidden" : "visible",
-                }}
-              >
-                hold to clear history
-              </span>
-              <span
-                className="hold-btn-clearing"
-                style={{
-                  visibility: clearHoldProgress > 0 ? "visible" : "hidden",
-                }}
-              >
-                clearing...
-              </span>
+          {isInRace && (
+            <span className="race-lock-indicator">
+              paragraph locked for race
             </span>
-            {clearHoldProgress > 0 && (
-              <span
-                className="hold-progress"
-                style={{ width: `${clearHoldProgress}%` }}
-              />
-            )}
-          </button>
+          )}
+          {!isInRace && (
+            <button
+              className="reset-btn danger hold-btn"
+              onMouseDown={startClearHold}
+              onMouseUp={cancelClearHold}
+              onMouseLeave={cancelClearHold}
+              onTouchStart={startClearHold}
+              onTouchEnd={cancelClearHold}
+            >
+              <span className="hold-btn-text">
+                <span
+                  style={{
+                    visibility: clearHoldProgress > 0 ? "hidden" : "visible",
+                  }}
+                >
+                  hold to clear history
+                </span>
+                <span
+                  className="hold-btn-clearing"
+                  style={{
+                    visibility: clearHoldProgress > 0 ? "visible" : "hidden",
+                  }}
+                >
+                  clearing...
+                </span>
+              </span>
+              {clearHoldProgress > 0 && (
+                <span
+                  className="hold-progress"
+                  style={{ width: `${clearHoldProgress}%` }}
+                />
+              )}
+            </button>
+          )}
         </footer>
 
         {/* History Modal */}
