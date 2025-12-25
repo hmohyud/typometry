@@ -3575,15 +3575,23 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raceId = params.get("race");
-    const isSpectator = params.get("spectate") === "true";
+    let joinKey = params.get("join"); // Key required to participate
+    
     if (raceId && !isInRace) {
-      // Use saved name or will be assigned guest# based on join order
+      // Check sessionStorage for joinKey (host recovering after refresh)
+      if (!joinKey) {
+        joinKey = sessionStorage.getItem(`typometry_race_key_${raceId}`);
+      }
+      
+      // No joinKey = spectator mode
+      const isSpectator = !joinKey;
       const name = isSpectator 
         ? `spectator` 
         : (localStorage.getItem("typometry_racer_name") || "guest");
       setRacerName(name);
       // Join as non-host - paragraph will be received from host via broadcast
-      joinRace(raceId, name, '', 0, false, isSpectator);
+      // Pass joinKey for validation (null if spectator)
+      joinRace(raceId, name, '', 0, false, isSpectator, joinKey);
     }
   }, []);
 
@@ -5080,8 +5088,12 @@ function App() {
         setStats(finalStats);
 
         // Finish race if in a race
-        if (isInRace && raceState.status === "racing" && raceState.raceStartTime) {
-          const raceTime = Date.now() - raceState.raceStartTime;
+        if (isInRace && raceState.status === "racing") {
+          // In realtime mode, time is from race start (GO signal)
+          // In non-realtime mode, time is from first keystroke
+          const raceTime = raceState.realtimeMode 
+            ? Date.now() - raceState.raceStartTime
+            : totalTime; // totalTime is already calculated from startTime.current
           
           // Use simple array of WPM values for race broadcast (smaller payload)
           const wordSpeedsSimple = wordSpeedsData.map(w => w.wpm);
@@ -5509,13 +5521,14 @@ function App() {
           </div>
 
           {/* Race progress - below text, larger for peripheral vision */}
-          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (!raceState.myFinished || raceState.isSpectator) && (
+          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (!raceState.myFinished || raceState.isSpectator || raceState.lateJoiner) && (
             <RaceProgressPanel
               racers={raceState.racers}
               spectators={raceState.spectators}
               myId={raceState.myId}
               myFinished={raceState.myFinished}
               isSpectator={raceState.isSpectator}
+              lateJoiner={raceState.lateJoiner}
             />
           )}
           {isComplete && !isInRace && (
@@ -9952,7 +9965,6 @@ function App() {
               /* Race stats view */
               <RaceStatsPanel
                 raceStats={raceState.raceStats}
-                onClear={clearRaceStats}
                 fmt={fmt}
                 shareUrl={generateShareUrl()}
               />
@@ -10023,6 +10035,7 @@ function App() {
             myId={raceState.myId}
             isHost={raceState.isHost}
             isSpectator={raceState.isSpectator}
+            lateJoiner={raceState.lateJoiner}
             realtimeMode={raceState.realtimeMode}
             winStreak={loadFromStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: 0 })}
             onRealtimeModeChange={setRealtimeMode}
@@ -10037,6 +10050,7 @@ function App() {
               setRacerName(newName);
             }}
             shareUrl={`${window.location.origin}${window.location.pathname}?race=${raceState.raceId}`}
+            joinKey={raceState.joinKey}
           />
         )}
 
@@ -10051,8 +10065,9 @@ function App() {
             shareUrl={generateShareUrl()}
             isWaitingForOthers={raceState.status !== "finished"}
             onPlayAgain={() => {
-              const { raceId, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
-              joinRace(raceId, racerName, paragraph, paragraphIndex, true);
+              const { raceId, joinKey, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
+              joinRace(raceId, racerName, paragraph, paragraphIndex, true, false, joinKey);
+              // Don't show joinKey in URL bar - host doesn't need it visible
               window.history.pushState({}, "", `?race=${raceId}`);
               // Reset typing state for new race
               setTyped('');
@@ -10096,8 +10111,9 @@ function App() {
                 
                 const name = localStorage.getItem("typometry_racer_name") || "guest1";
                 setRacerName(name);
-                const { raceId, paragraph, paragraphIndex } = createRace(newText, newIndex);
-                joinRace(raceId, name, paragraph, paragraphIndex, true);
+                const { raceId, joinKey, paragraph, paragraphIndex } = createRace(newText, newIndex);
+                joinRace(raceId, name, paragraph, paragraphIndex, true, false, joinKey);
+                // Don't show joinKey in URL bar - host doesn't need it visible
                 window.history.pushState({}, "", `?race=${raceId}`);
               }}
               title="Race a friend! Creates a shareable link to type this passage together in real-time."

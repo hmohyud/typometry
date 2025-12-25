@@ -42,6 +42,8 @@ export function useRace() {
     myId: null,
     isHost: false,
     isSpectator: false,
+    lateJoiner: false, // True if joined while race was in progress
+    joinKey: null, // Key required to participate (not just spectate)
     myFinished: false,
     countdownEnd: null,
     raceStartTime: null,
@@ -351,7 +353,24 @@ export function useRace() {
           }
         }
         
+        // Late joiners: update presence to convert from spectator to racer
         setState(prev => {
+          if (prev.lateJoiner && channelRef.current) {
+            // Convert late joiner to regular racer for next race
+            channelRef.current.track({
+              odId: myIdRef.current,
+              name: myNameRef.current,
+              ready: false,
+              progress: 0,
+              wpm: 0,
+              accuracy: 100,
+              finished: false,
+              time: 0,
+              isHost: false,
+              isSpectator: false, // No longer spectating
+            });
+          }
+          
           const raceStats = calculateRaceStats(data.results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
           // Check if I'm in the results (meaning I finished)
           const myResultExists = data.results.some(r => r.id === prev.myId);
@@ -361,6 +380,9 @@ export function useRace() {
             results: data.results,
             raceStats,
             myFinished: prev.myFinished || myResultExists,
+            // Convert late joiner back to regular racer
+            isSpectator: prev.lateJoiner ? false : prev.isSpectator,
+            lateJoiner: false,
           };
         });
         break;
@@ -449,29 +471,61 @@ export function useRace() {
       // Merge presence data with existing racers to preserve broadcast-updated fields
       // (progress, wpm, accuracy are updated via broadcast more frequently than presence)
       const existingRacersMap = new Map(prev.racers.map(r => [r.id, r]));
-      const racers = presenceRacers.map(pr => {
+      
+      // During a race, also keep track of disconnected racers from host's data
+      const hostRacersMap = new Map();
+      if (isHostRef.current && raceDataRef.current?.racers) {
+        raceDataRef.current.racers.forEach(r => hostRacersMap.set(r.id, r));
+      }
+      
+      let racers = presenceRacers.map(pr => {
         const existing = existingRacersMap.get(pr.id);
-        if (existing) {
-          // Preserve the higher progress/wpm values (from broadcast updates)
-          // Position should never go backward
-          const existingPos = typeof existing.position === 'number' ? existing.position : -1;
+        const hostData = hostRacersMap.get(pr.id);
+        
+        if (existing || hostData) {
+          // Merge with existing/host data - racer might be reconnecting
+          const source = existing || hostData;
+          const existingPos = typeof source.position === 'number' ? source.position : -1;
           const newPos = typeof pr.position === 'number' ? pr.position : -1;
           const finalPos = Math.max(existingPos, newPos);
           
           return {
             ...pr,
-            progress: Math.max(pr.progress, existing.progress),
-            wpm: existing.wpm > 0 ? existing.wpm : pr.wpm,
-            accuracy: existing.accuracy < 100 ? existing.accuracy : pr.accuracy,
-            finished: pr.finished || existing.finished,
-            time: existing.time || pr.time,
-            wordSpeeds: existing.wordSpeeds || pr.wordSpeeds,
-            keystrokeData: existing.keystrokeData || pr.keystrokeData,
+            progress: Math.max(pr.progress, source.progress || 0),
+            wpm: source.wpm > 0 ? source.wpm : pr.wpm,
+            accuracy: source.accuracy < 100 ? source.accuracy : pr.accuracy,
+            finished: pr.finished || source.finished,
+            time: source.time || pr.time,
+            wordSpeeds: source.wordSpeeds || pr.wordSpeeds,
+            keystrokeData: source.keystrokeData || pr.keystrokeData,
             position: finalPos >= 0 ? finalPos : undefined,
+            disconnected: false, // They're back online
           };
         }
-        return pr;
+        return { ...pr, disconnected: false };
       });
+      
+      // During a race, keep disconnected racers who had progress (they might reconnect)
+      const raceInProgress = prev.status === RaceStatus.RACING || prev.status === RaceStatus.COUNTDOWN;
+      if (raceInProgress) {
+        const onlineIds = new Set(presenceRacers.map(r => r.id));
+        
+        // Add disconnected racers from existing state
+        prev.racers.forEach(r => {
+          if (!onlineIds.has(r.id) && r.progress > 0 && !r.finished) {
+            racers.push({ ...r, disconnected: true });
+          }
+        });
+        
+        // Also check host's raceData
+        if (isHostRef.current && raceDataRef.current?.racers) {
+          raceDataRef.current.racers.forEach(r => {
+            if (!onlineIds.has(r.id) && r.progress > 0 && !r.finished && !racers.find(x => x.id === r.id)) {
+              racers.push({ ...r, disconnected: true });
+            }
+          });
+        }
+      }
       
       // If we just joined and there's race state from host, sync it
       if (raceStateFromHost && !isHostRef.current && prev.status === RaceStatus.WAITING) {
@@ -479,6 +533,19 @@ export function useRace() {
         if (raceStateFromHost.status === 'racing') newStatus = RaceStatus.RACING;
         else if (raceStateFromHost.status === 'countdown') newStatus = RaceStatus.COUNTDOWN;
         else if (raceStateFromHost.status === 'finished') newStatus = RaceStatus.FINISHED;
+        
+        // Check if we're reconnecting (our ID exists in racers with progress)
+        const myRacer = racers.find(r => r.id === prev.myId);
+        const isReconnecting = myRacer && myRacer.progress > 0;
+        
+        // Validate joinKey - if no key or wrong key, force spectator
+        const hostJoinKey = raceStateFromHost.joinKey;
+        const hasValidKey = prev.joinKey && hostJoinKey && prev.joinKey === hostJoinKey;
+        const invalidKey = hostJoinKey && !hasValidKey && !prev.isSpectator;
+        
+        // If race is already in progress and we're not reconnecting, convert to spectator
+        const raceInProgress = newStatus === RaceStatus.RACING || newStatus === RaceStatus.COUNTDOWN;
+        const shouldBeSpectator = (raceInProgress && !prev.isSpectator && !isReconnecting) || invalidKey;
         
         return {
           ...prev,
@@ -488,7 +555,24 @@ export function useRace() {
           paragraphIndex: raceStateFromHost.paragraphIndex || prev.paragraphIndex,
           status: newStatus,
           raceStartTime: raceStateFromHost.raceStartTime || prev.raceStartTime,
+          isSpectator: shouldBeSpectator || prev.isSpectator,
+          lateJoiner: raceInProgress && shouldBeSpectator, // Flag to show "waiting for race to end" message
         };
+      }
+      
+      // Even if not syncing race state, validate joinKey on first presence sync
+      if (raceStateFromHost && !isHostRef.current && !prev.isSpectator && prev.status !== RaceStatus.IDLE) {
+        const hostJoinKey = raceStateFromHost.joinKey;
+        const hasValidKey = prev.joinKey && hostJoinKey && prev.joinKey === hostJoinKey;
+        if (hostJoinKey && !hasValidKey) {
+          // Invalid key - convert to spectator
+          return {
+            ...prev,
+            racers,
+            spectators: presenceSpectators,
+            isSpectator: true,
+          };
+        }
       }
       
       // Check if host left - need to elect new host
@@ -508,6 +592,7 @@ export function useRace() {
             paragraphIndex: prev.paragraphIndex,
             status: currentStatus,
             raceStartTime: prev.raceStartTime,
+            joinKey: prev.joinKey, // Preserve joinKey for validation
           };
           
           // Update our presence to reflect host status with race state
@@ -528,6 +613,7 @@ export function useRace() {
                 paragraphIndex: prev.paragraphIndex,
                 status: currentStatus,
                 raceStartTime: prev.raceStartTime,
+                joinKey: prev.joinKey, // Include for new joiner validation
               },
             });
           }
@@ -569,11 +655,16 @@ export function useRace() {
   // Create a new race - returns the code immediately
   const createRace = useCallback((paragraph, paragraphIndex) => {
     const raceId = generateRaceCode();
-    return { raceId, paragraph, paragraphIndex };
+    // Generate a separate join key - required to participate (not just spectate)
+    const joinKey = Math.random().toString(36).substring(2, 10);
+    // Store joinKey in sessionStorage so host can recover after refresh
+    sessionStorage.setItem(`typometry_race_key_${raceId}`, joinKey);
+    return { raceId, joinKey, paragraph, paragraphIndex };
   }, []);
 
   // Join a race (as host, joiner, or spectator)
-  const joinRace = useCallback(async (raceId, name, paragraph = '', paragraphIndex = 0, asHost = false, asSpectator = false) => {
+  // joinKey is required to participate - without it, user becomes spectator
+  const joinRace = useCallback(async (raceId, name, paragraph = '', paragraphIndex = 0, asHost = false, asSpectator = false, joinKey = null) => {
     const myId = myIdRef.current;
     isHostRef.current = asHost;
 
@@ -584,15 +675,17 @@ export function useRace() {
       myId,
       isHost: asHost,
       isSpectator: asSpectator,
+      lateJoiner: false, // Reset - will be set if race is in progress
       paragraph: asHost ? paragraph : '',
       paragraphIndex: asHost ? paragraphIndex : 0,
+      joinKey: joinKey, // Store provided join key for validation
       error: null,
       results: [],
       raceStats: null,
     }));
 
     if (asHost) {
-      raceDataRef.current = { paragraph, paragraphIndex, racers: [], realtimeMode: true };
+      raceDataRef.current = { paragraph, paragraphIndex, racers: [], realtimeMode: true, joinKey };
     }
 
     // Subscribe to Supabase Realtime channel
@@ -638,7 +731,7 @@ export function useRace() {
           }
           myNameRef.current = finalName;
           
-          // Track presence
+          // Track presence - host includes joinKey in raceState for validation
           await channel.track({
             odId: myId,
             name: finalName,
@@ -650,6 +743,13 @@ export function useRace() {
             time: 0,
             isHost: asHost,
             isSpectator: asSpectator,
+            // Host broadcasts joinKey so joiners can validate
+            ...(asHost && raceDataRef.current?.joinKey ? {
+              raceState: {
+                status: 'waiting',
+                joinKey: raceDataRef.current.joinKey,
+              }
+            } : {}),
           });
 
           // Delayed check for name collisions (race condition protection)
@@ -837,6 +937,7 @@ export function useRace() {
               status: 'racing',
               raceStartTime: startTime,
               realtimeMode,
+              joinKey: raceDataRef.current.joinKey,
             },
           });
         }
@@ -1014,6 +1115,14 @@ export function useRace() {
 
   // Leave race
   const leaveRace = useCallback(async () => {
+    // Clean up joinKey from sessionStorage
+    setState(prev => {
+      if (prev.raceId) {
+        sessionStorage.removeItem(`typometry_race_key_${prev.raceId}`);
+      }
+      return prev;
+    });
+    
     if (channelRef.current) {
       await supabase.removeChannel(channelRef.current);
       channelRef.current = null;
@@ -1029,6 +1138,9 @@ export function useRace() {
       racers: [],
       myId: null,
       isHost: false,
+      isSpectator: false,
+      lateJoiner: false,
+      joinKey: null,
       myFinished: false,
       countdownEnd: null,
       raceStartTime: null,

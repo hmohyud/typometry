@@ -127,6 +127,7 @@ export function RaceLobby({
   myId, 
   isHost,
   isSpectator,
+  lateJoiner = false,
   realtimeMode,
   winStreak = { current: 0, best: 0 },
   onRealtimeModeChange,
@@ -134,11 +135,13 @@ export function RaceLobby({
   onStart, 
   onLeave,
   onNameChange,
-  shareUrl 
+  shareUrl,
+  joinKey 
 }) {
   const [isReady, setIsReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showLink, setShowLink] = useState(false);
+  const [linkType, setLinkType] = useState('join'); // 'join' or 'spectate'
 
   const handleReadyToggle = () => {
     if (isSpectator) return; // Spectators can't ready up
@@ -147,9 +150,15 @@ export function RaceLobby({
     onReady(newReady);
   };
 
+  // Generate URL based on link type
+  // Join URL includes the secret key, spectate URL does not
+  const currentUrl = linkType === 'join' && joinKey
+    ? `${shareUrl}&join=${joinKey}`
+    : shareUrl; // Spectate = just the race ID, no key
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(currentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -185,37 +194,67 @@ export function RaceLobby({
 
   return (
     <div className="race-lobby">
-      {/* Invite bar - all inline */}
-      <div className="invite-bar">
-        <button 
-          onClick={() => setShowLink(!showLink)} 
-          className="invite-toggle"
-        >
-          {showLink ? 'hide' : 'show'}
-        </button>
-        <div className="invite-url" onClick={handleUrlClick}>
-          {showLink ? (
-            <code ref={urlRef}>{shareUrl}</code>
-          ) : (
-            <span className="invite-dots">••••••••••••••••••••••••</span>
-          )}
+      {/* Invite bar - with link type selector */}
+      <div className="invite-section">
+        <div className="invite-type-row">
+          <span className="invite-type-label">share link:</span>
+          <div className="invite-type-toggle">
+            <button 
+              className={`type-btn ${linkType === 'join' ? 'active' : ''}`}
+              onClick={() => setLinkType('join')}
+            >
+              join race
+            </button>
+            <button 
+              className={`type-btn ${linkType === 'spectate' ? 'active' : ''}`}
+              onClick={() => setLinkType('spectate')}
+            >
+              watch only
+            </button>
+          </div>
         </div>
-        <button 
-          onClick={handleCopy} 
-          className={`invite-copy ${copied ? 'copied' : ''}`}
-        >
-          {copied ? 'copied' : 'copy'}
-        </button>
+        <div className="invite-bar">
+          <div className="invite-url" onClick={handleUrlClick}>
+            {showLink ? (
+              <code ref={urlRef}>{currentUrl}</code>
+            ) : (
+              <span className="invite-dots">••••••••••••••••••••••••</span>
+            )}
+          </div>
+          <button 
+            onClick={() => setShowLink(!showLink)} 
+            className="invite-toggle"
+          >
+            {showLink ? 'hide' : 'show'}
+          </button>
+          <button 
+            onClick={handleCopy} 
+            className={`invite-copy ${copied ? 'copied' : ''}`}
+          >
+            {copied ? 'copied' : 'copy'}
+          </button>
+        </div>
       </div>
 
       {/* Spectator banner */}
-      {isSpectator && (
+      {isSpectator && !lateJoiner && (
         <div className="spectator-banner">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
           spectating
+        </div>
+      )}
+      
+      {/* Late joiner banner - watching current race, will join next */}
+      {lateJoiner && (
+        <div className="late-joiner-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          race in progress — you'll join the next one
         </div>
       )}
 
@@ -368,11 +407,12 @@ export function RacerProgress({ racer, isYou, colorIndex = 0 }) {
   const color = RACER_COLORS[colorIndex];
   
   return (
-    <div className={`racer-progress ${isYou ? 'you' : ''} ${racer.finished ? 'finished' : ''}`}>
+    <div className={`racer-progress ${isYou ? 'you' : ''} ${racer.finished ? 'finished' : ''} ${racer.disconnected ? 'disconnected' : ''}`}>
       <div className="racer-progress-info">
         <span className="racer-progress-name" style={{ color: isYou ? 'var(--text)' : color.hex }}>
           {racer.name}
           {isYou && <span className="you-tag">you</span>}
+          {racer.disconnected && <span className="disconnected-tag">offline</span>}
         </span>
         <span className="racer-progress-wpm">
           {racer.wpm > 0 ? `${Math.round(racer.wpm)}` : '–'}
@@ -392,7 +432,7 @@ export function RacerProgress({ racer, isYou, colorIndex = 0 }) {
 }
 
 // Race progress panel showing all racers
-export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, isSpectator }) {
+export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, isSpectator, lateJoiner = false }) {
   const sortedRacers = useMemo(() => {
     // Sort: you first, then by progress/finish position
     return [...racers].sort((a, b) => {
@@ -412,6 +452,16 @@ export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, i
 
   return (
     <div className="race-progress-panel">
+      {/* Late joiner banner */}
+      {lateJoiner && (
+        <div className="late-joiner-watching">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          race in progress — you'll join the next one
+        </div>
+      )}
       {sortedRacers.map(racer => {
         const colorIndex = getRacerColorIndex(racer.id, racers);
         return (
@@ -428,7 +478,7 @@ export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, i
           waiting for others ({finishedCount}/{totalCount})
         </div>
       )}
-      {isSpectator && (
+      {isSpectator && !lateJoiner && (
         <div className="spectator-watching">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -647,14 +697,12 @@ function SpeedOverTimeChart({ results, myId }) {
     if (speeds.length < 2) return null;
     
     const colorIndex = getRacerColorIndex(racer.id, results);
-    const color = racer.id === myId ? 'var(--accent)' : RACER_COLORS[colorIndex].hex;
     const hexColor = racer.id === myId ? '#6ecf6e' : RACER_COLORS[colorIndex].hex;
     const isYou = racer.id === myId;
     
     return {
       id: racer.id,
       name: racer.name,
-      color,
       hexColor,
       isYou,
       speeds,
@@ -662,10 +710,6 @@ function SpeedOverTimeChart({ results, myId }) {
   }).filter(Boolean);
   
   if (racerData.length === 0) return null;
-  
-  // Chart dimensions
-  const chartHeight = 100;
-  const chartWidth = maxWords - 1;
   
   return (
     <div className="speed-chart">
@@ -690,22 +734,22 @@ function SpeedOverTimeChart({ results, myId }) {
         </div>
         <div className="speed-chart-graph">
           <svg 
-            viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
+            viewBox="0 0 100 50" 
             preserveAspectRatio="none"
             className="speed-chart-svg"
           >
             {/* Grid lines */}
-            <line x1="0" y1="0" x2={chartWidth} y2="0" stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" />
-            <line x1="0" y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" strokeDasharray="2,2" />
-            <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" />
+            <line x1="0" y1="0" x2="100" y2="0" stroke="currentColor" strokeWidth="0.3" opacity="0.2" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1="25" x2="100" y2="25" stroke="currentColor" strokeWidth="0.3" opacity="0.15" strokeDasharray="2,2" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1="50" x2="100" y2="50" stroke="currentColor" strokeWidth="0.3" opacity="0.2" vectorEffect="non-scaling-stroke" />
             
             {/* Lines - render "you" last so it's on top */}
             {racerData
               .sort((a, b) => (a.isYou ? 1 : 0) - (b.isYou ? 1 : 0))
               .map(({ id, hexColor, speeds, isYou }) => {
                 const points = speeds.map((speed, i) => {
-                  const x = (i / (speeds.length - 1)) * chartWidth;
-                  const y = chartHeight - ((speed - minSpeed) / speedRange) * chartHeight;
+                  const x = (i / (speeds.length - 1)) * 100;
+                  const y = 50 - ((speed - minSpeed) / speedRange) * 50;
                   return `${x},${y}`;
                 }).join(' ');
                 
@@ -715,10 +759,11 @@ function SpeedOverTimeChart({ results, myId }) {
                     points={points}
                     fill="none"
                     stroke={hexColor}
-                    strokeWidth={isYou ? 3 : 2}
+                    strokeWidth={isYou ? 2 : 1.5}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    opacity={isYou ? 1 : 0.6}
+                    opacity={isYou ? 1 : 0.7}
+                    vectorEffect="non-scaling-stroke"
                   />
                 );
               })}
@@ -811,7 +856,7 @@ function RaceKeyboards({ results, myId }) {
 }
 
 // Race Stats Panel - for the Race tab in stats view
-export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
+export function RaceStatsPanel({ raceStats, fmt, shareUrl }) {
   const [copied, setCopied] = useState(false);
   
   const handleShare = async () => {
@@ -887,10 +932,9 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
         )}
         {shareUrl && !stillWaiting && (
           <button className="pvp-share" onClick={handleShare}>
-            {copied ? 'copied!' : 'share'}
+            {copied ? 'copied!' : 'share results'}
           </button>
         )}
-        <button className="pvp-clear" onClick={onClear}>×</button>
       </div>
 
       {/* Your Result - Hero Section */}
