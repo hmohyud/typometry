@@ -12,6 +12,8 @@ import {
   RaceResults,
   RaceStatsPanel,
   SharedResultsView,
+  RACER_COLORS,
+  getRacerColorIndex,
 } from "./RaceMode";
 
 // Number formatting utilities
@@ -95,6 +97,7 @@ const STORAGE_KEYS = {
   HISTOGRAMS: "typometry_histograms",
   HISTOGRAM_ZOOM: "typometry_histogram_zoom",
   RACE_HISTORY: "typometry_race_history",
+  WIN_STREAK: "typometry_win_streak",
 };
 
 // Histogram bucket configurations - fine granularity for smooth distributions
@@ -3482,6 +3485,7 @@ function App() {
     leaveRace,
     clearRaceStats,
     generateShareUrl,
+    setRealtimeMode,
     isInRace,
     hasRaceStats,
     waitingForOthers,
@@ -3571,30 +3575,45 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raceId = params.get("race");
+    const isSpectator = params.get("spectate") === "true";
     if (raceId && !isInRace) {
       // Use saved name or will be assigned guest# based on join order
-      const name = localStorage.getItem("typometry_racer_name") || "guest";
+      const name = isSpectator 
+        ? `spectator` 
+        : (localStorage.getItem("typometry_racer_name") || "guest");
       setRacerName(name);
       // Join as non-host - paragraph will be received from host via broadcast
-      joinRace(raceId, name, '', 0, false);
+      joinRace(raceId, name, '', 0, false, isSpectator);
     }
   }, []);
 
   // Sync race paragraph to currentText when received from host
   useEffect(() => {
-    if (raceState.paragraph && raceState.status === 'waiting' && !raceState.isHost) {
-      setCurrentText(raceState.paragraph);
-      setCurrentIndex(raceState.paragraphIndex);
-      setTyped('');
-      setKeystrokeData([]);
-      setRawKeyEvents([]);
-      setIsActive(false);
-      setIsComplete(false);
-      setStats(null);
-      lastKeystrokeTime.current = null;
-      startTime.current = null;
+    if (raceState.paragraph && !raceState.isHost && currentText !== raceState.paragraph) {
+      // Sync paragraph during waiting, countdown, or start of racing
+      if (raceState.status === 'waiting' || raceState.status === 'countdown' || 
+          (raceState.status === 'racing' && typed.length === 0)) {
+        setCurrentText(raceState.paragraph);
+        setCurrentIndex(raceState.paragraphIndex);
+        setTyped('');
+        setKeystrokeData([]);
+        setRawKeyEvents([]);
+        setIsActive(false);
+        setIsComplete(false);
+        setStats(null);
+        lastKeystrokeTime.current = null;
+        startTime.current = null;
+      }
     }
-  }, [raceState.paragraph, raceState.status, raceState.isHost]);
+  }, [raceState.paragraph, raceState.status, raceState.isHost, raceState.paragraphIndex]);
+
+  // Start timer immediately when race begins in realtime mode
+  useEffect(() => {
+    if (raceState.status === 'racing' && raceState.realtimeMode === true && !isActive && !raceState.isSpectator) {
+      setIsActive(true);
+      startTime.current = performance.now();
+    }
+  }, [raceState.status, raceState.realtimeMode, isActive, raceState.isSpectator]);
 
   // Auto-switch to race stats view when race finishes
   useEffect(() => {
@@ -3659,6 +3678,21 @@ function App() {
       const newRaceHistory = [raceEntry, ...existingHistory].slice(0, 50); // Keep last 50 races
       saveToStorage(STORAGE_KEYS.RACE_HISTORY, newRaceHistory);
       setRaceHistory(newRaceHistory);
+      
+      // Track win streak
+      const myPosition = raceState.raceStats.myResult?.position || 999;
+      const currentStreak = loadFromStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: 0 });
+      if (myPosition === 1) {
+        // Won - increment streak
+        const newStreak = {
+          current: currentStreak.current + 1,
+          best: Math.max(currentStreak.best, currentStreak.current + 1),
+        };
+        saveToStorage(STORAGE_KEYS.WIN_STREAK, newStreak);
+      } else {
+        // Lost - reset current streak but keep best
+        saveToStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: currentStreak.best });
+      }
     }
   }, [raceState.status, raceState.raceStats, generateShareUrl]);
 
@@ -4879,6 +4913,11 @@ function App() {
         }
       }
 
+      // Block typing for spectators
+      if (raceState.isSpectator) {
+        return;
+      }
+
       // If viewing past stats, Shift+Enter dismisses and scrolls to top to resume typing
       if (viewingPastStats) {
         if (e.key === "Enter" && e.shiftKey) {
@@ -4910,7 +4949,11 @@ function App() {
 
       if (!isActive) {
         setIsActive(true);
-        startTime.current = now;
+        // In realtime race mode, timer already started at GO
+        // Only set startTime if not already set (non-realtime mode)
+        if (!startTime.current) {
+          startTime.current = now;
+        }
       }
 
       // Track ALL key events including backspaces for momentum analysis
@@ -4973,7 +5016,7 @@ function App() {
         const totalChars = keystrokeData.filter((k) => !k.isBackspace).length + 1;
         const currentWpm = elapsedMinutes > 0 ? (correctChars / 5) / elapsedMinutes : 0;
         const currentAccuracy = totalChars > 0 ? (correctChars / totalChars) * 100 : 100;
-        updateRaceProgress(progress, currentWpm, currentAccuracy);
+        updateRaceProgress(progress, currentWpm, currentAccuracy, newTypedLength);
       }
 
       // Check completion
@@ -5043,7 +5086,14 @@ function App() {
           // Use simple array of WPM values for race broadcast (smaller payload)
           const wordSpeedsSimple = wordSpeedsData.map(w => w.wpm);
           
-          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeedsSimple);
+          // Simplified keystroke data for keyboard viz (key, correct, time)
+          const keystrokeSimple = allKeystrokes.map(k => ({
+            key: k.key,
+            correct: k.correct,
+            time: k.interval, // Use interval (time between keystrokes)
+          }));
+          
+          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeedsSimple, keystrokeSimple);
         }
 
         // Scroll to show complete hint after a brief delay
@@ -5179,6 +5229,21 @@ function App() {
   );
 
   const renderText = () => {
+    // Get opponent positions for ghost cursors (only during active race)
+    const opponentPositions = {};
+    if (isInRace && raceState.status === "racing") {
+      raceState.racers.forEach((racer) => {
+        if (racer.id !== raceState.myId && !racer.finished && typeof racer.position === 'number' && racer.position >= 0) {
+          const colorIndex = getRacerColorIndex(racer.id, raceState.racers);
+          opponentPositions[racer.position] = {
+            name: racer.name,
+            colorIndex: colorIndex,
+            color: RACER_COLORS[colorIndex].hex,
+          };
+        }
+      });
+    }
+
     return currentText.split("").map((char, i) => {
       let className = "char";
 
@@ -5194,8 +5259,19 @@ function App() {
         className += " space";
       }
 
+      // Check if an opponent's cursor is at this position
+      const opponent = opponentPositions[i];
+      if (opponent) {
+        className += ` ghost-cursor`;
+      }
+
       return (
-        <span key={i} className={className}>
+        <span 
+          key={i} 
+          className={className} 
+          data-ghost={opponent?.name}
+          style={opponent ? { '--ghost-color': opponent.color } : undefined}
+        >
           {char}
         </span>
       );
@@ -5433,11 +5509,13 @@ function App() {
           </div>
 
           {/* Race progress - below text, larger for peripheral vision */}
-          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (
+          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (!raceState.myFinished || raceState.isSpectator) && (
             <RaceProgressPanel
               racers={raceState.racers}
+              spectators={raceState.spectators}
               myId={raceState.myId}
               myFinished={raceState.myFinished}
+              isSpectator={raceState.isSpectator}
             />
           )}
           {isComplete && !isInRace && (
@@ -5683,18 +5761,6 @@ function App() {
                           Race
                         </button>
                       )}
-                      <button
-                        className={`toggle-btn ${
-                          statsView === "history" || statsView === "race-history" ? "active" : ""
-                        }`}
-                        onClick={() => {
-                          setStatsView("history");
-                          setSelectedHistoryEntry(null);
-                          setSelectedRaceEntry(null);
-                        }}
-                      >
-                        History
-                      </button>
                     </div>
                     <div className="stats-header-right">
                       {(hasGlobalStats || hasAllTimeStats) && (
@@ -6222,7 +6288,15 @@ function App() {
                 {stats.impressiveBigrams.length > 0 && (
                   <div className="bigrams impressive-section">
                     <p className="bigram-label">
-                      🏆 impressive reaches (fast + far)
+                      <svg className="label-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                        <path d="M4 22h16"/>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/>
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                      </svg>
+                      impressive reaches (fast + far)
                     </p>
                     <div className="bigram-list horizontal">
                       {stats.impressiveBigrams.map(
@@ -7451,7 +7525,15 @@ function App() {
                   cumulativeStats.impressiveBigrams.length > 0 && (
                     <div className="bigrams impressive-section">
                       <p className="bigram-label">
-                        🏆 all-time impressive reaches
+                        <svg className="label-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                          <path d="M4 22h16"/>
+                          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/>
+                          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/>
+                          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                        </svg>
+                        all-time impressive reaches
                       </p>
                       <div className="bigram-list horizontal">
                         {cumulativeStats.impressiveBigrams.map(
@@ -9226,7 +9308,17 @@ function App() {
                               <span className="stat-value">
                                 {fmt.int(records.fastestWpm)}
                               </span>
-                              <span className="stat-label">🏆 best WPM</span>
+                              <span className="stat-label">
+                                <svg className="stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                                  <path d="M4 22h16"/>
+                                  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22"/>
+                                  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22"/>
+                                  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                                </svg>
+                                best WPM
+                              </span>
                             </div>
                           </Tooltip>
                           <Tooltip content="Longest streak of correct keystrokes by any user">
@@ -9235,7 +9327,12 @@ function App() {
                                 {fmt.count(records.longestStreak)}
                               </span>
                               <span className="stat-label">
-                                🔥 longest streak
+                                <svg className="stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M12 2c1 3 2.5 3.5 3.5 4.5A5 5 0 0 1 17 10c0 .5-.5 2-1.5 3-1 1-2 1.5-3.5 1.5S9 14 8 13c-1-1-1.5-2.5-1.5-3a5 5 0 0 1 1.5-3.5C9 5.5 11 5 12 2z"/>
+                                  <path d="M12 18v4"/>
+                                  <path d="M8 22h8"/>
+                                </svg>
+                                longest streak
                               </span>
                             </div>
                           </Tooltip>
@@ -9922,8 +10019,13 @@ function App() {
           <RaceLobby
             raceId={raceState.raceId}
             racers={raceState.racers}
+            spectators={raceState.spectators}
             myId={raceState.myId}
             isHost={raceState.isHost}
+            isSpectator={raceState.isSpectator}
+            realtimeMode={raceState.realtimeMode}
+            winStreak={loadFromStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: 0 })}
+            onRealtimeModeChange={setRealtimeMode}
             onReady={setRaceReady}
             onStart={startRace}
             onLeave={() => {
@@ -9942,23 +10044,27 @@ function App() {
           <RaceCountdown endTime={raceState.countdownEnd} />
         )}
 
-        {raceState.status === "finished" && raceState.results && (
+        {((raceState.status === "finished" && raceState.results) || (raceState.myFinished && raceState.results)) && (
           <RaceResults
             results={raceState.results}
             myId={raceState.myId}
             shareUrl={generateShareUrl()}
+            isWaitingForOthers={raceState.status !== "finished"}
             onPlayAgain={() => {
               const { raceId, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
               joinRace(raceId, racerName, paragraph, paragraphIndex, true);
               window.history.pushState({}, "", `?race=${raceId}`);
-              resetTest();
+              // Reset typing state for new race
+              setTyped('');
+              setKeystrokeData([]);
+              setRawKeyEvents([]);
+              setIsActive(false);
+              setIsComplete(false);
+              setStats(null);
+              lastKeystrokeTime.current = null;
+              startTime.current = null;
             }}
             onLeave={() => {
-              leaveRace();
-              window.history.pushState({}, "", window.location.pathname);
-            }}
-            onViewStats={() => {
-              setStatsView("race");
               leaveRace();
               window.history.pushState({}, "", window.location.pathname);
             }}
@@ -10041,14 +10147,14 @@ function App() {
         </footer>
 
         {/* History Modal */}
-        {showHistory && cumulativeStats && cumulativeStats.history && (
+        {showHistory && (
           <div className="modal-overlay" onClick={() => setShowHistory(false)}>
             <div
-              className="modal history-modal"
+              className="modal history-modal combined"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="modal-header">
-                <h2>Session History</h2>
+                <h2>History</h2>
                 <button
                   className="modal-close"
                   onClick={() => setShowHistory(false)}
@@ -10057,73 +10163,54 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                <div className="history-list">
-                  {[...cumulativeStats.history].reverse().map((session, i) => {
-                    const date = new Date(session.timestamp);
-                    const minutes = session.totalTime / 60000;
-                    const wpm =
-                      minutes > 0
-                        ? Math.round(session.charCount / 5 / minutes)
-                        : 0;
-                    const accuracy =
-                      session.charCount > 0
-                        ? Math.round(
-                            ((session.charCount - session.errorCount) /
-                              session.charCount) *
-                              100
-                          )
-                        : 0;
-
-                    return (
-                      <div key={session.timestamp} className="history-item">
-                        <div className="history-item-header">
-                          <span className="history-date">
-                            {date.toLocaleDateString()}{" "}
-                            {date.toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          <span className="history-session">
-                            #{cumulativeStats.history.length - i}
-                          </span>
-                        </div>
-                        <div className="history-item-stats">
-                          <span className="history-stat">
-                            <span className="history-stat-value">{wpm}</span>
-                            <span className="history-stat-label">wpm</span>
-                          </span>
-                          <span className="history-stat">
-                            <span className="history-stat-value">
-                              {accuracy}%
-                            </span>
-                            <span className="history-stat-label">accuracy</span>
-                          </span>
-                          <span className="history-stat">
-                            <span className="history-stat-value">
-                              {session.consistency || "—"}%
-                            </span>
-                            <span className="history-stat-label">
-                              consistency
-                            </span>
-                          </span>
-                          <span className="history-stat">
-                            <span className="history-stat-value">
-                              {session.errorCount}
-                            </span>
-                            <span className="history-stat-label">errors</span>
-                          </span>
-                          <span className="history-stat">
-                            <span className="history-stat-value">
-                              {fmt.int(session.totalTime / 1000)}s
-                            </span>
-                            <span className="history-stat-label">time</span>
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {selectedHistoryEntry ? (
+                  <HistoryDetailView
+                    entry={selectedHistoryEntry}
+                    paragraph={selectedHistoryEntry.paragraph || ALL_PARAGRAPHS[selectedHistoryEntry.paragraphIndex]}
+                    onBack={() => setSelectedHistoryEntry(null)}
+                    onPracticeAgain={(entry) => {
+                      const para = entry.paragraph || ALL_PARAGRAPHS[entry.paragraphIndex];
+                      if (para) {
+                        setCurrentText(para);
+                        setCurrentIndex(entry.paragraphIndex);
+                        setTyped('');
+                        setIsComplete(false);
+                        setIsActive(false);
+                        setStats(null);
+                        setKeystrokeData([]);
+                        setRawKeyEvents([]);
+                        startTime.current = null;
+                        lastKeystrokeTime.current = null;
+                        setSelectedHistoryEntry(null);
+                        setShowHistory(false);
+                      }
+                    }}
+                    fmt={fmt}
+                  />
+                ) : selectedRaceEntry ? (
+                  <RaceDetailView
+                    race={selectedRaceEntry}
+                    onBack={() => setSelectedRaceEntry(null)}
+                    fmt={fmt}
+                  />
+                ) : (
+                  <CombinedHistoryBrowser
+                    history={loadFromStorage(STORAGE_KEYS.HISTORY, [])}
+                    raceHistory={raceHistory}
+                    paragraphs={ALL_PARAGRAPHS}
+                    onSelectSession={(entry) => setSelectedHistoryEntry(entry)}
+                    onSelectRace={(race) => setSelectedRaceEntry(race)}
+                    selectedSessionId={selectedHistoryEntry?.timestamp}
+                    selectedRaceId={selectedRaceEntry?.raceId}
+                    onClearSessions={() => {
+                      saveToStorage(STORAGE_KEYS.HISTORY, []);
+                    }}
+                    onClearRaces={() => {
+                      saveToStorage(STORAGE_KEYS.RACE_HISTORY, []);
+                      setRaceHistory([]);
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>

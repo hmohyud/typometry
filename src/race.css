@@ -202,6 +202,144 @@
   box-shadow: 0 0 0 2px rgba(145, 200, 145, 0.2);
 }
 
+/* Lobby Settings */
+.lobby-settings {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  margin-bottom: 0.5rem;
+  border-top: 1px solid var(--bg-secondary);
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.setting-toggle.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.setting-toggle input {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-dim);
+  border-radius: 9px;
+  transition: all 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.setting-toggle input:checked + .toggle-slider {
+  background: rgba(145, 200, 145, 0.2);
+  border-color: var(--accent);
+}
+
+.setting-toggle input:checked + .toggle-slider::before {
+  transform: translateX(14px);
+  background: var(--accent);
+}
+
+.toggle-label {
+  transition: color 0.2s;
+}
+
+.setting-toggle input:checked ~ .toggle-label {
+  color: var(--accent);
+}
+
+.setting-toggle:not(.disabled):hover .toggle-label {
+  color: var(--text);
+}
+
+/* Spectator banner */
+.spectator-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(147, 51, 234, 0.15);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  border-radius: 4px;
+  color: #a78bfa;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Win streak badge */
+.win-streak-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  border-radius: 4px;
+  color: #fb923c;
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.win-streak-badge svg {
+  stroke: #fb923c;
+}
+
+/* Spectators list */
+.lobby-spectators {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.spectators-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.spectators-label svg {
+  opacity: 0.7;
+}
+
+/* Spectator waiting text */
+.spectator-waiting {
+  flex: 2;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 /* Actions - fixed grid */
 .lobby-actions {
   display: grid;
@@ -410,10 +548,51 @@
   font-size: 0.9rem;
 }
 
+/* Spectator watching indicator */
+.spectator-watching {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  background: rgba(147, 51, 234, 0.15);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  border-radius: 6px;
+  color: #a78bfa;
+  font-size: 0.9rem;
+}
+
+.spectators-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  margin-top: 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.spectators-indicator svg {
+  opacity: 0.7;
+}
+
 /* Results */
 .race-results {
   max-width: 400px;
   margin: 2rem auto;
+}
+
+.results-waiting {
+  text-align: center;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  animation: pulse 1.5s ease-in-out infinite;
+  background: rgba(145, 200, 145, 0.1);
+  border-radius: 4px;
 }
 
 .results-list {
@@ -765,11 +944,21 @@
   margin-bottom: 1.5rem;
 }
 
+.pvp-insights .tooltip-wrapper,
+.pvp-insights .tooltip-trigger {
+  display: block;
+}
+
 .insight {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: 0.75rem 0.5rem;
   background: var(--bg-secondary);
   border-radius: 6px;
+  min-height: 60px;
 }
 
 .insight-value {
@@ -779,9 +968,11 @@
   font-weight: 600;
   color: var(--text);
   line-height: 1.2;
+  margin-bottom: 0.2rem;
 }
 
 .insight-label {
+  display: block;
   font-size: 0.65rem;
   color: var(--text-muted);
   text-transform: lowercase;
@@ -1316,5 +1507,206 @@
   .shared-raw-data pre {
     font-size: 0.55rem;
     max-height: 200px;
+  }
+}
+
+/* Custom Tooltips */
+.tooltip-trigger {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+}
+
+.custom-tooltip {
+  position: fixed;
+  transform: translateX(-50%) translateY(-100%);
+  margin-top: -8px;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--text-dim);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 400;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: tooltipFadeIn 0.15s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-100%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-100%);
+  }
+}
+
+.tooltip-arrow {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--text-dim);
+}
+
+.tooltip-arrow::before {
+  content: '';
+  position: absolute;
+  bottom: 1px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--bg);
+}
+
+/* Speed Over Time Chart */
+.speed-chart {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.speed-chart-header {
+  margin-bottom: 0.5rem;
+}
+
+.speed-chart-title {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+.speed-chart-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.speed-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.speed-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.speed-legend-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.speed-chart-container {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.speed-chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  text-align: right;
+  min-width: 30px;
+  padding: 2px 0;
+}
+
+.speed-chart-graph {
+  flex: 1;
+  height: 80px;
+  position: relative;
+}
+
+.speed-chart-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.speed-chart-x-label {
+  text-align: center;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 600px) {
+  .speed-chart-graph {
+    height: 60px;
+  }
+  
+  .speed-chart-y-axis {
+    font-size: 0.6rem;
+    min-width: 25px;
+  }
+}
+
+/* Race Keyboards */
+.race-keyboards {
+  margin-bottom: 1.5rem;
+}
+
+.race-keyboards-header {
+  margin-bottom: 0.75rem;
+}
+
+.race-keyboards-title {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+.race-keyboards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.race-keyboard {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.race-keyboard-header {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.race-keyboard .keyboard-viz {
+  transform: scale(0.85);
+  transform-origin: top center;
+}
+
+@media (max-width: 700px) {
+  .race-keyboards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .race-keyboard .keyboard-viz {
+    transform: scale(0.75);
   }
 }

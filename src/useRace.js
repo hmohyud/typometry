@@ -38,14 +38,17 @@ export function useRace() {
     paragraph: '',
     paragraphIndex: 0,
     racers: [],
+    spectators: [],
     myId: null,
     isHost: false,
+    isSpectator: false,
     myFinished: false,
     countdownEnd: null,
     raceStartTime: null,
     results: [],
     raceStats: null,
     error: null,
+    realtimeMode: true, // Timer starts at GO, not first keystroke
   });
 
   const myIdRef = useRef(generateRacerId());
@@ -124,6 +127,9 @@ export function useRace() {
           // Don't override if we're the host
           if (isHostRef.current) return prev;
           
+          // Don't downgrade from FINISHED status - race is over
+          if (prev.status === RaceStatus.FINISHED) return prev;
+          
           // Map status string to RaceStatus
           let newStatus = prev.status;
           if (data.status === 'waiting') newStatus = RaceStatus.WAITING;
@@ -138,6 +144,7 @@ export function useRace() {
             status: newStatus,
             raceStartTime: data.raceStartTime,
             racers: data.racers.length > 0 ? data.racers : prev.racers,
+            realtimeMode: data.realtimeMode ?? prev.realtimeMode,
           };
         });
         break;
@@ -170,11 +177,21 @@ export function useRace() {
         }
         break;
 
+      case 'settings_update':
+        setState(prev => ({
+          ...prev,
+          realtimeMode: data.realtimeMode ?? prev.realtimeMode,
+        }));
+        break;
+
       case 'countdown':
         setState(prev => ({
           ...prev,
           status: RaceStatus.COUNTDOWN,
           countdownEnd: data.endTime,
+          realtimeMode: data.realtimeMode ?? prev.realtimeMode,
+          paragraph: data.paragraph || prev.paragraph,
+          paragraphIndex: data.paragraphIndex ?? prev.paragraphIndex,
         }));
         break;
 
@@ -183,35 +200,82 @@ export function useRace() {
           ...prev,
           status: RaceStatus.RACING,
           raceStartTime: data.startTime,
+          realtimeMode: data.realtimeMode ?? prev.realtimeMode,
+          paragraph: data.paragraph || prev.paragraph,
+          paragraphIndex: data.paragraphIndex ?? prev.paragraphIndex,
         }));
         break;
 
       case 'progress':
         setState(prev => ({
           ...prev,
-          racers: prev.racers.map(r =>
-            r.id === data.odId ? { ...r, progress: data.progress, wpm: data.wpm, accuracy: data.accuracy } : r
-          )
+          racers: prev.racers.map(r => {
+            if (r.id !== data.odId) return r;
+            
+            // Only update position if new position is ahead (never go backward)
+            const newPosition = typeof data.position === 'number' ? data.position : r.position;
+            const currentPosition = typeof r.position === 'number' ? r.position : -1;
+            const finalPosition = Math.max(newPosition || 0, currentPosition);
+            
+            return { 
+              ...r, 
+              progress: data.progress, 
+              wpm: data.wpm, 
+              accuracy: data.accuracy, 
+              position: finalPosition,
+            };
+          })
         }));
         if (isHostRef.current && raceDataRef.current) {
-          raceDataRef.current.racers = raceDataRef.current.racers.map(r =>
-            r.id === data.odId ? { ...r, progress: data.progress, wpm: data.wpm, accuracy: data.accuracy } : r
-          );
+          raceDataRef.current.racers = raceDataRef.current.racers.map(r => {
+            if (r.id !== data.odId) return r;
+            
+            const newPosition = typeof data.position === 'number' ? data.position : r.position;
+            const currentPosition = typeof r.position === 'number' ? r.position : -1;
+            const finalPosition = Math.max(newPosition || 0, currentPosition);
+            
+            return { 
+              ...r, 
+              progress: data.progress, 
+              wpm: data.wpm, 
+              accuracy: data.accuracy, 
+              position: finalPosition,
+            };
+          });
         }
         break;
 
       case 'finish':
         setState(prev => {
           const updatedRacers = prev.racers.map(r =>
-            r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
+            r.id === data.odId ? { 
+              ...r, 
+              finished: true, 
+              wpm: data.wpm, 
+              accuracy: data.accuracy, 
+              time: data.time, 
+              wordSpeeds: data.wordSpeeds || [],
+              keystrokeData: data.keystrokeData || [],
+            } : r
           );
           
           // If host, update raceData
           if (isHostRef.current && raceDataRef.current) {
             raceDataRef.current.racers = raceDataRef.current.racers.map(r =>
-              r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
+              r.id === data.odId ? { 
+                ...r, 
+                finished: true, 
+                wpm: data.wpm, 
+                accuracy: data.accuracy, 
+                time: data.time, 
+                wordSpeeds: data.wordSpeeds || [],
+                keystrokeData: data.keystrokeData || [],
+              } : r
             );
           }
+          
+          // Check if this is our own finish
+          const isMyFinish = data.odId === prev.myId;
           
           // Calculate progressive stats with whoever has finished so far
           const finishedRacers = updatedRacers.filter(r => r.finished);
@@ -230,6 +294,11 @@ export function useRace() {
 
             // If all finished and we're host, broadcast final results
             if (allFinished && isHostRef.current) {
+              // Update raceDataRef status
+              if (raceDataRef.current) {
+                raceDataRef.current.status = 'finished';
+              }
+              
               setTimeout(() => {
                 broadcast('race_finished', { results });
               }, 50);
@@ -237,6 +306,7 @@ export function useRace() {
               return {
                 ...prev,
                 racers: updatedRacers,
+                myFinished: prev.myFinished || isMyFinish,
                 status: RaceStatus.FINISHED,
                 results,
                 raceStats,
@@ -246,23 +316,51 @@ export function useRace() {
             return { 
               ...prev, 
               racers: updatedRacers,
+              myFinished: prev.myFinished || isMyFinish,
               results, // Update results progressively
               raceStats, // Update stats progressively
             };
           }
           
-          return { ...prev, racers: updatedRacers };
+          return { ...prev, racers: updatedRacers, myFinished: prev.myFinished || isMyFinish };
         });
         break;
 
       case 'race_finished':
+        // Update raceDataRef status if we're host
+        if (isHostRef.current && raceDataRef.current) {
+          raceDataRef.current.status = 'finished';
+          
+          // Update host presence to reflect finished status
+          if (channelRef.current) {
+            const myRacer = data.results.find(r => r.id === myIdRef.current);
+            channelRef.current.track({
+              odId: myIdRef.current,
+              name: myNameRef.current,
+              ready: true,
+              progress: 100,
+              wpm: myRacer?.wpm || 0,
+              accuracy: myRacer?.accuracy || 100,
+              finished: true,
+              time: myRacer?.time || 0,
+              isHost: true,
+              raceState: {
+                status: 'finished',
+              },
+            });
+          }
+        }
+        
         setState(prev => {
           const raceStats = calculateRaceStats(data.results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+          // Check if I'm in the results (meaning I finished)
+          const myResultExists = data.results.some(r => r.id === prev.myId);
           return {
             ...prev,
             status: RaceStatus.FINISHED,
             results: data.results,
             raceStats,
+            myFinished: prev.myFinished || myResultExists,
           };
         });
         break;
@@ -300,24 +398,38 @@ export function useRace() {
     if (!channelRef.current) return;
 
     const presenceState = channelRef.current.presenceState();
-    const racers = [];
+    const presenceRacersMap = new Map(); // Dedupe by odId
+    const presenceSpectatorsMap = new Map();
     let hostPresent = false;
     let currentHost = null;
     let raceStateFromHost = null;
 
     Object.values(presenceState).forEach(presences => {
       presences.forEach(presence => {
-        racers.push({
+        // Skip if no odId
+        if (!presence.odId) return;
+        
+        const person = {
           id: presence.odId,
           name: presence.name,
           ready: presence.ready || false,
           progress: presence.progress || 0,
           wpm: presence.wpm || 0,
           accuracy: presence.accuracy || 100,
+          position: presence.position, // Character position in text (for ghost cursor)
           finished: presence.finished || false,
           time: presence.time || 0,
           isHost: presence.isHost || false,
-        });
+          isSpectator: presence.isSpectator || false,
+        };
+        
+        // Use Map to deduplicate - later entries override earlier ones
+        if (presence.isSpectator) {
+          presenceSpectatorsMap.set(presence.odId, person);
+        } else {
+          presenceRacersMap.set(presence.odId, person);
+        }
+        
         if (presence.isHost) {
           hostPresent = true;
           currentHost = presence;
@@ -329,16 +441,49 @@ export function useRace() {
       });
     });
 
+    // Convert maps to arrays
+    const presenceRacers = Array.from(presenceRacersMap.values());
+    const presenceSpectators = Array.from(presenceSpectatorsMap.values());
+
     setState(prev => {
+      // Merge presence data with existing racers to preserve broadcast-updated fields
+      // (progress, wpm, accuracy are updated via broadcast more frequently than presence)
+      const existingRacersMap = new Map(prev.racers.map(r => [r.id, r]));
+      const racers = presenceRacers.map(pr => {
+        const existing = existingRacersMap.get(pr.id);
+        if (existing) {
+          // Preserve the higher progress/wpm values (from broadcast updates)
+          // Position should never go backward
+          const existingPos = typeof existing.position === 'number' ? existing.position : -1;
+          const newPos = typeof pr.position === 'number' ? pr.position : -1;
+          const finalPos = Math.max(existingPos, newPos);
+          
+          return {
+            ...pr,
+            progress: Math.max(pr.progress, existing.progress),
+            wpm: existing.wpm > 0 ? existing.wpm : pr.wpm,
+            accuracy: existing.accuracy < 100 ? existing.accuracy : pr.accuracy,
+            finished: pr.finished || existing.finished,
+            time: existing.time || pr.time,
+            wordSpeeds: existing.wordSpeeds || pr.wordSpeeds,
+            keystrokeData: existing.keystrokeData || pr.keystrokeData,
+            position: finalPos >= 0 ? finalPos : undefined,
+          };
+        }
+        return pr;
+      });
+      
       // If we just joined and there's race state from host, sync it
       if (raceStateFromHost && !isHostRef.current && prev.status === RaceStatus.WAITING) {
         let newStatus = prev.status;
         if (raceStateFromHost.status === 'racing') newStatus = RaceStatus.RACING;
         else if (raceStateFromHost.status === 'countdown') newStatus = RaceStatus.COUNTDOWN;
+        else if (raceStateFromHost.status === 'finished') newStatus = RaceStatus.FINISHED;
         
         return {
           ...prev,
           racers,
+          spectators: presenceSpectators,
           paragraph: raceStateFromHost.paragraph || prev.paragraph,
           paragraphIndex: raceStateFromHost.paragraphIndex || prev.paragraphIndex,
           status: newStatus,
@@ -355,11 +500,13 @@ export function useRace() {
         if (newHostId === prev.myId) {
           // We are the new host - take over
           isHostRef.current = true;
+          const currentStatus = prev.status === RaceStatus.RACING ? 'racing' : 
+                                prev.status === RaceStatus.FINISHED ? 'finished' : 'waiting';
           raceDataRef.current = { 
             racers, 
             paragraph: prev.paragraph, 
             paragraphIndex: prev.paragraphIndex,
-            status: prev.status === RaceStatus.RACING ? 'racing' : 'waiting',
+            status: currentStatus,
             raceStartTime: prev.raceStartTime,
           };
           
@@ -379,7 +526,7 @@ export function useRace() {
               raceState: {
                 paragraph: prev.paragraph,
                 paragraphIndex: prev.paragraphIndex,
-                status: prev.status === RaceStatus.RACING ? 'racing' : 'waiting',
+                status: currentStatus,
                 raceStartTime: prev.raceStartTime,
               },
             });
@@ -392,11 +539,12 @@ export function useRace() {
         }
       }
       
-      return { ...prev, racers };
+      return { ...prev, racers, spectators: presenceSpectators };
     });
 
+    // Update raceDataRef with presence racers (for host)
     if (isHostRef.current && raceDataRef.current) {
-      raceDataRef.current.racers = racers;
+      raceDataRef.current.racers = presenceRacers;
     }
   }, [checkAllFinished]);
 
@@ -411,6 +559,7 @@ export function useRace() {
           status: raceDataRef.current.status || 'waiting',
           raceStartTime: raceDataRef.current.raceStartTime || null,
           racers: raceDataRef.current.racers || [],
+          realtimeMode: raceDataRef.current.realtimeMode ?? true,
         });
       }, 100);
     }
@@ -423,8 +572,8 @@ export function useRace() {
     return { raceId, paragraph, paragraphIndex };
   }, []);
 
-  // Join a race (as host or joiner)
-  const joinRace = useCallback(async (raceId, name, paragraph = '', paragraphIndex = 0, asHost = false) => {
+  // Join a race (as host, joiner, or spectator)
+  const joinRace = useCallback(async (raceId, name, paragraph = '', paragraphIndex = 0, asHost = false, asSpectator = false) => {
     const myId = myIdRef.current;
     isHostRef.current = asHost;
 
@@ -434,6 +583,7 @@ export function useRace() {
       status: RaceStatus.CONNECTING,
       myId,
       isHost: asHost,
+      isSpectator: asSpectator,
       paragraph: asHost ? paragraph : '',
       paragraphIndex: asHost ? paragraphIndex : 0,
       error: null,
@@ -442,7 +592,7 @@ export function useRace() {
     }));
 
     if (asHost) {
-      raceDataRef.current = { paragraph, paragraphIndex, racers: [] };
+      raceDataRef.current = { paragraph, paragraphIndex, racers: [], realtimeMode: true };
     }
 
     // Subscribe to Supabase Realtime channel
@@ -492,13 +642,14 @@ export function useRace() {
           await channel.track({
             odId: myId,
             name: finalName,
-            ready: false,
+            ready: asSpectator ? true : false, // Spectators are always "ready"
             progress: 0,
             wpm: 0,
             accuracy: 100,
             finished: false,
             time: 0,
             isHost: asHost,
+            isSpectator: asSpectator,
           });
 
           // Delayed check for name collisions (race condition protection)
@@ -556,6 +707,9 @@ export function useRace() {
   const setReady = useCallback(async (ready) => {
     if (!channelRef.current) return;
 
+    // Get current presence state to preserve isSpectator
+    const currentPresence = channelRef.current.presenceState()[myIdRef.current]?.[0];
+
     await channelRef.current.track({
       odId: myIdRef.current,
       name: myNameRef.current,
@@ -566,6 +720,7 @@ export function useRace() {
       finished: false,
       time: 0,
       isHost: isHostRef.current,
+      isSpectator: currentPresence?.isSpectator || false,
     });
 
     broadcast('ready_update', { odId: myIdRef.current, ready });
@@ -620,6 +775,7 @@ export function useRace() {
       finished: myRacer?.finished || false,
       time: myRacer?.time || 0,
       isHost: isHostRef.current,
+      isSpectator: myRacer?.isSpectator || false,
     });
     
     // Broadcast name change
@@ -634,60 +790,87 @@ export function useRace() {
     if (!isHostRef.current) return;
 
     const countdownEnd = Date.now() + 3000;
-    broadcast('countdown', { endTime: countdownEnd });
-
-    if (raceDataRef.current) {
-      raceDataRef.current.status = 'countdown';
-    }
-
-    setState(prev => ({
-      ...prev,
-      status: RaceStatus.COUNTDOWN,
-      countdownEnd,
-    }));
-
-    setTimeout(() => {
-      const startTime = Date.now();
-      broadcast('race_start', { startTime });
+    
+    // Get current realtimeMode from state
+    setState(prev => {
+      const realtimeMode = prev.realtimeMode;
+      const paragraph = raceDataRef.current?.paragraph || prev.paragraph;
+      const paragraphIndex = raceDataRef.current?.paragraphIndex ?? prev.paragraphIndex;
       
+      broadcast('countdown', { 
+        endTime: countdownEnd, 
+        realtimeMode,
+        paragraph,
+        paragraphIndex,
+      });
+
       if (raceDataRef.current) {
-        raceDataRef.current.status = 'racing';
-        raceDataRef.current.raceStartTime = startTime;
+        raceDataRef.current.status = 'countdown';
+        raceDataRef.current.realtimeMode = realtimeMode;
       }
-      
-      // Update host presence with race state for recovery
-      if (channelRef.current && isHostRef.current) {
-        const myRacer = raceDataRef.current?.racers?.find(r => r.id === myIdRef.current);
-        channelRef.current.track({
-          odId: myIdRef.current,
-          name: myNameRef.current,
-          ready: true,
-          progress: myRacer?.progress || 0,
-          wpm: myRacer?.wpm || 0,
-          accuracy: myRacer?.accuracy || 100,
-          finished: false,
-          time: 0,
-          isHost: true,
-          raceState: {
-            paragraph: raceDataRef.current.paragraph,
-            paragraphIndex: raceDataRef.current.paragraphIndex,
-            status: 'racing',
-            raceStartTime: startTime,
-          },
-        });
-      }
-      
-      setState(prev => ({
+
+      setTimeout(() => {
+        const startTime = Date.now();
+        broadcast('race_start', { startTime, realtimeMode, paragraph, paragraphIndex });
+        
+        if (raceDataRef.current) {
+          raceDataRef.current.status = 'racing';
+          raceDataRef.current.raceStartTime = startTime;
+        }
+        
+        // Update host presence with race state for recovery
+        if (channelRef.current && isHostRef.current) {
+          const myRacer = raceDataRef.current?.racers?.find(r => r.id === myIdRef.current);
+          channelRef.current.track({
+            odId: myIdRef.current,
+            name: myNameRef.current,
+            ready: true,
+            progress: myRacer?.progress || 0,
+            wpm: myRacer?.wpm || 0,
+            accuracy: myRacer?.accuracy || 100,
+            finished: false,
+            time: 0,
+            isHost: true,
+            raceState: {
+              paragraph: raceDataRef.current.paragraph,
+              paragraphIndex: raceDataRef.current.paragraphIndex,
+              status: 'racing',
+              raceStartTime: startTime,
+              realtimeMode,
+            },
+          });
+        }
+        
+        setState(prev2 => ({
+          ...prev2,
+          status: RaceStatus.RACING,
+          raceStartTime: startTime,
+        }));
+      }, 3000);
+
+      return {
         ...prev,
-        status: RaceStatus.RACING,
-        raceStartTime: startTime,
-      }));
-    }, 3000);
+        status: RaceStatus.COUNTDOWN,
+        countdownEnd,
+      };
+    });
+  }, [broadcast]);
+
+  // Set realtime mode (host only)
+  const setRealtimeMode = useCallback((enabled) => {
+    if (!isHostRef.current) return;
+    
+    setState(prev => ({ ...prev, realtimeMode: enabled }));
+    broadcast('settings_update', { realtimeMode: enabled });
+    
+    if (raceDataRef.current) {
+      raceDataRef.current.realtimeMode = enabled;
+    }
   }, [broadcast]);
 
   // Update progress - real-time via broadcast (unlimited!)
-  const updateProgress = useCallback((progress, wpm, accuracy) => {
-    broadcast('progress', { odId: myIdRef.current, progress, wpm, accuracy });
+  const updateProgress = useCallback((progress, wpm, accuracy, position) => {
+    broadcast('progress', { odId: myIdRef.current, progress, wpm, accuracy, position });
 
     // Update presence - include race state if host
     if (channelRef.current) {
@@ -698,6 +881,7 @@ export function useRace() {
         progress,
         wpm,
         accuracy,
+        position,
         finished: false,
         time: 0,
         isHost: isHostRef.current,
@@ -725,13 +909,13 @@ export function useRace() {
   }, [broadcast]);
 
   // Finish race
-  const finishRace = useCallback((wpm, accuracy, time, wordSpeeds = []) => {
+  const finishRace = useCallback((wpm, accuracy, time, wordSpeeds = [], keystrokeData = []) => {
     const myId = myIdRef.current;
-    broadcast('finish', { odId: myId, wpm, accuracy, time, wordSpeeds });
+    broadcast('finish', { odId: myId, wpm, accuracy, time, wordSpeeds, keystrokeData });
 
     // Update presence to show finished
     if (channelRef.current) {
-      channelRef.current.track({
+      const presenceData = {
         odId: myId,
         name: myNameRef.current,
         ready: true,
@@ -741,12 +925,24 @@ export function useRace() {
         finished: true,
         time,
         isHost: isHostRef.current,
-      });
+      };
+      
+      // Host includes race state - mark as racing until all finished
+      if (isHostRef.current && raceDataRef.current) {
+        presenceData.raceState = {
+          paragraph: raceDataRef.current.paragraph,
+          paragraphIndex: raceDataRef.current.paragraphIndex,
+          status: raceDataRef.current.status || 'racing',
+          raceStartTime: raceDataRef.current.raceStartTime,
+        };
+      }
+      
+      channelRef.current.track(presenceData);
     }
 
     setState(prev => {
       const updatedRacers = prev.racers.map(r =>
-        r.id === myId ? { ...r, finished: true, wpm, accuracy, time, wordSpeeds } : r
+        r.id === myId ? { ...r, finished: true, wpm, accuracy, time, wordSpeeds, keystrokeData } : r
       );
 
       // Update host's race data
@@ -772,6 +968,29 @@ export function useRace() {
       // If all finished and we're host, broadcast final results
       if (allFinished && isHostRef.current) {
         broadcast('race_finished', { results });
+        
+        // Update raceDataRef status
+        if (raceDataRef.current) {
+          raceDataRef.current.status = 'finished';
+        }
+        
+        // Update presence with finished status
+        if (channelRef.current) {
+          channelRef.current.track({
+            odId: myId,
+            name: myNameRef.current,
+            ready: true,
+            progress: 100,
+            wpm,
+            accuracy,
+            finished: true,
+            time,
+            isHost: true,
+            raceState: {
+              status: 'finished',
+            },
+          });
+        }
 
         return {
           ...prev,
@@ -883,6 +1102,7 @@ export function useRace() {
     leaveRace,
     clearRaceStats,
     generateShareUrl,
+    setRealtimeMode,
     isInRace: state.status !== RaceStatus.IDLE && state.status !== RaceStatus.FINISHED,
     hasRaceStats: state.raceStats !== null,
     waitingForOthers,

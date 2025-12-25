@@ -1,4 +1,54 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { KeyboardHeatmap } from './KeyboardViz';
+
+// Custom Tooltip component - appears above element
+function Tooltip({ children, text, position = 'top' }) {
+  const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+  const triggerRef = useRef(null);
+  const tooltipRef = useRef(null);
+
+  const showTooltip = useCallback(() => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setCoords({
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+      setVisible(true);
+    }
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    setVisible(false);
+  }, []);
+
+  return (
+    <span 
+      ref={triggerRef}
+      className="tooltip-trigger"
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+      onFocus={showTooltip}
+      onBlur={hideTooltip}
+    >
+      {children}
+      {visible && text && (
+        <span 
+          ref={tooltipRef}
+          className="custom-tooltip"
+          style={{
+            left: coords.x,
+            top: coords.y,
+          }}
+        >
+          {text}
+          <span className="tooltip-arrow" />
+        </span>
+      )}
+    </span>
+  );
+}
 
 // Editable name component
 function EditableName({ name, isYou, onNameChange }) {
@@ -73,8 +123,13 @@ function EditableName({ name, isYou, onNameChange }) {
 export function RaceLobby({ 
   raceId, 
   racers, 
+  spectators = [],
   myId, 
   isHost,
+  isSpectator,
+  realtimeMode,
+  winStreak = { current: 0, best: 0 },
+  onRealtimeModeChange,
   onReady, 
   onStart, 
   onLeave,
@@ -86,6 +141,7 @@ export function RaceLobby({
   const [showLink, setShowLink] = useState(false);
 
   const handleReadyToggle = () => {
+    if (isSpectator) return; // Spectators can't ready up
     const newReady = !isReady;
     setIsReady(newReady);
     onReady(newReady);
@@ -102,7 +158,7 @@ export function RaceLobby({
   };
 
   const allReady = racers.length >= 2 && racers.every(r => r.ready);
-  const canStart = isHost && allReady;
+  const canStart = isHost && allReady && !isSpectator;
   const urlRef = useRef(null);
 
   const handleUrlClick = () => {
@@ -152,6 +208,30 @@ export function RaceLobby({
         </button>
       </div>
 
+      {/* Spectator banner */}
+      {isSpectator && (
+        <div className="spectator-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          spectating
+        </div>
+      )}
+
+      {/* Win streak badge */}
+      {winStreak.current > 0 && !isSpectator && (
+        <Tooltip text={`Best streak: ${winStreak.best}`}>
+          <div className="win-streak-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2c1 3 2.5 3.5 3.5 4.5A5 5 0 0 1 17 10c0 .5-.5 2-1.5 3-1 1-2 1.5-3.5 1.5S9 14 8 13c-1-1-1.5-2.5-1.5-3a5 5 0 0 1 1.5-3.5C9 5.5 11 5 12 2z"/>
+              <path d="M12 18v4M8 22h8"/>
+            </svg>
+            {winStreak.current} streak
+          </div>
+        </Tooltip>
+      )}
+
       {/* Racers list */}
       <div className="lobby-racers">
         {racers.map((racer) => (
@@ -173,7 +253,7 @@ export function RaceLobby({
             </div>
           </div>
         ))}
-        {racers.length < 2 && (
+        {racers.length < 2 && !isSpectator && (
           <div className="lobby-racer empty">
             <div className="racer-info">
               <span className="racer-status" />
@@ -183,24 +263,60 @@ export function RaceLobby({
         )}
       </div>
 
+      {/* Spectators list */}
+      {spectators.length > 0 && (
+        <div className="lobby-spectators">
+          <span className="spectators-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            {spectators.length} watching
+          </span>
+        </div>
+      )}
+
+      {/* Race Settings (host only) */}
+      <div className="lobby-settings">
+        <Tooltip text={realtimeMode ? "Timer starts at GO for everyone" : "Timer starts when you begin typing"}>
+          <label className={`setting-toggle ${!isHost || isSpectator ? 'disabled' : ''}`}>
+            <input
+              type="checkbox"
+              checked={realtimeMode}
+              onChange={(e) => isHost && !isSpectator && onRealtimeModeChange(e.target.checked)}
+              disabled={!isHost || isSpectator}
+            />
+            <span className="toggle-slider" />
+            <span className="toggle-label">realtime</span>
+          </label>
+        </Tooltip>
+      </div>
+
       {/* Actions - fixed layout */}
       <div className="lobby-actions">
         <button onClick={onLeave} className="lobby-btn leave">
           leave
         </button>
-        <button 
-          onClick={handleReadyToggle}
-          className={`lobby-btn ready-toggle ${isReady ? 'is-ready' : ''}`}
-        >
-          {isReady ? 'not ready' : 'ready'}
-        </button>
-        <button 
-          onClick={canStart ? onStart : undefined}
-          className={`lobby-btn start ${!canStart ? 'disabled' : ''}`}
-          disabled={!canStart}
-        >
-          start
-        </button>
+        {!isSpectator && (
+          <>
+            <button 
+              onClick={handleReadyToggle}
+              className={`lobby-btn ready-toggle ${isReady ? 'is-ready' : ''}`}
+            >
+              {isReady ? 'not ready' : 'ready'}
+            </button>
+            <button 
+              onClick={canStart ? onStart : undefined}
+              className={`lobby-btn start ${!canStart ? 'disabled' : ''}`}
+              disabled={!canStart}
+            >
+              start
+            </button>
+          </>
+        )}
+        {isSpectator && (
+          <span className="spectator-waiting">waiting for race to start...</span>
+        )}
       </div>
     </div>
   );
@@ -228,12 +344,33 @@ export function RaceCountdown({ endTime }) {
   );
 }
 
+// Racer colors - consistent across the app
+export const RACER_COLORS = [
+  { name: 'amber', hex: '#f59e0b' },
+  { name: 'violet', hex: '#8b5cf6' },
+  { name: 'pink', hex: '#ec4899' },
+  { name: 'cyan', hex: '#06b6d4' },
+  { name: 'emerald', hex: '#10b981' },
+  { name: 'rose', hex: '#f43f5e' },
+  { name: 'sky', hex: '#0ea5e9' },
+  { name: 'orange', hex: '#f97316' },
+];
+
+// Get stable color index for a racer based on all racers in the race
+export function getRacerColorIndex(racerId, allRacers) {
+  // Sort all racers by ID for stable ordering
+  const sortedIds = [...allRacers].map(r => r.id).sort();
+  return sortedIds.indexOf(racerId) % RACER_COLORS.length;
+}
+
 // Progress bar for a single racer
-export function RacerProgress({ racer, isYou }) {
+export function RacerProgress({ racer, isYou, colorIndex = 0 }) {
+  const color = RACER_COLORS[colorIndex];
+  
   return (
     <div className={`racer-progress ${isYou ? 'you' : ''} ${racer.finished ? 'finished' : ''}`}>
       <div className="racer-progress-info">
-        <span className="racer-progress-name">
+        <span className="racer-progress-name" style={{ color: isYou ? 'var(--text)' : color.hex }}>
           {racer.name}
           {isYou && <span className="you-tag">you</span>}
         </span>
@@ -244,7 +381,10 @@ export function RacerProgress({ racer, isYou }) {
       <div className="racer-progress-bar">
         <div 
           className="racer-progress-fill"
-          style={{ width: `${racer.progress}%` }}
+          style={{ 
+            width: `${racer.progress}%`,
+            backgroundColor: isYou ? 'var(--accent)' : color.hex,
+          }}
         />
       </div>
     </div>
@@ -252,31 +392,58 @@ export function RacerProgress({ racer, isYou }) {
 }
 
 // Race progress panel showing all racers
-export function RaceProgressPanel({ racers, myId, myFinished }) {
+export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, isSpectator }) {
   const sortedRacers = useMemo(() => {
+    // Sort: you first, then by progress/finish position
     return [...racers].sort((a, b) => {
+      // Always put yourself first
+      if (a.id === myId) return -1;
+      if (b.id === myId) return 1;
+      // Then sort by finish position or progress
       if (a.finished && b.finished) return (a.position || 0) - (b.position || 0);
       if (a.finished) return -1;
       if (b.finished) return 1;
       return b.progress - a.progress;
     });
-  }, [racers]);
+  }, [racers, myId]);
 
   const finishedCount = racers.filter(r => r.finished).length;
   const totalCount = racers.length;
 
   return (
     <div className="race-progress-panel">
-      {sortedRacers.map(racer => (
-        <RacerProgress 
-          key={racer.id} 
-          racer={racer} 
-          isYou={racer.id === myId}
-        />
-      ))}
-      {myFinished && finishedCount < totalCount && (
+      {sortedRacers.map(racer => {
+        const colorIndex = getRacerColorIndex(racer.id, racers);
+        return (
+          <RacerProgress 
+            key={racer.id} 
+            racer={racer} 
+            isYou={racer.id === myId}
+            colorIndex={colorIndex}
+          />
+        );
+      })}
+      {myFinished && finishedCount < totalCount && !isSpectator && (
         <div className="waiting-for-others">
           waiting for others ({finishedCount}/{totalCount})
+        </div>
+      )}
+      {isSpectator && (
+        <div className="spectator-watching">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          watching
+        </div>
+      )}
+      {spectators.length > 0 && !isSpectator && (
+        <div className="spectators-indicator">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          {spectators.length} watching
         </div>
       )}
     </div>
@@ -284,7 +451,7 @@ export function RaceProgressPanel({ racers, myId, myFinished }) {
 }
 
 // Race results screen
-export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, shareUrl }) {
+export function RaceResults({ results, myId, onPlayAgain, onLeave, shareUrl, isWaitingForOthers }) {
   const [copied, setCopied] = useState(false);
   
   const formatTime = (ms) => (ms / 1000).toFixed(1) + 's';
@@ -300,8 +467,15 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, 
     }
   };
   
+  const finishedCount = results.length;
+  
   return (
     <div className="race-results">
+      {isWaitingForOthers && (
+        <div className="results-waiting">
+          waiting for others to finish...
+        </div>
+      )}
       <div className="results-list">
         {results.map((racer, index) => (
           <div 
@@ -315,9 +489,9 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, 
               {racer.name}
               {racer.id === myId && <span className="you-tag">you</span>}
             </span>
-            <span className="result-wpm">{Math.round(racer.wpm)}</span>
-            <span className="result-accuracy">{Math.round(racer.accuracy)}%</span>
-            <span className="result-time">{formatTime(racer.time)}</span>
+            <span className="result-wpm" title="Words per minute">{Math.round(racer.wpm)}</span>
+            <span className="result-accuracy" title="Accuracy percentage">{Math.round(racer.accuracy)}%</span>
+            <span className="result-time" title="Time to complete">{formatTime(racer.time)}</span>
           </div>
         ))}
       </div>
@@ -326,17 +500,16 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, 
         <button onClick={onLeave} className="result-btn">
           leave
         </button>
-        {shareUrl && (
+        {shareUrl && !isWaitingForOthers && (
           <button onClick={handleShare} className="result-btn">
             {copied ? 'copied!' : 'share'}
           </button>
         )}
-        <button onClick={onViewStats} className="result-btn">
-          stats
-        </button>
-        <button onClick={onPlayAgain} className="result-btn primary">
-          race again
-        </button>
+        {!isWaitingForOthers && (
+          <button onClick={onPlayAgain} className="result-btn primary">
+            race again
+          </button>
+        )}
       </div>
     </div>
   );
@@ -415,14 +588,18 @@ function WordSpeedMap({ results, paragraph, myId }) {
         const speeds = racer.wordSpeeds || [];
         if (speeds.length === 0) return null;
         
+        const colorIndex = getRacerColorIndex(racer.id, results);
+        const color = RACER_COLORS[colorIndex];
+        const isYou = racer.id === myId;
+        
         return (
           <div 
             key={racer.id} 
-            className={`speed-map-row ${racer.id === myId ? 'you' : ''}`}
+            className={`speed-map-row ${isYou ? 'you' : ''}`}
           >
-            <span className="speed-map-label">
+            <span className="speed-map-label" style={{ color: isYou ? 'var(--accent)' : color.hex }}>
               {racer.name}
-              {racer.id === myId && <span className="you-tag">you</span>}
+              {isYou && <span className="you-tag">you</span>}
             </span>
             <div className="speed-map-words">
               {words.map((word, i) => (
@@ -441,6 +618,194 @@ function WordSpeedMap({ results, paragraph, myId }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Speed Over Time Chart - shows how speed varied throughout the race
+function SpeedOverTimeChart({ results, myId }) {
+  if (!results || results.length === 0) return null;
+  
+  // Check if any racer has wordSpeeds data
+  const hasWordSpeeds = results.some(r => r.wordSpeeds && r.wordSpeeds.length > 0);
+  if (!hasWordSpeeds) return null;
+  
+  const maxWords = Math.max(...results.map(r => r.wordSpeeds?.length || 0));
+  if (maxWords < 3) return null; // Need at least 3 data points
+  
+  // Get all speeds to calculate y-axis range
+  const allSpeeds = results.flatMap(r => r.wordSpeeds || []).filter(s => s > 0);
+  if (allSpeeds.length === 0) return null;
+  
+  const minSpeed = Math.floor(Math.min(...allSpeeds) * 0.85);
+  const maxSpeed = Math.ceil(Math.max(...allSpeeds) * 1.1);
+  const speedRange = maxSpeed - minSpeed || 1;
+  
+  // Create data for each racer
+  const racerData = results.map(racer => {
+    const speeds = racer.wordSpeeds || [];
+    if (speeds.length < 2) return null;
+    
+    const colorIndex = getRacerColorIndex(racer.id, results);
+    const color = racer.id === myId ? 'var(--accent)' : RACER_COLORS[colorIndex].hex;
+    const hexColor = racer.id === myId ? '#6ecf6e' : RACER_COLORS[colorIndex].hex;
+    const isYou = racer.id === myId;
+    
+    return {
+      id: racer.id,
+      name: racer.name,
+      color,
+      hexColor,
+      isYou,
+      speeds,
+    };
+  }).filter(Boolean);
+  
+  if (racerData.length === 0) return null;
+  
+  // Chart dimensions
+  const chartHeight = 100;
+  const chartWidth = maxWords - 1;
+  
+  return (
+    <div className="speed-chart">
+      <div className="speed-chart-header">
+        <span className="speed-chart-title">speed over time</span>
+      </div>
+      
+      <div className="speed-chart-legend">
+        {racerData.map(({ id, name, hexColor, isYou }) => (
+          <div key={id} className="speed-legend-item">
+            <span className="speed-legend-dot" style={{ backgroundColor: hexColor }} />
+            <span className="speed-legend-name">{name}{isYou ? ' (you)' : ''}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="speed-chart-container">
+        <div className="speed-chart-y-axis">
+          <span>{maxSpeed}</span>
+          <span>{Math.round((maxSpeed + minSpeed) / 2)}</span>
+          <span>{minSpeed}</span>
+        </div>
+        <div className="speed-chart-graph">
+          <svg 
+            viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
+            preserveAspectRatio="none"
+            className="speed-chart-svg"
+          >
+            {/* Grid lines */}
+            <line x1="0" y1="0" x2={chartWidth} y2="0" stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" />
+            <line x1="0" y1={chartHeight/2} x2={chartWidth} y2={chartHeight/2} stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" strokeDasharray="2,2" />
+            <line x1="0" y1={chartHeight} x2={chartWidth} y2={chartHeight} stroke="var(--text-dim)" strokeWidth="0.5" opacity="0.2" />
+            
+            {/* Lines - render "you" last so it's on top */}
+            {racerData
+              .sort((a, b) => (a.isYou ? 1 : 0) - (b.isYou ? 1 : 0))
+              .map(({ id, hexColor, speeds, isYou }) => {
+                const points = speeds.map((speed, i) => {
+                  const x = (i / (speeds.length - 1)) * chartWidth;
+                  const y = chartHeight - ((speed - minSpeed) / speedRange) * chartHeight;
+                  return `${x},${y}`;
+                }).join(' ');
+                
+                return (
+                  <polyline 
+                    key={id}
+                    points={points}
+                    fill="none"
+                    stroke={hexColor}
+                    strokeWidth={isYou ? 3 : 2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={isYou ? 1 : 0.6}
+                  />
+                );
+              })}
+          </svg>
+        </div>
+      </div>
+      <div className="speed-chart-x-label">words →</div>
+    </div>
+  );
+}
+
+// Race Keyboards - shows keyboard heatmaps for each racer
+function RaceKeyboards({ results, myId }) {
+  if (!results || results.length === 0) return null;
+  
+  // Check if any racer has keystrokeData
+  const hasKeystrokeData = results.some(r => r.keystrokeData && r.keystrokeData.length > 0);
+  if (!hasKeystrokeData) return null;
+  
+  // Convert keystrokeData to keyStats format for KeyboardHeatmap
+  const convertToKeyStats = (keystrokeData) => {
+    if (!keystrokeData || keystrokeData.length === 0) return null;
+    
+    const keyStats = {};
+    keystrokeData.forEach(k => {
+      // Normalize key to lowercase, skip backspace and modifier keys
+      const rawKey = k.key;
+      if (!rawKey) return;
+      const key = rawKey.toLowerCase();
+      if (key === 'backspace' || key === 'shift' || key === 'control' || key === 'alt' || key === 'meta') return;
+      
+      if (!keyStats[key]) {
+        keyStats[key] = { times: [], count: 0, correct: 0, errors: 0 };
+      }
+      
+      if (k.time && k.time > 0) {
+        keyStats[key].times.push(k.time);
+      }
+      keyStats[key].count++;
+      
+      // Handle both boolean and string representations of correct
+      const isCorrect = k.correct === true || k.correct === 'true';
+      if (isCorrect) {
+        keyStats[key].correct++;
+      } else {
+        keyStats[key].errors++;
+      }
+    });
+    
+    // Compute avgInterval and accuracy for each key
+    Object.keys(keyStats).forEach(key => {
+      const times = keyStats[key].times;
+      keyStats[key].avgInterval = times.length > 0 
+        ? times.reduce((a, b) => a + b, 0) / times.length 
+        : 0;
+      keyStats[key].accuracy = keyStats[key].count > 0 
+        ? keyStats[key].correct / keyStats[key].count 
+        : 1;
+    });
+    
+    return keyStats;
+  };
+  
+  return (
+    <div className="race-keyboards">
+      <div className="race-keyboards-header">
+        <span className="race-keyboards-title">keyboard heatmaps</span>
+      </div>
+      <div className="race-keyboards-grid">
+        {results.map(racer => {
+          const keyStats = convertToKeyStats(racer.keystrokeData);
+          if (!keyStats) return null;
+          
+          const colorIndex = getRacerColorIndex(racer.id, results);
+          const color = RACER_COLORS[colorIndex];
+          const isYou = racer.id === myId;
+          
+          return (
+            <div key={racer.id} className={`race-keyboard ${isYou ? 'you' : ''}`}>
+              <div className="race-keyboard-header" style={{ color: isYou ? 'var(--accent)' : color.hex }}>
+                {racer.name}{isYou && ' (you)'}
+              </div>
+              <KeyboardHeatmap keyStats={keyStats} mode="speed" />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -531,26 +896,34 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
       {/* Your Result - Hero Section */}
       {myResult && (
         <div className="pvp-hero">
-          <div className="pvp-position">
-            <span className="position-num">{myResult.position}</span>
-            <span className="position-suffix">
-              {myResult.position === 1 ? 'st' : myResult.position === 2 ? 'nd' : myResult.position === 3 ? 'rd' : 'th'}
-            </span>
-            {stillWaiting && <span className="provisional">(provisional)</span>}
-          </div>
+          <Tooltip text="Your finishing position">
+            <div className="pvp-position">
+              <span className="position-num">{myResult.position}</span>
+              <span className="position-suffix">
+                {myResult.position === 1 ? 'st' : myResult.position === 2 ? 'nd' : myResult.position === 3 ? 'rd' : 'th'}
+              </span>
+              {stillWaiting && <span className="provisional">(provisional)</span>}
+            </div>
+          </Tooltip>
           <div className="pvp-main-stats">
-            <div className="main-stat">
-              <span className="stat-value">{fmt.int(myResult.wpm)}</span>
-              <span className="stat-label">wpm</span>
-            </div>
-            <div className="main-stat">
-              <span className="stat-value">{fmt.dec(myResult.accuracy, 1)}</span>
-              <span className="stat-label">accuracy</span>
-            </div>
-            <div className="main-stat">
-              <span className="stat-value">{formatTime(myResult.time)}</span>
-              <span className="stat-label">time</span>
-            </div>
+            <Tooltip text="Words per minute - your typing speed">
+              <div className="main-stat">
+                <span className="stat-value">{fmt.int(myResult.wpm)}</span>
+                <span className="stat-label">wpm</span>
+              </div>
+            </Tooltip>
+            <Tooltip text="Percentage of characters typed correctly">
+              <div className="main-stat">
+                <span className="stat-value">{fmt.dec(myResult.accuracy, 1)}</span>
+                <span className="stat-label">accuracy</span>
+              </div>
+            </Tooltip>
+            <Tooltip text="Time taken to complete the paragraph">
+              <div className="main-stat">
+                <span className="stat-value">{formatTime(myResult.time)}</span>
+                <span className="stat-label">time</span>
+              </div>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -560,7 +933,9 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
         <div className="pvp-h2h">
           <div className="h2h-row">
             <span className="h2h-you">{fmt.int(myResult.wpm)}</span>
-            <span className="h2h-label">wpm</span>
+            <Tooltip text="Words per minute comparison">
+              <span className="h2h-label">wpm</span>
+            </Tooltip>
             <span className="h2h-them">{fmt.int(opponent.wpm)}</span>
           </div>
           <div className="h2h-bar">
@@ -571,7 +946,9 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
           </div>
           <div className="h2h-row">
             <span className="h2h-you">{fmt.dec(myResult.accuracy, 1)}%</span>
-            <span className="h2h-label">accuracy</span>
+            <Tooltip text="Accuracy percentage comparison">
+              <span className="h2h-label">accuracy</span>
+            </Tooltip>
             <span className="h2h-them">{fmt.dec(opponent.accuracy, 1)}%</span>
           </div>
           <div className="h2h-bar">
@@ -582,7 +959,9 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
           </div>
           <div className="h2h-row">
             <span className="h2h-you">{formatTime(myResult.time)}</span>
-            <span className="h2h-label">time</span>
+            <Tooltip text="Time to complete (less is better)">
+              <span className="h2h-label">time</span>
+            </Tooltip>
             <span className="h2h-them">{formatTime(opponent.time)}</span>
           </div>
           <div className="h2h-bar">
@@ -626,44 +1005,60 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
       {/* Race Insights */}
       <div className="pvp-insights">
         {marginOfVictory > 0 && (
-          <div className="insight">
-            <span className="insight-value">{fmt.dec(marginOfVictory, 1)}</span>
-            <span className="insight-label">wpm margin</span>
-          </div>
+          <Tooltip text="Speed difference between 1st and 2nd place">
+            <div className="insight">
+              <span className="insight-value">{fmt.dec(marginOfVictory, 1)}</span>
+              <span className="insight-label">wpm margin</span>
+            </div>
+          </Tooltip>
         )}
         {marginTime > 0 && (
-          <div className="insight">
-            <span className="insight-value">{(marginTime / 1000).toFixed(1)}s</span>
-            <span className="insight-label">time gap</span>
-          </div>
+          <Tooltip text="Time difference between 1st and 2nd place">
+            <div className="insight">
+              <span className="insight-value">{(marginTime / 1000).toFixed(1)}s</span>
+              <span className="insight-label">time gap</span>
+            </div>
+          </Tooltip>
         )}
-        <div className="insight">
-          <span className="insight-value">{fmt.int(wpmSpread)}</span>
-          <span className="insight-label">wpm spread</span>
-        </div>
-        <div className="insight">
-          <span className="insight-value">{fmt.dec(avgWpm, 0)}</span>
-          <span className="insight-label">field avg</span>
-        </div>
-        <div className="insight">
-          <span className="insight-value">{fmt.dec(avgAccuracy, 1)}%</span>
-          <span className="insight-label">avg accuracy</span>
-        </div>
-        <div className="insight">
-          <span className="insight-value">{formatTime(avgTime)}</span>
-          <span className="insight-label">avg time</span>
-        </div>
-        {paragraph && myResult && (
+        <Tooltip text="Difference between fastest and slowest racer">
           <div className="insight">
-            <span className="insight-value">{(paragraph.length / (myResult.time / 1000)).toFixed(1)}</span>
-            <span className="insight-label">chars/sec</span>
+            <span className="insight-value">{fmt.int(wpmSpread)}</span>
+            <span className="insight-label">wpm spread</span>
           </div>
+        </Tooltip>
+        <Tooltip text="Average speed of all racers">
+          <div className="insight">
+            <span className="insight-value">{fmt.dec(avgWpm, 0)}</span>
+            <span className="insight-label">field avg</span>
+          </div>
+        </Tooltip>
+        <Tooltip text="Average accuracy of all racers">
+          <div className="insight">
+            <span className="insight-value">{fmt.dec(avgAccuracy, 1)}%</span>
+            <span className="insight-label">avg accuracy</span>
+          </div>
+        </Tooltip>
+        <Tooltip text="Average completion time for all racers">
+          <div className="insight">
+            <span className="insight-value">{formatTime(avgTime)}</span>
+            <span className="insight-label">avg time</span>
+          </div>
+        </Tooltip>
+        {paragraph && myResult && (
+          <Tooltip text="Your typing speed in characters per second">
+            <div className="insight">
+              <span className="insight-value">{(paragraph.length / (myResult.time / 1000)).toFixed(1)}</span>
+              <span className="insight-label">chars/sec</span>
+            </div>
+          </Tooltip>
         )}
         {paragraph && (
-          <div className="insight">
-            <span className="insight-value">{Math.round(paragraph.length / 5)}</span>
-            <span className="insight-label">words</span>
-          </div>
+          <Tooltip text="Total words in paragraph (5 chars = 1 word)">
+            <div className="insight">
+              <span className="insight-value">{Math.round(paragraph.length / 5)}</span>
+              <span className="insight-label">words</span>
+            </div>
+          </Tooltip>
         )}
       </div>
 
@@ -673,29 +1068,44 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
           const barWidth = wpmSpread > 0 
             ? ((racer.wpm - slowestWpm) / wpmSpread) * 100 
             : 100;
+          const colorIndex = getRacerColorIndex(racer.id, allResults);
+          const color = RACER_COLORS[colorIndex];
+          const isYou = racer.id === myResult?.id;
+          
           return (
-            <div 
-              key={racer.id} 
-              className={`standing ${racer.id === myResult?.id ? 'you' : ''}`}
-            >
-              <span className="standing-pos">{index + 1}</span>
-              <div className="standing-info">
-                <span className="standing-name">
-                  {racer.name}
-                  {racer.id === myResult?.id && <span className="you-tag">you</span>}
-                </span>
-                <div className="standing-bar">
-                  <div className="standing-fill" style={{ width: `${barWidth}%` }} />
+            <Tooltip key={racer.id} text={`${fmt.int(racer.wpm)} WPM · ${fmt.dec(racer.accuracy, 1)}% accuracy · ${formatTime(racer.time)}`}>
+              <div className={`standing ${isYou ? 'you' : ''}`}>
+                <span className="standing-pos" style={{ color: isYou ? 'var(--accent)' : color.hex }}>{index + 1}</span>
+                <div className="standing-info">
+                  <span className="standing-name" style={{ color: isYou ? 'var(--text)' : color.hex }}>
+                    {racer.name}
+                    {isYou && <span className="you-tag">you</span>}
+                  </span>
+                  <div className="standing-bar">
+                    <div 
+                      className="standing-fill" 
+                      style={{ 
+                        width: `${barWidth}%`,
+                        backgroundColor: isYou ? 'var(--accent)' : color.hex,
+                      }} 
+                    />
+                  </div>
                 </div>
+                <span className="standing-wpm" style={{ color: isYou ? 'var(--accent)' : color.hex }}>{fmt.int(racer.wpm)}</span>
               </div>
-              <span className="standing-wpm">{fmt.int(racer.wpm)}</span>
-            </div>
+            </Tooltip>
           );
         })}
       </div>
 
+      {/* Speed Over Time Chart */}
+      <SpeedOverTimeChart results={allResults} myId={myResult?.id} />
+
       {/* Word Speed Map */}
       <WordSpeedMap results={allResults} paragraph={paragraph} myId={myResult?.id} />
+
+      {/* Keyboard Visualization */}
+      <RaceKeyboards results={allResults} myId={myResult?.id} />
 
       {/* Text Info */}
       <div className="pvp-text-info">

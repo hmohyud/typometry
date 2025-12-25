@@ -443,6 +443,43 @@ h1 {
   text-decoration-color: var(--incorrect);
 }
 
+/* Ghost cursors for opponents in race */
+.char.ghost-cursor {
+  position: relative;
+}
+
+.char.ghost-cursor::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--ghost-color, #f59e0b);
+  border-radius: 2px;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Ghost cursor name label - always visible above the cursor */
+.char.ghost-cursor::after {
+  content: attr(data-ghost);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ghost-color, #f59e0b);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 500;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+}
+
 .hint {
   color: var(--text-muted);
   font-size: 0.875rem;
@@ -517,6 +554,14 @@ h1 {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stat-icon {
+  vertical-align: middle;
+  opacity: 0.8;
 }
 
 /* Graphs section */
@@ -606,6 +651,14 @@ h1 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.label-icon {
+  opacity: 0.8;
 }
 
 .bigram-list {
@@ -1855,6 +1908,16 @@ footer {
   overflow-y: auto;
 }
 
+/* Combined History Modal */
+.modal.history-modal.combined {
+  max-width: 800px;
+  max-height: 85vh;
+}
+
+.modal.history-modal.combined .modal-body {
+  padding: 0;
+}
+
 /* History List */
 .history-list {
   display: flex;
@@ -2906,14 +2969,15 @@ footer {
   text-align: center;
 }
 
-.behavioral-grid {
-  display: grid;
+/* Behavioral grid in finger/chord sections (2 columns) */
+.finger-section .behavioral-grid,
+.chord-section .behavioral-grid {
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
 }
 
 @media (max-width: 600px) {
-  .behavioral-grid {
+  .finger-section .behavioral-grid,
+  .chord-section .behavioral-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -3856,20 +3920,20 @@ footer {
   margin-bottom: 0.75rem;
 }
 
-.behavioral-grid {
-  display: grid;
+/* Behavioral grid in history detail (3 columns) */
+.history-behavioral .behavioral-grid {
   grid-template-columns: repeat(3, 1fr);
   gap: 0.5rem;
 }
 
-.behavioral-stat {
+.history-behavioral .behavioral-stat {
   text-align: center;
   padding: 0.5rem;
   background: var(--bg);
   border-radius: 4px;
 }
 
-.behavioral-stat .stat-value {
+.history-behavioral .behavioral-stat .stat-value {
   display: block;
   font-family: var(--font-mono);
   font-size: 0.9rem;
@@ -3877,7 +3941,7 @@ footer {
   color: var(--text);
 }
 
-.behavioral-stat .stat-label {
+.history-behavioral .behavioral-stat .stat-label {
   display: block;
   font-size: 0.6rem;
   color: var(--text-dim);
@@ -3904,7 +3968,7 @@ footer {
     grid-column: span 1;
   }
 
-  .behavioral-grid {
+  .history-behavioral .behavioral-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
