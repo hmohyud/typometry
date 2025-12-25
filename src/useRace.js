@@ -802,16 +802,29 @@ export function useRace() {
     
     const { allResults, paragraph } = state.raceStats;
     
-    // Compact format: name|wpm|acc|time for each racer, separated by ;
-    const resultsStr = allResults.map(r => 
-      `${r.name}|${Math.round(r.wpm)}|${Math.round(r.accuracy)}|${Math.round(r.time)}`
-    ).join(';');
+    // Version 2 format - more comprehensive
+    // v2|charCount,wordCount,timestamp|name,wpm,acc,time,ws1-ws2-ws3...|name,...
+    const meta = [
+      paragraph?.length || 0,
+      Math.round((paragraph?.length || 0) / 5),
+      Date.now(),
+    ].join(',');
     
-    // Include paragraph length and word count
-    const meta = `${paragraph?.length || 0}|${Math.round((paragraph?.length || 0) / 5)}`;
+    const racers = allResults.map(r => {
+      const parts = [
+        r.name,
+        Math.round(r.wpm * 10) / 10, // 1 decimal
+        Math.round(r.accuracy * 10) / 10,
+        Math.round(r.time),
+      ];
+      // Add word speeds if available (dash-separated for compactness)
+      if (r.wordSpeeds && r.wordSpeeds.length > 0) {
+        parts.push(r.wordSpeeds.join('-'));
+      }
+      return parts.join(',');
+    }).join('|');
     
-    // Combine and encode
-    const data = `${meta}::${resultsStr}`;
+    const data = `v2|${meta}|${racers}`;
     const encoded = btoa(encodeURIComponent(data));
     
     return `${window.location.origin}${window.location.pathname}?r=${encoded}`;
@@ -855,29 +868,179 @@ export function useRace() {
 export function parseSharedResults(encoded) {
   try {
     const data = decodeURIComponent(atob(encoded));
-    const [meta, resultsStr] = data.split('::');
-    const [charCount, wordCount] = meta.split('|').map(Number);
     
-    const results = resultsStr.split(';').map((r, i) => {
-      const [name, wpm, accuracy, time] = r.split('|');
-      return {
-        id: `shared_${i}`,
-        name,
-        wpm: Number(wpm),
-        accuracy: Number(accuracy),
-        time: Number(time),
-        position: i + 1,
-      };
-    });
+    // Check version
+    if (data.startsWith('v2|')) {
+      return parseV2(data);
+    }
     
-    return {
-      results,
-      charCount,
-      wordCount,
-      racerCount: results.length,
-    };
+    // Legacy v1 format
+    return parseV1(data);
   } catch (e) {
     console.error('Failed to parse shared results:', e);
+    return null;
+  }
+}
+
+function parseV1(data) {
+  const [meta, resultsStr] = data.split('::');
+  const [charCount, wordCount] = meta.split('|').map(Number);
+  
+  const results = resultsStr.split(';').map((r, i) => {
+    const [name, wpm, accuracy, time] = r.split('|');
+    return {
+      id: `shared_${i}`,
+      name,
+      wpm: Number(wpm),
+      accuracy: Number(accuracy),
+      time: Number(time),
+      position: i + 1,
+      wordSpeeds: [],
+    };
+  });
+  
+  return computeDerivedStats(results, charCount, wordCount, null);
+}
+
+function parseV2(data) {
+  const parts = data.split('|');
+  const [charCount, wordCount, timestamp] = parts[1].split(',').map(Number);
+  
+  const results = [];
+  for (let i = 2; i < parts.length; i++) {
+    const racerParts = parts[i].split(',');
+    const name = racerParts[0];
+    const wpm = Number(racerParts[1]);
+    const accuracy = Number(racerParts[2]);
+    const time = Number(racerParts[3]);
+    const wordSpeeds = racerParts[4] ? racerParts[4].split('-').map(Number) : [];
+    
+    results.push({
+      id: `shared_${i - 2}`,
+      name,
+      wpm,
+      accuracy,
+      time,
+      position: i - 1,
+      wordSpeeds,
+    });
+  }
+  
+  return computeDerivedStats(results, charCount, wordCount, timestamp);
+}
+
+function computeDerivedStats(results, charCount, wordCount, timestamp) {
+  const racerCount = results.length;
+  
+  // Basic aggregates
+  const wpms = results.map(r => r.wpm);
+  const accuracies = results.map(r => r.accuracy);
+  const times = results.map(r => r.time);
+  
+  const avgWpm = wpms.reduce((a, b) => a + b, 0) / racerCount;
+  const avgAccuracy = accuracies.reduce((a, b) => a + b, 0) / racerCount;
+  const avgTime = times.reduce((a, b) => a + b, 0) / racerCount;
+  
+  const maxWpm = Math.max(...wpms);
+  const minWpm = Math.min(...wpms);
+  const maxAccuracy = Math.max(...accuracies);
+  const minAccuracy = Math.min(...accuracies);
+  const fastestTime = Math.min(...times);
+  const slowestTime = Math.max(...times);
+  
+  // Standard deviations
+  const wpmStdDev = Math.sqrt(wpms.reduce((sum, w) => sum + Math.pow(w - avgWpm, 2), 0) / racerCount);
+  const accStdDev = Math.sqrt(accuracies.reduce((sum, a) => sum + Math.pow(a - avgAccuracy, 2), 0) / racerCount);
+  
+  // Winner stats
+  const winner = results[0];
+  const runnerUp = results[1];
+  const marginWpm = runnerUp ? winner.wpm - runnerUp.wpm : 0;
+  const marginTime = runnerUp ? runnerUp.time - winner.time : 0;
+  
+  // Word-level stats (if available)
+  const allWordSpeeds = results.flatMap(r => r.wordSpeeds || []);
+  const hasWordSpeeds = allWordSpeeds.length > 0;
+  
+  let wordSpeedStats = null;
+  if (hasWordSpeeds) {
+    const avgWordSpeed = allWordSpeeds.reduce((a, b) => a + b, 0) / allWordSpeeds.length;
+    const maxWordSpeed = Math.max(...allWordSpeeds);
+    const minWordSpeed = Math.min(...allWordSpeeds);
+    const wordSpeedStdDev = Math.sqrt(
+      allWordSpeeds.reduce((sum, w) => sum + Math.pow(w - avgWordSpeed, 2), 0) / allWordSpeeds.length
+    );
+    
+    // Per-word averages across racers
+    const wordCount = Math.max(...results.map(r => r.wordSpeeds?.length || 0));
+    const perWordAvg = [];
+    for (let i = 0; i < wordCount; i++) {
+      const speedsAtPos = results.map(r => r.wordSpeeds?.[i]).filter(s => s !== undefined);
+      if (speedsAtPos.length > 0) {
+        perWordAvg.push(Math.round(speedsAtPos.reduce((a, b) => a + b, 0) / speedsAtPos.length));
+      }
+    }
+    
+    wordSpeedStats = {
+      avgWordSpeed,
+      maxWordSpeed,
+      minWordSpeed,
+      wordSpeedStdDev,
+      wordSpeedRange: maxWordSpeed - minWordSpeed,
+      perWordAvg,
+    };
+  }
+  
+  // Characters per second for winner
+  const winnerCps = charCount / (winner.time / 1000);
+  
+  return {
+    results,
+    charCount,
+    wordCount,
+    timestamp,
+    racerCount,
+    
+    // Aggregates
+    avgWpm,
+    avgAccuracy,
+    avgTime,
+    
+    // Extremes
+    maxWpm,
+    minWpm,
+    wpmSpread: maxWpm - minWpm,
+    maxAccuracy,
+    minAccuracy,
+    accuracySpread: maxAccuracy - minAccuracy,
+    fastestTime,
+    slowestTime,
+    timeSpread: slowestTime - fastestTime,
+    
+    // Distributions
+    wpmStdDev,
+    accStdDev,
+    
+    // Competition
+    winner,
+    marginWpm,
+    marginTime,
+    winnerCps,
+    
+    // Word-level
+    wordSpeedStats,
+    hasWordSpeeds,
+    
+    // Include raw decoded string for inspection
+    rawEncoded: `v2|${[charCount, wordCount, timestamp].join(',')}|${results.map(r => [r.name, r.wpm, r.accuracy, r.time, (r.wordSpeeds || []).join('-')].join(',')).join('|')}`,
+  };
+}
+
+// Utility to just decode and return the raw string
+export function decodeShareUrl(encoded) {
+  try {
+    return decodeURIComponent(atob(encoded));
+  } catch (e) {
     return null;
   }
 }

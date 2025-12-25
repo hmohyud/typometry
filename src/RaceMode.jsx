@@ -628,6 +628,26 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
           <span className="insight-value">{fmt.dec(avgWpm, 0)}</span>
           <span className="insight-label">field avg</span>
         </div>
+        <div className="insight">
+          <span className="insight-value">{fmt.dec(avgAccuracy, 1)}%</span>
+          <span className="insight-label">avg accuracy</span>
+        </div>
+        <div className="insight">
+          <span className="insight-value">{formatTime(avgTime)}</span>
+          <span className="insight-label">avg time</span>
+        </div>
+        {paragraph && myResult && (
+          <div className="insight">
+            <span className="insight-value">{(paragraph.length / (myResult.time / 1000)).toFixed(1)}</span>
+            <span className="insight-label">chars/sec</span>
+          </div>
+        )}
+        {paragraph && (
+          <div className="insight">
+            <span className="insight-value">{Math.round(paragraph.length / 5)}</span>
+            <span className="insight-label">words</span>
+          </div>
+        )}
       </div>
 
       {/* Standings */}
@@ -667,36 +687,11 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
   );
 }
 
-// Parse shared results from URL
-export function parseSharedResults(encoded) {
-  try {
-    const decoded = decodeURIComponent(atob(encoded));
-    const [meta, resultsStr] = decoded.split('::');
-    const [chars, words] = meta.split('|').map(Number);
-    
-    const results = resultsStr.split(';').map((r, i) => {
-      const [name, wpm, accuracy, time] = r.split('|');
-      return {
-        id: `shared_${i}`,
-        name,
-        wpm: Number(wpm),
-        accuracy: Number(accuracy),
-        time: Number(time),
-        position: i + 1,
-      };
-    });
-    
-    return { results, chars, words };
-  } catch (e) {
-    console.error('Failed to parse shared results:', e);
-    return null;
-  }
-}
+// Parse shared results - re-export from useRace.js
+// (imported at top of file, but also available here for backward compat)
 
 // Shared Results View - standalone page for shared links
-export function SharedResultsView({ encoded, onGoToApp }) {
-  const data = parseSharedResults(encoded);
-  
+export function SharedResultsView({ data, onGoToApp }) {
   if (!data) {
     return (
       <div className="shared-results-error">
@@ -706,11 +701,29 @@ export function SharedResultsView({ encoded, onGoToApp }) {
     );
   }
   
-  const { results, chars, words } = data;
-  const winner = results[0];
-  const avgWpm = results.reduce((a, r) => a + r.wpm, 0) / results.length;
-  const wpmSpread = Math.max(...results.map(r => r.wpm)) - Math.min(...results.map(r => r.wpm));
-  const slowestWpm = Math.min(...results.map(r => r.wpm));
+  const { 
+    results, 
+    charCount, 
+    wordCount, 
+    racerCount,
+    avgWpm,
+    avgAccuracy,
+    avgTime,
+    maxWpm,
+    minWpm,
+    wpmSpread,
+    wpmStdDev,
+    accStdDev,
+    fastestTime,
+    slowestTime,
+    winner,
+    marginWpm,
+    marginTime,
+    winnerCps,
+    wordSpeedStats,
+    hasWordSpeeds,
+    timestamp,
+  } = data;
 
   const formatTime = (ms) => {
     const seconds = ms / 1000;
@@ -720,6 +733,16 @@ export function SharedResultsView({ encoded, onGoToApp }) {
     return `${mins}m ${secs}s`;
   };
   
+  const formatDate = (ts) => {
+    if (!ts) return null;
+    return new Date(ts).toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
   return (
     <div className="shared-results">
       <div className="shared-header">
@@ -727,20 +750,22 @@ export function SharedResultsView({ encoded, onGoToApp }) {
         <button onClick={onGoToApp} className="go-to-app-btn">try typometry</button>
       </div>
       
+      {/* Winner Hero */}
       <div className="shared-winner">
         <span className="winner-label">winner</span>
         <span className="winner-name">{winner.name}</span>
         <div className="winner-stats">
-          <span>{winner.wpm} wpm</span>
-          <span>{winner.accuracy}%</span>
+          <span>{Math.round(winner.wpm * 10) / 10} wpm</span>
+          <span>{Math.round(winner.accuracy * 10) / 10}%</span>
           <span>{formatTime(winner.time)}</span>
         </div>
       </div>
       
+      {/* Standings with bars */}
       <div className="shared-standings">
         {results.map((racer, index) => {
           const barWidth = wpmSpread > 0 
-            ? ((racer.wpm - slowestWpm) / wpmSpread) * 100 
+            ? ((racer.wpm - minWpm) / wpmSpread) * 100 
             : 100;
           return (
             <div key={racer.id} className="shared-standing">
@@ -751,19 +776,97 @@ export function SharedResultsView({ encoded, onGoToApp }) {
                   <div className="standing-fill" style={{ width: `${barWidth}%` }} />
                 </div>
               </div>
-              <span className="standing-wpm">{racer.wpm}</span>
+              <span className="standing-wpm">{Math.round(racer.wpm)}</span>
             </div>
           );
         })}
       </div>
       
-      <div className="shared-meta">
-        <span>{results.length} racers</span>
-        <span>·</span>
-        <span>{chars} chars</span>
-        <span>·</span>
-        <span>~{words} words</span>
+      {/* Competition Stats */}
+      <div className="shared-stats-grid">
+        {marginWpm > 0 && (
+          <div className="shared-stat">
+            <span className="stat-value">{marginWpm.toFixed(1)}</span>
+            <span className="stat-label">wpm margin</span>
+          </div>
+        )}
+        {marginTime > 0 && (
+          <div className="shared-stat">
+            <span className="stat-value">{(marginTime / 1000).toFixed(1)}s</span>
+            <span className="stat-label">time gap</span>
+          </div>
+        )}
+        <div className="shared-stat">
+          <span className="stat-value">{avgWpm.toFixed(0)}</span>
+          <span className="stat-label">avg wpm</span>
+        </div>
+        <div className="shared-stat">
+          <span className="stat-value">{wpmSpread.toFixed(0)}</span>
+          <span className="stat-label">wpm spread</span>
+        </div>
+        <div className="shared-stat">
+          <span className="stat-value">{wpmStdDev.toFixed(1)}</span>
+          <span className="stat-label">wpm σ</span>
+        </div>
+        <div className="shared-stat">
+          <span className="stat-value">{avgAccuracy.toFixed(1)}%</span>
+          <span className="stat-label">avg accuracy</span>
+        </div>
+        <div className="shared-stat">
+          <span className="stat-value">{winnerCps.toFixed(1)}</span>
+          <span className="stat-label">cps (winner)</span>
+        </div>
+        <div className="shared-stat">
+          <span className="stat-value">{formatTime(avgTime)}</span>
+          <span className="stat-label">avg time</span>
+        </div>
       </div>
+      
+      {/* Word Speed Stats */}
+      {hasWordSpeeds && wordSpeedStats && (
+        <div className="shared-word-stats">
+          <div className="word-stats-header">word-level analysis</div>
+          <div className="shared-stats-grid">
+            <div className="shared-stat">
+              <span className="stat-value">{Math.round(wordSpeedStats.avgWordSpeed)}</span>
+              <span className="stat-label">avg word wpm</span>
+            </div>
+            <div className="shared-stat">
+              <span className="stat-value">{wordSpeedStats.maxWordSpeed}</span>
+              <span className="stat-label">fastest word</span>
+            </div>
+            <div className="shared-stat">
+              <span className="stat-value">{wordSpeedStats.minWordSpeed}</span>
+              <span className="stat-label">slowest word</span>
+            </div>
+            <div className="shared-stat">
+              <span className="stat-value">{wordSpeedStats.wordSpeedRange}</span>
+              <span className="stat-label">word range</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Meta */}
+      <div className="shared-meta">
+        <span>{racerCount} racer{racerCount !== 1 ? 's' : ''}</span>
+        <span>·</span>
+        <span>{charCount} chars</span>
+        <span>·</span>
+        <span>~{wordCount} words</span>
+        {timestamp && (
+          <>
+            <span>·</span>
+            <span>{formatDate(timestamp)}</span>
+          </>
+        )}
+      </div>
+      
+      {/* Raw Data Expander */}
+      <details className="shared-raw-data">
+        <summary>view raw data</summary>
+        <pre>{JSON.stringify(data, null, 2)}</pre>
+      </details>
     </div>
   );
 }
@@ -776,5 +879,4 @@ export default {
   RaceResults,
   RaceStatsPanel,
   SharedResultsView,
-  parseSharedResults,
 };

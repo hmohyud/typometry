@@ -4,7 +4,7 @@ import { getKeyDistance } from "./keyboard";
 import { KeyboardHeatmap, KeyboardFlowMap } from "./KeyboardViz";
 import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
 import { useGlobalStats } from "./useGlobalStats";
-import { useRace } from "./useRace";
+import { useRace, parseSharedResults } from "./useRace";
 import {
   RaceLobby,
   RaceCountdown,
@@ -94,6 +94,7 @@ const STORAGE_KEYS = {
   HISTORY: "typometry_history",
   HISTOGRAMS: "typometry_histograms",
   HISTOGRAM_ZOOM: "typometry_histogram_zoom",
+  RACE_HISTORY: "typometry_race_history",
 };
 
 // Histogram bucket configurations - fine granularity for smooth distributions
@@ -1119,6 +1120,331 @@ const Sparkline = ({ data, width = 200, height = 40, color = "#e2b714" }) => {
     <svg width={width} height={height} className="sparkline">
       <polyline fill="none" stroke={color} strokeWidth="2" points={points} />
     </svg>
+  );
+};
+
+// Sentence Flow - color-coded word-by-word speed visualization
+const SentenceFlow = ({ wordSpeeds, avgWpm, showTooltips = true }) => {
+  const [hoveredWord, setHoveredWord] = useState(null);
+  
+  if (!wordSpeeds || wordSpeeds.length === 0) return null;
+  
+  // Calculate speed range for color scaling
+  const wpms = wordSpeeds.map(w => w.wpm).filter(w => w > 0);
+  if (wpms.length === 0) return null;
+  
+  const minWpm = Math.min(...wpms);
+  const maxWpm = Math.max(...wpms);
+  const range = maxWpm - minWpm || 1;
+  const avg = avgWpm || wpms.reduce((a, b) => a + b, 0) / wpms.length;
+  
+  // Color function: red (slow) -> yellow -> green (fast)
+  const getWordColor = (wpm) => {
+    const normalized = (wpm - minWpm) / range;
+    const hue = normalized * 120; // 0 = red, 60 = yellow, 120 = green
+    return `hsl(${hue}, 70%, 45%)`;
+  };
+  
+  // Get relative indicator
+  const getRelative = (wpm) => {
+    const diff = wpm - avg;
+    if (Math.abs(diff) < 5) return 'avg';
+    return diff > 0 ? 'fast' : 'slow';
+  };
+
+  return (
+    <div className="sentence-flow">
+      <div className="sentence-flow-header">
+        <span className="flow-title">sentence flow</span>
+        <div className="flow-legend">
+          <span className="legend-item slow">slow</span>
+          <span className="legend-gradient"></span>
+          <span className="legend-item fast">fast</span>
+        </div>
+      </div>
+      <div className="sentence-flow-words">
+        {wordSpeeds.map((wordData, i) => (
+          <span
+            key={i}
+            className={`flow-word ${getRelative(wordData.wpm)} ${wordData.errors > 0 ? 'has-errors' : ''}`}
+            style={{ 
+              backgroundColor: getWordColor(wordData.wpm),
+              opacity: 0.85 + (wordData.wpm - minWpm) / range * 0.15,
+            }}
+            onMouseEnter={() => setHoveredWord(i)}
+            onMouseLeave={() => setHoveredWord(null)}
+          >
+            {wordData.word}
+            {showTooltips && hoveredWord === i && (
+              <div className="flow-tooltip">
+                <div className="tooltip-stat">
+                  <span className="tooltip-value">{wordData.wpm}</span>
+                  <span className="tooltip-label">wpm</span>
+                </div>
+                {wordData.time > 0 && (
+                  <div className="tooltip-stat">
+                    <span className="tooltip-value">{wordData.time}</span>
+                    <span className="tooltip-label">ms</span>
+                  </div>
+                )}
+                {wordData.errors > 0 && (
+                  <div className="tooltip-stat error">
+                    <span className="tooltip-value">{wordData.errors}</span>
+                    <span className="tooltip-label">errors</span>
+                  </div>
+                )}
+                <div className="tooltip-diff">
+                  {wordData.wpm >= avg ? '+' : ''}{Math.round(wordData.wpm - avg)} vs avg
+                </div>
+              </div>
+            )}
+          </span>
+        ))}
+      </div>
+      <div className="sentence-flow-stats">
+        <span>range: {minWpm}–{maxWpm} wpm</span>
+        <span>·</span>
+        <span>avg: {Math.round(avg)} wpm</span>
+        <span>·</span>
+        <span>{wordSpeeds.length} words</span>
+      </div>
+    </div>
+  );
+};
+
+// History Browser - clickable list of past sessions
+const HistoryBrowser = ({ history, paragraphs, onSelect, selectedId, onClose }) => {
+  if (!history || history.length === 0) {
+    return (
+      <div className="history-browser empty">
+        <p>no history yet</p>
+        <p className="hint">complete a paragraph to see it here</p>
+      </div>
+    );
+  }
+
+  const formatDate = (ts) => {
+    const date = new Date(ts);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+      return 'yesterday';
+    } else if (diffDays < 7) {
+      return date.toLocaleDateString(undefined, { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const getPreview = (entry) => {
+    const para = paragraphs[entry.paragraphIndex];
+    if (!para) return '...';
+    return para.substring(0, 50) + (para.length > 50 ? '...' : '');
+  };
+
+  return (
+    <div className="history-browser">
+      <div className="history-browser-header">
+        <h3>session history</h3>
+        <button className="close-btn" onClick={onClose}>×</button>
+      </div>
+      <div className="history-list">
+        {history.slice().reverse().map((entry, i) => (
+          <div 
+            key={entry.timestamp} 
+            className={`history-item ${selectedId === entry.timestamp ? 'selected' : ''}`}
+            onClick={() => onSelect(entry)}
+          >
+            <div className="history-item-main">
+              <span className="history-preview">{getPreview(entry)}</span>
+              <span className="history-date">{formatDate(entry.timestamp)}</span>
+            </div>
+            <div className="history-item-stats">
+              <span className="history-wpm">{Math.round(entry.wpm)} wpm</span>
+              <span className="history-acc">{Math.round(entry.accuracy)}%</span>
+              <span className="history-time">{(entry.totalTime / 1000).toFixed(1)}s</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Race History Browser - clickable list of past races
+const RaceHistoryBrowser = ({ races, onSelect, selectedId, onClose, onClearAll }) => {
+  if (!races || races.length === 0) {
+    return (
+      <div className="history-browser empty">
+        <p>no race history yet</p>
+        <p className="hint">complete a race to see it here</p>
+      </div>
+    );
+  }
+
+  const formatDate = (ts) => {
+    const date = new Date(ts);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+      return 'yesterday';
+    } else if (diffDays < 7) {
+      return date.toLocaleDateString(undefined, { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const getPositionSuffix = (pos) => {
+    if (pos === 1) return 'st';
+    if (pos === 2) return 'nd';
+    if (pos === 3) return 'rd';
+    return 'th';
+  };
+
+  return (
+    <div className="history-browser race-history">
+      <div className="history-browser-header">
+        <h3>race history</h3>
+        <div className="header-actions">
+          {onClearAll && (
+            <button className="clear-all-btn" onClick={onClearAll}>clear all</button>
+          )}
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+      </div>
+      <div className="history-list">
+        {races.map((race) => (
+          <div 
+            key={race.raceId} 
+            className={`history-item race-item ${selectedId === race.raceId ? 'selected' : ''}`}
+            onClick={() => onSelect(race)}
+          >
+            <div className="history-item-main">
+              <div className="race-position">
+                {race.myResult && (
+                  <span className={`position-badge p${race.myResult.position}`}>
+                    {race.myResult.position}{getPositionSuffix(race.myResult.position)}
+                  </span>
+                )}
+                <span className="race-opponents">vs {race.racerCount - 1} other{race.racerCount > 2 ? 's' : ''}</span>
+              </div>
+              <span className="history-date">{formatDate(race.timestamp)}</span>
+            </div>
+            <div className="history-item-stats">
+              {race.myResult && (
+                <>
+                  <span className="history-wpm">{Math.round(race.myResult.wpm)} wpm</span>
+                  <span className="history-acc">{Math.round(race.myResult.accuracy)}%</span>
+                </>
+              )}
+              <span className="race-avg">avg: {Math.round(race.avgWpm)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// History Detail View - shows full stats for a past session
+const HistoryDetailView = ({ entry, paragraph, onBack, fmt }) => {
+  if (!entry) return null;
+
+  const formatTime = (ms) => {
+    const seconds = ms / 1000;
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = (seconds % 60).toFixed(1);
+    return `${mins}m ${secs}s`;
+  };
+
+  return (
+    <div className="history-detail">
+      <div className="history-detail-header">
+        <button className="back-btn" onClick={onBack}>← back</button>
+        <span className="detail-date">
+          {new Date(entry.timestamp).toLocaleString()}
+        </span>
+      </div>
+
+      {/* Paragraph with sentence flow */}
+      <div className="history-paragraph-section">
+        <h4>paragraph</h4>
+        {entry.wordSpeeds && entry.wordSpeeds.length > 0 ? (
+          <SentenceFlow wordSpeeds={entry.wordSpeeds} avgWpm={entry.wpm} />
+        ) : (
+          <div className="history-paragraph-text">{paragraph}</div>
+        )}
+      </div>
+
+      {/* Key Stats */}
+      <div className="history-stats-grid">
+        <div className="history-stat hero">
+          <span className="stat-value">{fmt.int(entry.wpm)}</span>
+          <span className="stat-label">wpm</span>
+        </div>
+        <div className="history-stat hero">
+          <span className="stat-value">{fmt.dec(entry.accuracy, 1)}%</span>
+          <span className="stat-label">accuracy</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{fmt.dec(entry.consistency, 1)}%</span>
+          <span className="stat-label">consistency</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{formatTime(entry.totalTime)}</span>
+          <span className="stat-label">time</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{entry.charCount}</span>
+          <span className="stat-label">chars</span>
+        </div>
+        <div className="history-stat">
+          <span className="stat-value">{entry.errorCount}</span>
+          <span className="stat-label">errors</span>
+        </div>
+      </div>
+
+      {/* Behavioral Stats */}
+      {entry.behavioral && (
+        <div className="history-behavioral">
+          <h4>behavioral analysis</h4>
+          <div className="behavioral-grid">
+            <div className="behavioral-stat">
+              <span className="stat-value">{fmt.dec(entry.behavioral.rhythmScore, 0)}%</span>
+              <span className="stat-label">rhythm</span>
+            </div>
+            <div className="behavioral-stat">
+              <span className="stat-value">{fmt.dec(entry.behavioral.flowRatio, 0)}%</span>
+              <span className="stat-label">flow</span>
+            </div>
+            <div className="behavioral-stat">
+              <span className="stat-value">{entry.behavioral.maxBurst}</span>
+              <span className="stat-label">max burst</span>
+            </div>
+            <div className="behavioral-stat">
+              <span className="stat-value">{entry.behavioral.hesitationCount}</span>
+              <span className="stat-label">hesitations</span>
+            </div>
+            <div className="behavioral-stat">
+              <span className="stat-value">{fmt.dec(entry.behavioral.momentum, 1)}</span>
+              <span className="stat-label">momentum</span>
+            </div>
+            <div className="behavioral-stat">
+              <span className="stat-value">{fmt.dec(100 - entry.behavioral.fatiguePercent, 0)}%</span>
+              <span className="stat-label">stamina</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -2778,18 +3104,23 @@ function App() {
   const [isActive, setIsActive] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [viewingPastStats, setViewingPastStats] = useState(false); // True when viewing stats via button (not after completing)
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null); // Selected history item to view
+  const [selectedRaceEntry, setSelectedRaceEntry] = useState(null); // Selected race history item
   const [keystrokeData, setKeystrokeData] = useState([]);
   const [stats, setStats] = useState(null);
   const [cumulativeStats, setCumulativeStats] = useState(null);
   const [completedCount, setCompletedCount] = useState(0);
   const [totalParagraphs] = useState(ALL_PARAGRAPHS.length);
-  const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global'
+  const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global' | 'history' | 'race-history'
   const [comparisonBase, setComparisonBase] = useState("none"); // 'none' | 'alltime' | 'global' | 'current'
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
   const [rowSpeedShiftMode, setRowSpeedShiftMode] = useState(false); // false = base keys, true = shifted keys
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [showFixedHint, setShowFixedHint] = useState(false);
+  const [raceHistory, setRaceHistory] = useState(() => 
+    loadFromStorage(STORAGE_KEYS.RACE_HISTORY, [])
+  );
   const [histograms, setHistograms] = useState(() => {
     const stored = loadFromStorage(STORAGE_KEYS.HISTOGRAMS, {});
     // Validate histogram data matches current bucket counts
@@ -2881,7 +3212,11 @@ function App() {
   // Check for shared results URL
   const [sharedResultsData, setSharedResultsData] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("r") || null;
+    const encoded = params.get("r");
+    if (encoded) {
+      return parseSharedResults(encoded);
+    }
+    return null;
   });
 
   // Load completed indices on mount
@@ -2970,6 +3305,35 @@ function App() {
       setStatsView('race');
     }
   }, [raceState.status, hasRaceStats]);
+
+  // Save race to history when finished
+  useEffect(() => {
+    if (raceState.status === 'finished' && raceState.raceStats) {
+      const existingHistory = loadFromStorage(STORAGE_KEYS.RACE_HISTORY, []);
+      
+      // Check if this race is already saved (by raceId)
+      const alreadySaved = existingHistory.some(r => r.raceId === raceState.raceStats.raceId);
+      if (alreadySaved) return;
+      
+      const raceEntry = {
+        raceId: raceState.raceStats.raceId || `race_${Date.now()}`,
+        timestamp: Date.now(),
+        paragraph: raceState.raceStats.paragraph,
+        paragraphIndex: raceState.raceStats.paragraphIndex,
+        racerCount: raceState.raceStats.racerCount,
+        myResult: raceState.raceStats.myResult,
+        allResults: raceState.raceStats.allResults,
+        avgWpm: raceState.raceStats.avgWpm,
+        avgAccuracy: raceState.raceStats.avgAccuracy,
+        wpmSpread: raceState.raceStats.wpmSpread,
+        shareUrl: generateShareUrl(),
+      };
+      
+      const newRaceHistory = [raceEntry, ...existingHistory].slice(0, 50); // Keep last 50 races
+      saveToStorage(STORAGE_KEYS.RACE_HISTORY, newRaceHistory);
+      setRaceHistory(newRaceHistory);
+    }
+  }, [raceState.status, raceState.raceStats, generateShareUrl]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -4289,11 +4653,59 @@ function App() {
       if (typed.length + 1 === currentText.length) {
         const totalTime = now - startTime.current;
         const allRawEvents = [...rawKeyEvents, rawEvent];
+        const allKeystrokes = [...keystrokeData, keystroke];
+        
+        // Compute word-level speeds
+        const words = currentText.split(/(\s+)/); // Split keeping spaces
+        const wordSpeedsData = [];
+        let charIdx = 0;
+        
+        for (const word of words) {
+          if (word.trim().length === 0) {
+            charIdx += word.length;
+            continue;
+          }
+          
+          const wordStart = charIdx;
+          const wordEnd = charIdx + word.length - 1;
+          const wordKeystrokes = allKeystrokes.filter(k => 
+            k.position >= wordStart && k.position <= wordEnd && !k.isBackspace
+          );
+          
+          let wordWpm = 0;
+          let wordTime = 0;
+          let wordErrors = wordKeystrokes.filter(k => !k.correct).length;
+          
+          if (wordKeystrokes.length >= 2) {
+            const firstTs = wordKeystrokes[0].timestamp;
+            const lastTs = wordKeystrokes[wordKeystrokes.length - 1].timestamp;
+            wordTime = lastTs - firstTs;
+            if (wordTime > 0) {
+              wordWpm = ((word.length / 5) / (wordTime / 60000));
+            }
+          }
+          
+          wordSpeedsData.push({
+            word,
+            wpm: Math.round(wordWpm),
+            time: Math.round(wordTime),
+            errors: wordErrors,
+            startPos: wordStart,
+            endPos: wordEnd,
+          });
+          
+          charIdx += word.length;
+        }
+        
         const finalStats = calculateStats(
-          [...keystrokeData, keystroke],
+          allKeystrokes,
           totalTime,
           allRawEvents
         );
+        
+        // Add wordSpeeds to finalStats
+        finalStats.wordSpeeds = wordSpeedsData;
+        
         setIsComplete(true);
         setStats(finalStats);
 
@@ -4301,46 +4713,10 @@ function App() {
         if (isInRace && raceState.status === "racing" && raceState.raceStartTime) {
           const raceTime = Date.now() - raceState.raceStartTime;
           
-          // Compute word-level speeds
-          const allKeystrokes = [...keystrokeData, keystroke];
-          const words = currentText.split(/(\s+)/); // Split keeping spaces
-          const wordSpeeds = [];
-          let charIndex = 0;
+          // Use simple array of WPM values for race broadcast (smaller payload)
+          const wordSpeedsSimple = wordSpeedsData.map(w => w.wpm);
           
-          for (const word of words) {
-            if (word.trim().length === 0) {
-              charIndex += word.length;
-              continue;
-            }
-            
-            const wordStart = charIndex;
-            const wordEnd = charIndex + word.length - 1;
-            
-            // Find keystrokes for this word
-            const wordKeystrokes = allKeystrokes.filter(k => 
-              k.position >= wordStart && k.position <= wordEnd && !k.isBackspace
-            );
-            
-            if (wordKeystrokes.length >= 2) {
-              const firstTimestamp = wordKeystrokes[0].timestamp;
-              const lastTimestamp = wordKeystrokes[wordKeystrokes.length - 1].timestamp;
-              const wordTimeMs = lastTimestamp - firstTimestamp;
-              
-              // WPM for this word (chars / 5 = standard word, convert ms to minutes)
-              if (wordTimeMs > 0) {
-                const wordWpm = ((word.length / 5) / (wordTimeMs / 60000));
-                wordSpeeds.push(Math.round(wordWpm));
-              } else {
-                wordSpeeds.push(finalStats.wpm); // Fallback to overall WPM
-              }
-            } else if (wordKeystrokes.length === 1) {
-              wordSpeeds.push(finalStats.wpm); // Single char word, use overall
-            }
-            
-            charIndex += word.length;
-          }
-          
-          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeeds);
+          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeedsSimple);
         }
 
         // Scroll to show complete hint after a brief delay
@@ -4375,6 +4751,7 @@ function App() {
           consistency: finalStats.consistency,
           intervals: finalStats.intervals,
           wordIntervals: finalStats.wordIntervals,
+          wordSpeeds: finalStats.wordSpeeds, // Use already computed wordSpeeds
           distances: finalStats.distances,
           bigrams: finalStats.bigrams,
           counts: finalStats.counts,
@@ -4608,7 +4985,7 @@ function App() {
     return (
       <div className="app-wrapper shared-results-wrapper">
         <SharedResultsView 
-          encoded={sharedResultsData}
+          data={sharedResultsData}
           onGoToApp={() => {
             setSharedResultsData(null);
             window.history.pushState({}, "", window.location.pathname);
@@ -4978,6 +5355,30 @@ function App() {
                           race
                         </button>
                       )}
+                      <button
+                        className={`toggle-btn ${
+                          statsView === "history" ? "active" : ""
+                        }`}
+                        onClick={() => {
+                          setStatsView("history");
+                          setSelectedHistoryEntry(null);
+                        }}
+                      >
+                        📋
+                      </button>
+                      {raceHistory.length > 0 && (
+                        <button
+                          className={`toggle-btn ${
+                            statsView === "race-history" ? "active" : ""
+                          }`}
+                          onClick={() => {
+                            setStatsView("race-history");
+                            setSelectedRaceEntry(null);
+                          }}
+                        >
+                          🏁
+                        </button>
+                      )}
                     </div>
                     <div className="stats-header-right">
                       {(hasGlobalStats || hasAllTimeStats) && (
@@ -5314,6 +5715,14 @@ function App() {
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* Sentence Flow - Word by Word Speed */}
+                {stats.wordSpeeds && stats.wordSpeeds.length > 0 && (
+                  <SentenceFlow 
+                    wordSpeeds={stats.wordSpeeds} 
+                    avgWpm={stats.wpm} 
+                  />
                 )}
 
                 {/* Keyboard Visualizations */}
@@ -9134,6 +9543,100 @@ function App() {
                 fmt={fmt}
                 shareUrl={generateShareUrl()}
               />
+            ) : statsView === "history" ? (
+              /* Session history view */
+              selectedHistoryEntry ? (
+                <HistoryDetailView
+                  entry={selectedHistoryEntry}
+                  paragraph={ALL_PARAGRAPHS[selectedHistoryEntry.paragraphIndex]}
+                  onBack={() => setSelectedHistoryEntry(null)}
+                  fmt={fmt}
+                />
+              ) : (
+                <HistoryBrowser
+                  history={loadFromStorage(STORAGE_KEYS.HISTORY, [])}
+                  paragraphs={ALL_PARAGRAPHS}
+                  onSelect={(entry) => setSelectedHistoryEntry(entry)}
+                  selectedId={selectedHistoryEntry?.timestamp}
+                  onClose={() => setStatsView("current")}
+                />
+              )
+            ) : statsView === "race-history" ? (
+              /* Race history view */
+              selectedRaceEntry ? (
+                <div className="race-history-detail">
+                  <div className="history-detail-header">
+                    <button className="back-btn" onClick={() => setSelectedRaceEntry(null)}>← back</button>
+                    <span className="detail-date">
+                      {new Date(selectedRaceEntry.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  {/* Paragraph */}
+                  <div className="history-paragraph-section">
+                    <h4>paragraph</h4>
+                    <div className="history-paragraph-text">{selectedRaceEntry.paragraph}</div>
+                  </div>
+                  
+                  {/* Results */}
+                  <div className="race-results-section">
+                    <h4>results</h4>
+                    <div className="race-results-list">
+                      {selectedRaceEntry.allResults?.map((racer, i) => (
+                        <div 
+                          key={racer.id} 
+                          className={`race-result-row ${racer.id === selectedRaceEntry.myResult?.id ? 'you' : ''}`}
+                        >
+                          <span className="result-pos">{i + 1}</span>
+                          <span className="result-name">{racer.name}</span>
+                          <span className="result-wpm">{Math.round(racer.wpm)} wpm</span>
+                          <span className="result-acc">{Math.round(racer.accuracy)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Stats */}
+                  <div className="history-stats-grid">
+                    <div className="history-stat">
+                      <span className="stat-value">{Math.round(selectedRaceEntry.avgWpm)}</span>
+                      <span className="stat-label">avg wpm</span>
+                    </div>
+                    <div className="history-stat">
+                      <span className="stat-value">{Math.round(selectedRaceEntry.wpmSpread)}</span>
+                      <span className="stat-label">wpm spread</span>
+                    </div>
+                    <div className="history-stat">
+                      <span className="stat-value">{selectedRaceEntry.racerCount}</span>
+                      <span className="stat-label">racers</span>
+                    </div>
+                  </div>
+                  
+                  {/* Share button */}
+                  {selectedRaceEntry.shareUrl && (
+                    <button 
+                      className="share-race-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedRaceEntry.shareUrl);
+                      }}
+                    >
+                      copy share link
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <RaceHistoryBrowser
+                  races={raceHistory}
+                  onSelect={(race) => setSelectedRaceEntry(race)}
+                  selectedId={selectedRaceEntry?.raceId}
+                  onClose={() => setStatsView("current")}
+                  onClearAll={() => {
+                    saveToStorage(STORAGE_KEYS.RACE_HISTORY, []);
+                    setRaceHistory([]);
+                    setStatsView("current");
+                  }}
+                />
+              )
             ) : null}
 
             <p className="restart-hint" ref={restartHintRef}>
