@@ -252,7 +252,7 @@ export function RacerProgress({ racer, isYou }) {
 }
 
 // Race progress panel showing all racers
-export function RaceProgressPanel({ racers, myId }) {
+export function RaceProgressPanel({ racers, myId, myFinished }) {
   const sortedRacers = useMemo(() => {
     return [...racers].sort((a, b) => {
       if (a.finished && b.finished) return (a.position || 0) - (b.position || 0);
@@ -261,6 +261,9 @@ export function RaceProgressPanel({ racers, myId }) {
       return b.progress - a.progress;
     });
   }, [racers]);
+
+  const finishedCount = racers.filter(r => r.finished).length;
+  const totalCount = racers.length;
 
   return (
     <div className="race-progress-panel">
@@ -271,6 +274,11 @@ export function RaceProgressPanel({ racers, myId }) {
           isYou={racer.id === myId}
         />
       ))}
+      {myFinished && finishedCount < totalCount && (
+        <div className="waiting-for-others">
+          waiting for others ({finishedCount}/{totalCount})
+        </div>
+      )}
     </div>
   );
 }
@@ -327,6 +335,106 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, onViewStats, 
           race again
         </button>
       </div>
+    </div>
+  );
+}
+
+// Word Speed Map - shows per-word speeds for each racer
+function WordSpeedMap({ results, paragraph, myId }) {
+  if (!results || results.length === 0 || !paragraph) return null;
+  
+  // Check if any racer has wordSpeeds data
+  const hasWordSpeeds = results.some(r => r.wordSpeeds && r.wordSpeeds.length > 0);
+  if (!hasWordSpeeds) return null;
+  
+  // Extract words from paragraph
+  const words = paragraph.split(/\s+/).filter(w => w.length > 0);
+  if (words.length === 0) return null;
+  
+  // Get all word speeds and calculate min/max for color scaling
+  const allSpeeds = results.flatMap(r => r.wordSpeeds || []).filter(s => s > 0);
+  if (allSpeeds.length === 0) return null;
+  
+  const minSpeed = Math.min(...allSpeeds);
+  const maxSpeed = Math.max(...allSpeeds);
+  const speedRange = maxSpeed - minSpeed || 1;
+  
+  // Calculate average speed per word position
+  const avgSpeedsPerWord = words.map((_, wordIndex) => {
+    const speedsAtPosition = results
+      .map(r => r.wordSpeeds?.[wordIndex])
+      .filter(s => s !== undefined && s > 0);
+    if (speedsAtPosition.length === 0) return null;
+    return Math.round(speedsAtPosition.reduce((a, b) => a + b, 0) / speedsAtPosition.length);
+  });
+  
+  // Color function: red (slow) -> yellow -> green (fast)
+  const getSpeedColor = (speed, opacity = 1) => {
+    if (!speed || speed <= 0) return `rgba(100, 100, 100, ${opacity * 0.3})`;
+    const normalized = (speed - minSpeed) / speedRange;
+    // HSL: 0 = red, 60 = yellow, 120 = green
+    const hue = normalized * 120;
+    return `hsla(${hue}, 70%, 45%, ${opacity})`;
+  };
+  
+  return (
+    <div className="word-speed-map">
+      <div className="speed-map-header">
+        <span className="speed-map-title">word speeds</span>
+        <div className="speed-map-legend">
+          <span className="legend-slow">slow</span>
+          <div className="legend-gradient" />
+          <span className="legend-fast">fast</span>
+        </div>
+      </div>
+      
+      {/* Average row */}
+      <div className="speed-map-row avg-row">
+        <span className="speed-map-label">avg</span>
+        <div className="speed-map-words">
+          {words.map((word, i) => (
+            <span 
+              key={i} 
+              className="speed-word"
+              style={{ 
+                backgroundColor: getSpeedColor(avgSpeedsPerWord[i], 0.7),
+              }}
+              title={avgSpeedsPerWord[i] ? `${avgSpeedsPerWord[i]} wpm` : 'no data'}
+            >
+              {word}
+            </span>
+          ))}
+        </div>
+      </div>
+      
+      {/* Individual racer rows */}
+      {results.map(racer => {
+        const speeds = racer.wordSpeeds || [];
+        if (speeds.length === 0) return null;
+        
+        return (
+          <div 
+            key={racer.id} 
+            className={`speed-map-row ${racer.id === myId ? 'you' : ''}`}
+          >
+            <span className="speed-map-label">{racer.name}</span>
+            <div className="speed-map-words">
+              {words.map((word, i) => (
+                <span 
+                  key={i} 
+                  className="speed-word"
+                  style={{ 
+                    backgroundColor: getSpeedColor(speeds[i], 0.7),
+                  }}
+                  title={speeds[i] ? `${speeds[i]} wpm` : 'no data'}
+                >
+                  {word}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -545,6 +653,9 @@ export function RaceStatsPanel({ raceStats, onClear, fmt, shareUrl }) {
           );
         })}
       </div>
+
+      {/* Word Speed Map */}
+      <WordSpeedMap results={allResults} paragraph={paragraph} myId={myResult?.id} />
 
       {/* Text Info */}
       <div className="pvp-text-info">

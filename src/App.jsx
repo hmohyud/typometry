@@ -4300,7 +4300,47 @@ function App() {
         // Finish race if in a race
         if (isInRace && raceState.status === "racing" && raceState.raceStartTime) {
           const raceTime = Date.now() - raceState.raceStartTime;
-          finishRace(finalStats.wpm, finalStats.accuracy, raceTime);
+          
+          // Compute word-level speeds
+          const allKeystrokes = [...keystrokeData, keystroke];
+          const words = currentText.split(/(\s+)/); // Split keeping spaces
+          const wordSpeeds = [];
+          let charIndex = 0;
+          
+          for (const word of words) {
+            if (word.trim().length === 0) {
+              charIndex += word.length;
+              continue;
+            }
+            
+            const wordStart = charIndex;
+            const wordEnd = charIndex + word.length - 1;
+            
+            // Find keystrokes for this word
+            const wordKeystrokes = allKeystrokes.filter(k => 
+              k.position >= wordStart && k.position <= wordEnd && !k.isBackspace
+            );
+            
+            if (wordKeystrokes.length >= 2) {
+              const firstTimestamp = wordKeystrokes[0].timestamp;
+              const lastTimestamp = wordKeystrokes[wordKeystrokes.length - 1].timestamp;
+              const wordTimeMs = lastTimestamp - firstTimestamp;
+              
+              // WPM for this word (chars / 5 = standard word, convert ms to minutes)
+              if (wordTimeMs > 0) {
+                const wordWpm = ((word.length / 5) / (wordTimeMs / 60000));
+                wordSpeeds.push(Math.round(wordWpm));
+              } else {
+                wordSpeeds.push(finalStats.wpm); // Fallback to overall WPM
+              }
+            } else if (wordKeystrokes.length === 1) {
+              wordSpeeds.push(finalStats.wpm); // Single char word, use overall
+            }
+            
+            charIndex += word.length;
+          }
+          
+          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeeds);
         }
 
         // Scroll to show complete hint after a brief delay
@@ -4678,7 +4718,7 @@ function App() {
             >
               start typing...
             </p>
-            {isActive && !isComplete && (
+            {isActive && !isComplete && !isInRace && (
               <div className="live-stats">
                 <span>
                   {typed.length} / {currentText.length}
@@ -4686,7 +4726,16 @@ function App() {
               </div>
             )}
           </div>
-          {isComplete && (
+
+          {/* Race progress - below text, larger for peripheral vision */}
+          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (
+            <RaceProgressPanel
+              racers={raceState.racers}
+              myId={raceState.myId}
+              myFinished={raceState.myFinished}
+            />
+          )}
+          {isComplete && !isInRace && (
             <div
               className={`complete-hint-container ${
                 showFixedHint ? "faded" : ""
@@ -4710,7 +4759,7 @@ function App() {
         </main>
 
         {/* Fixed floating hint when scrolled past the main hint */}
-        {isComplete && (
+        {isComplete && !isInRace && (
           <div className={`fixed-hint ${showFixedHint ? "visible" : ""}`}>
             {viewingPastStats ? (
               <>
@@ -4724,9 +4773,10 @@ function App() {
           </div>
         )}
 
-        {(isComplete && stats) ||
+        {((isComplete && stats) ||
         (isComplete && statsView === "alltime" && cumulativeStats) ||
-        (isComplete && statsView === "global" && globalAverages) ? (
+        (isComplete && statsView === "global" && globalAverages)) && 
+        !(isInRace && raceState.status !== "finished") ? (
           <section className="stats">
             {/* Stats View Toggle - shows in different configurations based on available data */}
             {(() => {
@@ -9117,20 +9167,7 @@ function App() {
           <RaceCountdown endTime={raceState.countdownEnd} />
         )}
 
-        {isInRace && raceState.status === "racing" && (
-          <RaceProgressPanel
-            racers={raceState.racers}
-            myId={raceState.myId}
-          />
-        )}
-
-        {waitingForOthers && (
-          <div className="waiting-for-others">
-            waiting for others ({finishedCount}/{totalCount})
-          </div>
-        )}
-
-        {raceState.status === "finished" && (
+        {raceState.status === "finished" && raceState.results && (
           <RaceResults
             results={raceState.results}
             myId={raceState.myId}

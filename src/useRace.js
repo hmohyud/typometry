@@ -203,13 +203,13 @@ export function useRace() {
       case 'finish':
         setState(prev => {
           const updatedRacers = prev.racers.map(r =>
-            r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time } : r
+            r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
           );
           
           // If host, update raceData and check if all finished
           if (isHostRef.current && raceDataRef.current) {
             raceDataRef.current.racers = raceDataRef.current.racers.map(r =>
-              r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time } : r
+              r.id === data.odId ? { ...r, finished: true, wpm: data.wpm, accuracy: data.accuracy, time: data.time, wordSpeeds: data.wordSpeeds || [] } : r
             );
             
             // Check if all finished
@@ -442,13 +442,34 @@ export function useRace() {
       .on('broadcast', { event: 'race' }, ({ payload }) => handleBroadcast(payload))
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          // Check existing names in the room
+          const presenceState = channel.presenceState();
+          const existingNames = new Set();
+          Object.values(presenceState).forEach(presences => {
+            presences.forEach(p => {
+              if (p.name) existingNames.add(p.name.toLowerCase());
+            });
+          });
+          
           // Determine name - assign guest number if needed
           let finalName = name;
           if (!name || name === 'guest' || name.match(/^guest\d*$/)) {
-            // Check how many racers are already in the room
-            const presenceState = channel.presenceState();
-            const existingCount = Object.keys(presenceState).length;
-            finalName = `guest${existingCount + 1}`;
+            // Assign guest number
+            let guestNum = 1;
+            while (existingNames.has(`guest${guestNum}`)) {
+              guestNum++;
+            }
+            finalName = `guest${guestNum}`;
+          } else {
+            // Check for duplicate - add number suffix if taken
+            const baseName = name.toLowerCase();
+            if (existingNames.has(baseName)) {
+              let suffix = 2;
+              while (existingNames.has(`${baseName}${suffix}`)) {
+                suffix++;
+              }
+              finalName = `${name}${suffix}`;
+            }
           }
           myNameRef.current = finalName;
           
@@ -464,6 +485,48 @@ export function useRace() {
             time: 0,
             isHost: asHost,
           });
+
+          // Delayed check for name collisions (race condition protection)
+          setTimeout(async () => {
+            const ps = channel.presenceState();
+            const nameCount = {};
+            const myOdId = myIdRef.current;
+            
+            Object.values(ps).forEach(presences => {
+              presences.forEach(p => {
+                const n = p.name?.toLowerCase();
+                if (n) {
+                  if (!nameCount[n]) nameCount[n] = [];
+                  nameCount[n].push(p.odId);
+                }
+              });
+            });
+            
+            // Check if our name has duplicates
+            const myName = myNameRef.current?.toLowerCase();
+            if (myName && nameCount[myName] && nameCount[myName].length > 1) {
+              // Multiple people with same name - later joiner (higher odId) gets renamed
+              const sorted = nameCount[myName].sort();
+              const myIndex = sorted.indexOf(myOdId);
+              if (myIndex > 0) {
+                // We're not the first - need to rename
+                const newName = `${myNameRef.current}${myIndex + 1}`;
+                myNameRef.current = newName;
+                
+                await channel.track({
+                  odId: myOdId,
+                  name: newName,
+                  ready: false,
+                  progress: 0,
+                  wpm: 0,
+                  accuracy: 100,
+                  finished: false,
+                  time: 0,
+                  isHost: asHost,
+                });
+              }
+            }
+          }, 500);
 
           setState(prev => ({ ...prev, status: RaceStatus.WAITING }));
         } else if (status === 'CHANNEL_ERROR') {
@@ -497,14 +560,36 @@ export function useRace() {
   const updateName = useCallback(async (newName) => {
     if (!channelRef.current || !newName.trim()) return;
     
-    const trimmedName = newName.trim().slice(0, 20); // Max 20 chars
-    myNameRef.current = trimmedName;
+    let finalName = newName.trim().slice(0, 20); // Max 20 chars
+    
+    // Check for duplicate names (excluding self)
+    const presenceState = channelRef.current.presenceState();
+    const existingNames = new Set();
+    Object.entries(presenceState).forEach(([odId, presences]) => {
+      presences.forEach(p => {
+        if (p.odId !== myIdRef.current && p.name) {
+          existingNames.add(p.name.toLowerCase());
+        }
+      });
+    });
+    
+    // Add suffix if name is taken
+    const baseName = finalName.toLowerCase();
+    if (existingNames.has(baseName)) {
+      let suffix = 2;
+      while (existingNames.has(`${baseName}${suffix}`)) {
+        suffix++;
+      }
+      finalName = `${finalName}${suffix}`;
+    }
+    
+    myNameRef.current = finalName;
     
     // Update local state
     setState(prev => ({
       ...prev,
       racers: prev.racers.map(r =>
-        r.id === myIdRef.current ? { ...r, name: trimmedName } : r
+        r.id === myIdRef.current ? { ...r, name: finalName } : r
       )
     }));
     
@@ -512,7 +597,7 @@ export function useRace() {
     const myRacer = channelRef.current.presenceState()[myIdRef.current]?.[0];
     await channelRef.current.track({
       odId: myIdRef.current,
-      name: trimmedName,
+      name: finalName,
       ready: myRacer?.ready || false,
       progress: myRacer?.progress || 0,
       wpm: myRacer?.wpm || 0,
@@ -523,10 +608,10 @@ export function useRace() {
     });
     
     // Broadcast name change
-    broadcast('name_update', { odId: myIdRef.current, name: trimmedName });
+    broadcast('name_update', { odId: myIdRef.current, name: finalName });
     
     // Save to localStorage for future sessions
-    localStorage.setItem('typometry_racer_name', trimmedName);
+    localStorage.setItem('typometry_racer_name', finalName);
   }, [broadcast]);
 
   // Start the race (host only)
@@ -625,9 +710,9 @@ export function useRace() {
   }, [broadcast]);
 
   // Finish race
-  const finishRace = useCallback((wpm, accuracy, time) => {
+  const finishRace = useCallback((wpm, accuracy, time, wordSpeeds = []) => {
     const myId = myIdRef.current;
-    broadcast('finish', { odId: myId, wpm, accuracy, time });
+    broadcast('finish', { odId: myId, wpm, accuracy, time, wordSpeeds });
 
     // Update presence to show finished
     if (channelRef.current) {
@@ -639,19 +724,20 @@ export function useRace() {
         wpm,
         accuracy,
         finished: true,
+        time,
         isHost: isHostRef.current,
       });
     }
 
     setState(prev => {
       const updatedRacers = prev.racers.map(r =>
-        r.id === myId ? { ...r, finished: true, wpm, accuracy, time } : r
+        r.id === myId ? { ...r, finished: true, wpm, accuracy, time, wordSpeeds } : r
       );
 
       // Update host's race data
       if (isHostRef.current && raceDataRef.current) {
         raceDataRef.current.racers = raceDataRef.current.racers.map(r =>
-          r.id === myId ? { ...r, finished: true, wpm, accuracy, time } : r
+          r.id === myId ? { ...r, finished: true, wpm, accuracy, time, wordSpeeds } : r
         );
       }
 
