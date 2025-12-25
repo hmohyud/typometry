@@ -1,0 +1,903 @@
+/* PvP Race Styles - Minimal */
+
+/* PvP Button in footer */
+.reset-btn.pvp-btn {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reset-btn.pvp-btn:hover {
+  background: rgba(145, 200, 145, 0.1);
+}
+
+/* Lobby */
+.race-lobby {
+  max-width: 400px;
+  margin: 2rem auto;
+}
+
+.lobby-invite {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.invite-btn {
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: var(--bg);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-width: 130px;
+  text-align: center;
+}
+
+.invite-btn:hover {
+  opacity: 0.85;
+}
+
+.lobby-racers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.lobby-racer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+.lobby-racer.you {
+  background: rgba(145, 200, 145, 0.1);
+}
+
+.lobby-racer.ready .racer-ready {
+  color: var(--accent);
+}
+
+.lobby-racer.empty {
+  opacity: 0.4;
+}
+
+.racer-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.you-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.racer-ready {
+  font-size: 1rem;
+  color: var(--text-dim);
+}
+
+/* Editable name */
+.racer-name-text {
+  color: var(--text);
+}
+
+.racer-name-text.editable {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--text-dim);
+  padding-bottom: 1px;
+}
+
+.racer-name-text.editable:hover {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.name-edit-input {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.35rem;
+  width: 120px;
+  outline: none;
+}
+
+.name-edit-input:focus {
+  box-shadow: 0 0 0 2px rgba(145, 200, 145, 0.2);
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.lobby-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lobby-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.lobby-btn.ready.is-ready {
+  background: rgba(145, 200, 145, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.lobby-btn.start {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.lobby-btn.start:hover {
+  opacity: 0.85;
+}
+
+/* Countdown */
+.race-countdown-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 100;
+}
+
+.race-countdown-number {
+  font-family: var(--font-mono);
+  font-size: 6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Progress Panel */
+.race-progress-panel {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  z-index: 50;
+}
+
+.racer-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.racer-progress.you .racer-progress-name {
+  color: var(--accent);
+}
+
+.racer-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.racer-progress-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.racer-progress-wpm {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.racer-progress-bar {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.racer-progress-fill {
+  height: 100%;
+  background: var(--text-dim);
+  border-radius: 2px;
+  transition: width 0.1s ease-out;
+}
+
+.racer-progress.you .racer-progress-fill {
+  background: var(--accent);
+}
+
+.racer-progress.finished .racer-progress-fill {
+  background: var(--accent);
+}
+
+/* Results */
+.race-results {
+  max-width: 400px;
+  margin: 2rem auto;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr 3rem 3.5rem 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.result-row.you {
+  background: rgba(145, 200, 145, 0.1);
+}
+
+.result-place {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.result-row:first-child .result-place {
+  color: var(--accent);
+}
+
+.result-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.result-wpm {
+  font-family: var(--font-mono);
+  color: var(--text);
+  text-align: right;
+}
+
+.result-accuracy,
+.result-time {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.results-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.result-btn {
+  flex: 1;
+  padding: 0.6rem;
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.result-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.result-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.result-btn.primary:hover {
+  opacity: 0.85;
+}
+
+/* PvP Stats Panel - New Design */
+.pvp-stats {
+  padding: 0.5rem 0;
+}
+
+.race-stats-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 1rem;
+  font-size: 0.85rem;
+}
+
+.pvp-header {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pvp-share {
+  padding: 0.25rem 0.6rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-dim);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pvp-share:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.pvp-clear {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.pvp-clear:hover {
+  opacity: 1;
+}
+
+/* Hero Section - Your Result */
+.pvp-hero {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.pvp-position {
+  display: flex;
+  align-items: baseline;
+}
+
+.position-num {
+  font-size: 3.5rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  line-height: 1;
+}
+
+.position-suffix {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin-left: 0.1rem;
+}
+
+.pvp-main-stats {
+  display: flex;
+  gap: 2rem;
+  flex: 1;
+}
+
+.main-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.main-stat .stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.main-stat .stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+/* Head to Head (2 players) */
+.pvp-h2h {
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.h2h-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.h2h-you {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 4rem;
+}
+
+.h2h-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.h2h-them {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--text);
+  min-width: 4rem;
+  text-align: right;
+}
+
+.h2h-bar {
+  height: 4px;
+  background: var(--text-dim);
+  border-radius: 2px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.h2h-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.h2h-fill.you {
+  background: var(--accent);
+}
+
+.h2h-names {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: -0.5rem;
+}
+
+/* Performance Context (3+ players) */
+.pvp-context {
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.context-item {
+  margin-bottom: 0.5rem;
+}
+
+.context-bar {
+  position: relative;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.context-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--accent) 100%);
+  border-radius: 3px;
+}
+
+.context-marker {
+  position: absolute;
+  top: -10px;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: var(--accent);
+}
+
+.context-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.context-value {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.context-diff {
+  text-align: center;
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.context-diff .positive {
+  color: var(--accent);
+}
+
+.context-diff .negative {
+  color: var(--incorrect);
+}
+
+/* Insights */
+.pvp-insights {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.insight {
+  text-align: center;
+  padding: 0.75rem 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.insight-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.insight-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+/* Standings */
+.pvp-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.standing {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.standing.you {
+  background: rgba(145, 200, 145, 0.1);
+  border-left: 2px solid var(--accent);
+}
+
+.standing-pos {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 1.5rem;
+  text-align: center;
+}
+
+.standing:first-child .standing-pos {
+  color: var(--accent);
+}
+
+.standing-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.standing-name {
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.standing-bar {
+  height: 3px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.standing-fill {
+  height: 100%;
+  background: var(--text-dim);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.standing.you .standing-fill {
+  background: var(--accent);
+}
+
+.standing:first-child .standing-fill {
+  background: var(--accent);
+}
+
+.standing-wpm {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+/* Text Info */
+.pvp-text-info {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* Shared Results View */
+.shared-results-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.shared-results {
+  width: 100%;
+  max-width: 500px;
+}
+
+.shared-results-error {
+  text-align: center;
+  padding: 3rem;
+}
+
+.shared-results-error p {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.shared-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.shared-title {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.go-to-app-btn {
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: var(--bg);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.go-to-app-btn:hover {
+  opacity: 0.85;
+}
+
+.shared-winner {
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.winner-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+
+.winner-name {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.winner-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.shared-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.shared-standing {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.shared-standing:first-child {
+  background: rgba(145, 200, 145, 0.1);
+  border-left: 2px solid var(--accent);
+}
+
+.shared-meta {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* Waiting for others */
+.waiting-for-others {
+  text-align: center;
+  padding: 1rem;
+  margin: 1rem auto;
+  max-width: 300px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .race-lobby,
+  .race-results {
+    margin: 1rem;
+  }
+
+  .race-progress-panel {
+    position: static;
+    width: 100%;
+    margin: 1rem 0;
+  }
+
+  .result-row {
+    grid-template-columns: 2.5rem 1fr 2.5rem;
+    font-size: 0.85rem;
+  }
+
+  .result-accuracy,
+  .result-time {
+    display: none;
+  }
+
+  .pvp-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .position-num {
+    font-size: 2.5rem;
+  }
+
+  .pvp-main-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .main-stat .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .pvp-insights {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lobby-actions {
+    flex-wrap: wrap;
+  }
+
+  .lobby-btn {
+    min-width: calc(50% - 0.25rem);
+  }
+
+  .lobby-btn.start {
+    width: 100%;
+    order: -1;
+  }
+
+  .shared-results-wrapper {
+    padding: 1rem;
+  }
+
+  .shared-winner {
+    padding: 1.5rem 1rem;
+  }
+
+  .winner-name {
+    font-size: 1.5rem;
+  }
+
+  .winner-stats {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .results-actions {
+    flex-wrap: wrap;
+  }
+
+  .result-btn {
+    min-width: calc(50% - 0.25rem);
+  }
+}

@@ -4,6 +4,15 @@ import { getKeyDistance } from "./keyboard";
 import { KeyboardHeatmap, KeyboardFlowMap } from "./KeyboardViz";
 import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
 import { useGlobalStats } from "./useGlobalStats";
+import { useRace } from "./useRace";
+import {
+  RaceLobby,
+  RaceCountdown,
+  RaceProgressPanel,
+  RaceResults,
+  RaceStatsPanel,
+  SharedResultsView,
+} from "./RaceMode";
 
 // Number formatting utilities
 const formatNumber = (num, options = {}) => {
@@ -2837,6 +2846,30 @@ function App() {
     loading: globalStatsLoading,
   } = useGlobalStats();
 
+  // Race mode
+  const {
+    state: raceState,
+    createRace,
+    joinRace,
+    setReady: setRaceReady,
+    updateName: updateRaceName,
+    startRace,
+    updateProgress: updateRaceProgress,
+    finishRace,
+    leaveRace,
+    clearRaceStats,
+    generateShareUrl,
+    isInRace,
+    hasRaceStats,
+    waitingForOthers,
+    finishedCount,
+    totalCount,
+  } = useRace();
+
+  const [racerName, setRacerName] = useState(() =>
+    localStorage.getItem("typometry_racer_name") || null
+  );
+
   const lastKeystrokeTime = useRef(null);
   const startTime = useRef(null);
   const containerRef = useRef(null);
@@ -2844,6 +2877,12 @@ function App() {
   const clearHoldInterval = useRef(null);
   const completeHintRef = useRef(null);
   const restartHintRef = useRef(null);
+
+  // Check for shared results URL
+  const [sharedResultsData, setSharedResultsData] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("r") || null;
+  });
 
   // Load completed indices on mount
   const [completedIndices, setCompletedIndices] = useState(() =>
@@ -2895,6 +2934,42 @@ function App() {
     }
     resetTest();
   }, []);
+
+  // Handle race URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const raceId = params.get("race");
+    if (raceId && !isInRace) {
+      // Use saved name or will be assigned guest# based on join order
+      const name = localStorage.getItem("typometry_racer_name") || "guest";
+      setRacerName(name);
+      // Join as non-host - paragraph will be received from host via broadcast
+      joinRace(raceId, name, '', 0, false);
+    }
+  }, []);
+
+  // Sync race paragraph to currentText when received from host
+  useEffect(() => {
+    if (raceState.paragraph && raceState.status === 'waiting' && !raceState.isHost) {
+      setCurrentText(raceState.paragraph);
+      setCurrentIndex(raceState.paragraphIndex);
+      setTyped('');
+      setKeystrokeData([]);
+      setRawKeyEvents([]);
+      setIsActive(false);
+      setIsComplete(false);
+      setStats(null);
+      lastKeystrokeTime.current = null;
+      startTime.current = null;
+    }
+  }, [raceState.paragraph, raceState.status, raceState.isHost]);
+
+  // Auto-switch to race stats view when race finishes
+  useEffect(() => {
+    if (raceState.status === 'finished' && hasRaceStats) {
+      setStatsView('race');
+    }
+  }, [raceState.status, hasRaceStats]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -4190,6 +4265,18 @@ function App() {
       setKeystrokeData((prev) => [...prev, keystroke]);
       setTyped((prev) => prev + e.key);
 
+      // Update race progress if in a race
+      if (isInRace && raceState.status === "racing") {
+        const newTypedLength = typed.length + 1;
+        const progress = (newTypedLength / currentText.length) * 100;
+        const elapsedMinutes = (now - startTime.current) / 60000;
+        const correctChars = keystrokeData.filter((k) => k.correct && !k.isBackspace).length + (isCorrect ? 1 : 0);
+        const totalChars = keystrokeData.filter((k) => !k.isBackspace).length + 1;
+        const currentWpm = elapsedMinutes > 0 ? (correctChars / 5) / elapsedMinutes : 0;
+        const currentAccuracy = totalChars > 0 ? (correctChars / totalChars) * 100 : 100;
+        updateRaceProgress(progress, currentWpm, currentAccuracy);
+      }
+
       // Check completion
       if (typed.length + 1 === currentText.length) {
         const totalTime = now - startTime.current;
@@ -4201,6 +4288,12 @@ function App() {
         );
         setIsComplete(true);
         setStats(finalStats);
+
+        // Finish race if in a race
+        if (isInRace && raceState.status === "racing" && raceState.raceStartTime) {
+          const raceTime = Date.now() - raceState.raceStartTime;
+          finishRace(finalStats.wpm, finalStats.accuracy, raceTime);
+        }
 
         // Scroll to show complete hint after a brief delay
         setTimeout(() => {
@@ -4459,6 +4552,21 @@ function App() {
     }
     setClearHoldProgress(0);
   };
+
+  // If viewing shared results, show that instead
+  if (sharedResultsData) {
+    return (
+      <div className="app-wrapper shared-results-wrapper">
+        <SharedResultsView 
+          encoded={sharedResultsData}
+          onGoToApp={() => {
+            setSharedResultsData(null);
+            window.history.pushState({}, "", window.location.pathname);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app-wrapper" onClick={() => containerRef.current?.focus()}>
@@ -4793,6 +4901,16 @@ function App() {
                           }}
                         >
                           Global ({fmt.count(globalAverages.total_sessions)})
+                        </button>
+                      )}
+                      {hasRaceStats && (
+                        <button
+                          className={`toggle-btn ${
+                            statsView === "race" ? "active" : ""
+                          }`}
+                          onClick={() => setStatsView("race")}
+                        >
+                          race
                         </button>
                       )}
                     </div>
@@ -8943,6 +9061,14 @@ function App() {
                     })()
                   : null}
               </>
+            ) : statsView === "race" && hasRaceStats ? (
+              /* Race stats view */
+              <RaceStatsPanel
+                raceStats={raceState.raceStats}
+                onClear={clearRaceStats}
+                fmt={fmt}
+                shareUrl={generateShareUrl()}
+              />
             ) : null}
 
             <p className="restart-hint" ref={restartHintRef}>
@@ -8950,6 +9076,67 @@ function App() {
             </p>
           </section>
         ) : null}
+
+        {/* Race Mode UI */}
+        {isInRace && raceState.status === "waiting" && (
+          <RaceLobby
+            raceId={raceState.raceId}
+            racers={raceState.racers}
+            myId={raceState.myId}
+            isHost={raceState.isHost}
+            onReady={setRaceReady}
+            onStart={startRace}
+            onLeave={() => {
+              leaveRace();
+              window.history.pushState({}, "", window.location.pathname);
+            }}
+            onNameChange={(newName) => {
+              updateRaceName(newName);
+              setRacerName(newName);
+            }}
+            shareUrl={`${window.location.origin}${window.location.pathname}?race=${raceState.raceId}`}
+          />
+        )}
+
+        {isInRace && raceState.status === "countdown" && (
+          <RaceCountdown endTime={raceState.countdownEnd} />
+        )}
+
+        {isInRace && raceState.status === "racing" && (
+          <RaceProgressPanel
+            racers={raceState.racers}
+            myId={raceState.myId}
+          />
+        )}
+
+        {waitingForOthers && (
+          <div className="waiting-for-others">
+            waiting for others ({finishedCount}/{totalCount})
+          </div>
+        )}
+
+        {raceState.status === "finished" && (
+          <RaceResults
+            results={raceState.results}
+            myId={raceState.myId}
+            shareUrl={generateShareUrl()}
+            onPlayAgain={() => {
+              const { raceId, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
+              joinRace(raceId, racerName, paragraph, paragraphIndex, true);
+              window.history.pushState({}, "", `?race=${raceId}`);
+              resetTest();
+            }}
+            onLeave={() => {
+              leaveRace();
+              window.history.pushState({}, "", window.location.pathname);
+            }}
+            onViewStats={() => {
+              setStatsView("race");
+              leaveRace();
+              window.history.pushState({}, "", window.location.pathname);
+            }}
+          />
+        )}
 
         <footer>
           <button
@@ -8959,6 +9146,21 @@ function App() {
           >
             next
           </button>
+          {!isInRace && !isComplete && (
+            <button
+              className="reset-btn pvp-btn"
+              onClick={() => {
+                const name = localStorage.getItem("typometry_racer_name") || "guest1";
+                setRacerName(name);
+                const { raceId, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
+                joinRace(raceId, name, paragraph, paragraphIndex, true);
+                window.history.pushState({}, "", `?race=${raceId}`);
+              }}
+              title="Race a friend! Creates a shareable link to type this passage together in real-time."
+            >
+              race a friend
+            </button>
+          )}
           <button
             className="reset-btn danger hold-btn"
             onMouseDown={startClearHold}
