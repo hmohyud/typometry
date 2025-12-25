@@ -28,6 +28,7 @@ function EditableName({ name, isYou, onNameChange }) {
   };
 
   const handleKeyDown = (e) => {
+    e.stopPropagation(); // Prevent typing from bubbling to main input
     if (e.key === 'Enter') {
       handleSubmit();
     } else if (e.key === 'Escape') {
@@ -50,6 +51,8 @@ function EditableName({ name, isYou, onNameChange }) {
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleSubmit}
         onKeyDown={handleKeyDown}
+        onKeyUp={(e) => e.stopPropagation()}
+        onKeyPress={(e) => e.stopPropagation()}
         maxLength={20}
       />
     );
@@ -80,6 +83,7 @@ export function RaceLobby({
 }) {
   const [isReady, setIsReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showLink, setShowLink] = useState(false);
 
   const handleReadyToggle = () => {
     const newReady = !isReady;
@@ -98,60 +102,105 @@ export function RaceLobby({
   };
 
   const allReady = racers.length >= 2 && racers.every(r => r.ready);
-  const canStart = isHost && racers.length >= 1;
+  const canStart = isHost && allReady;
+  const urlRef = useRef(null);
+
+  const handleUrlClick = () => {
+    if (!showLink) {
+      setShowLink(true);
+      // Select after state update
+      setTimeout(() => {
+        if (urlRef.current) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(urlRef.current);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }, 0);
+    } else if (urlRef.current) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(urlRef.current);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
 
   return (
     <div className="race-lobby">
-      <div className="lobby-invite">
-        <button onClick={handleCopy} className="invite-btn">
-          {copied ? '✓ copied' : 'copy invite link'}
+      {/* Invite bar - all inline */}
+      <div className="invite-bar">
+        <button 
+          onClick={() => setShowLink(!showLink)} 
+          className="invite-toggle"
+        >
+          {showLink ? 'hide' : 'show'}
+        </button>
+        <div className="invite-url" onClick={handleUrlClick}>
+          {showLink ? (
+            <code ref={urlRef}>{shareUrl}</code>
+          ) : (
+            <span className="invite-dots">••••••••••••••••••••••••</span>
+          )}
+        </div>
+        <button 
+          onClick={handleCopy} 
+          className={`invite-copy ${copied ? 'copied' : ''}`}
+        >
+          {copied ? 'copied' : 'copy'}
         </button>
       </div>
 
+      {/* Racers list */}
       <div className="lobby-racers">
         {racers.map((racer) => (
           <div 
             key={racer.id} 
-            className={`lobby-racer ${racer.id === myId ? 'you' : ''} ${racer.ready ? 'ready' : ''}`}
+            className={`lobby-racer ${racer.id === myId ? 'you' : ''}`}
           >
-            <span className="racer-name">
+            <div className="racer-info">
+              <span 
+                className={`racer-status ${racer.ready ? 'ready' : ''}`}
+                title={racer.ready ? 'ready' : 'not ready'}
+              />
               <EditableName 
                 name={racer.name} 
                 isYou={racer.id === myId}
                 onNameChange={onNameChange}
               />
               {racer.id === myId && <span className="you-tag">you</span>}
-            </span>
-            <span className="racer-ready">
-              {racer.ready ? '✓' : '·'}
-            </span>
+            </div>
           </div>
         ))}
         {racers.length < 2 && (
           <div className="lobby-racer empty">
-            <span className="racer-name">waiting for opponent...</span>
+            <div className="racer-info">
+              <span className="racer-status" />
+              <span className="racer-name-text">waiting...</span>
+            </div>
           </div>
         )}
       </div>
 
+      {/* Actions - fixed layout */}
       <div className="lobby-actions">
         <button onClick={onLeave} className="lobby-btn leave">
           leave
         </button>
         <button 
           onClick={handleReadyToggle}
-          className={`lobby-btn ready ${isReady ? 'is-ready' : ''}`}
+          className={`lobby-btn ready-toggle ${isReady ? 'is-ready' : ''}`}
         >
           {isReady ? 'not ready' : 'ready'}
         </button>
-        {canStart && (
-          <button 
-            onClick={onStart}
-            className="lobby-btn start"
-          >
-            start
-          </button>
-        )}
+        <button 
+          onClick={canStart ? onStart : undefined}
+          className={`lobby-btn start ${!canStart ? 'disabled' : ''}`}
+          disabled={!canStart}
+        >
+          start
+        </button>
       </div>
     </div>
   );

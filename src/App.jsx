@@ -4180,6 +4180,14 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
+      // Block typing during race lobby/countdown
+      if (isInRace && (raceState.status === 'waiting' || raceState.status === 'countdown' || raceState.status === 'connecting')) {
+        // Only allow Escape to potentially leave
+        if (e.key !== 'Escape') {
+          return;
+        }
+      }
+
       // If viewing past stats, Shift+Enter dismisses and scrolls to top to resume typing
       if (viewingPastStats) {
         if (e.key === "Enter" && e.shiftKey) {
@@ -4420,6 +4428,8 @@ function App() {
       calculateStats,
       resetTest,
       completedIndices,
+      isInRace,
+      raceState.status,
     ]
   );
 
@@ -4627,7 +4637,7 @@ function App() {
         </header>
 
         <main className="typing-area">
-          <div className={`text-display ${viewingPastStats ? "locked" : ""}`}>
+          <div className={`text-display ${viewingPastStats ? "locked" : ""} ${isInRace && raceState.status === 'waiting' ? "race-blur" : ""}`}>
             <div className="text-content">{renderText()}</div>
             {viewingPastStats && (
               <div className="text-lock-overlay">
@@ -4647,6 +4657,11 @@ function App() {
                   </svg>
                 </div>
                 <span className="lock-hint">shift+enter to resume</span>
+              </div>
+            )}
+            {isInRace && raceState.status === 'waiting' && (
+              <div className="text-lock-overlay">
+                <span className="lock-hint">waiting for race to start...</span>
               </div>
             )}
           </div>
@@ -9150,9 +9165,18 @@ function App() {
             <button
               className="reset-btn pvp-btn"
               onClick={() => {
+                // Get a fresh paragraph for the race
+                const { text: newText, index: newIndex } = getNextParagraph(completedIndices);
+                setCurrentText(newText);
+                setCurrentIndex(newIndex);
+                setTyped('');
+                setKeystrokeData([]);
+                setRawKeyEvents([]);
+                setIsActive(false);
+                
                 const name = localStorage.getItem("typometry_racer_name") || "guest1";
                 setRacerName(name);
-                const { raceId, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
+                const { raceId, paragraph, paragraphIndex } = createRace(newText, newIndex);
                 joinRace(raceId, name, paragraph, paragraphIndex, true);
                 window.history.pushState({}, "", `?race=${raceId}`);
               }}
