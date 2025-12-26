@@ -56,6 +56,9 @@ function EditableName({ name, isYou, onNameChange }) {
   const [value, setValue] = useState(name);
   const inputRef = useRef(null);
 
+  // Check if name is a default name (guest followed by number)
+  const isDefaultName = /^guest\d+$/i.test(name);
+
   useEffect(() => {
     setValue(name);
   }, [name]);
@@ -115,6 +118,22 @@ function EditableName({ name, isYou, onNameChange }) {
       title="click to edit"
     >
       {name}
+      {isDefaultName && (
+        <svg 
+          className="edit-name-icon" 
+          width="11" 
+          height="11" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      )}
     </span>
   );
 }
@@ -500,11 +519,26 @@ export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, i
   );
 }
 
-// Race results screen
+// Race results screen with podium
 export function RaceResults({ results, myId, isHost, onPlayAgain, onLeave, isWaitingForOthers }) {
   const formatTime = (ms) => (ms / 1000).toFixed(1) + 's';
   
-  const finishedCount = results.length;
+  // Split into podium (top 3) and rest
+  const podiumRacers = results.slice(0, 3);
+  const remainingRacers = results.slice(3);
+  
+  // Reorder for podium display: 2nd, 1st, 3rd
+  const podiumOrder = [];
+  if (podiumRacers[1]) podiumOrder.push({ ...podiumRacers[1], place: 2 });
+  if (podiumRacers[0]) podiumOrder.push({ ...podiumRacers[0], place: 1 });
+  if (podiumRacers[2]) podiumOrder.push({ ...podiumRacers[2], place: 3 });
+  
+  const getMedal = (place) => {
+    if (place === 1) return '🥇';
+    if (place === 2) return '🥈';
+    if (place === 3) return '🥉';
+    return '';
+  };
   
   return (
     <div className="race-results">
@@ -513,25 +547,49 @@ export function RaceResults({ results, myId, isHost, onPlayAgain, onLeave, isWai
           waiting for others to finish...
         </div>
       )}
-      <div className="results-list">
-        {results.map((racer, index) => (
+      
+      {/* Podium Display */}
+      <div className="podium-container">
+        {podiumOrder.map((racer) => (
           <div 
             key={racer.id} 
-            className={`result-row ${racer.id === myId ? 'you' : ''}`}
+            className={`podium-spot place-${racer.place} ${racer.id === myId ? 'you' : ''}`}
           >
-            <span className="result-place">
-              {index === 0 ? '1st' : index === 1 ? '2nd' : index === 2 ? '3rd' : `${index + 1}th`}
-            </span>
-            <span className="result-name">
-              {racer.name}
-              {racer.id === myId && <span className="you-tag">you</span>}
-            </span>
-            <span className="result-wpm" title="Words per minute">{Math.round(racer.wpm)}</span>
-            <span className="result-accuracy" title="Accuracy percentage">{Math.round(racer.accuracy)}%</span>
-            <span className="result-time" title="Time to complete">{formatTime(racer.time)}</span>
+            <div className="podium-racer">
+              <span className="podium-medal">{getMedal(racer.place)}</span>
+              <span className="podium-name">
+                {racer.name}
+                {racer.id === myId && <span className="you-tag">you</span>}
+              </span>
+              <span className="podium-wpm">{Math.round(racer.wpm)} wpm</span>
+              <span className="podium-time">{formatTime(racer.time)}</span>
+            </div>
+            <div className="podium-block">
+              <span className="podium-place">{racer.place}</span>
+            </div>
           </div>
         ))}
       </div>
+      
+      {/* Remaining racers list */}
+      {remainingRacers.length > 0 && (
+        <div className="remaining-racers">
+          {remainingRacers.map((racer, index) => (
+            <div 
+              key={racer.id} 
+              className={`remaining-racer ${racer.id === myId ? 'you' : ''}`}
+            >
+              <span className="remaining-place">{index + 4}th</span>
+              <span className="remaining-name">
+                {racer.name}
+                {racer.id === myId && <span className="you-tag">you</span>}
+              </span>
+              <span className="remaining-wpm">{Math.round(racer.wpm)} wpm</span>
+              <span className="remaining-time">{formatTime(racer.time)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="results-actions">
         <button onClick={onLeave} className="result-btn">
