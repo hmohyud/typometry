@@ -386,6 +386,54 @@ export function useRace() {
           };
         });
         break;
+
+      case 'new_round':
+        // Host initiated a new round - reset to lobby with new paragraph
+        setState(prev => {
+          // Reset all racers to not ready, not finished
+          const resetRacers = prev.racers.map(r => ({
+            ...r,
+            ready: false,
+            finished: false,
+            progress: 0,
+            wpm: 0,
+            accuracy: 100,
+            time: 0,
+            position: undefined,
+            wordSpeeds: [],
+            keystrokeData: [],
+          }));
+          
+          return {
+            ...prev,
+            status: RaceStatus.WAITING,
+            paragraph: data.paragraph,
+            paragraphIndex: data.paragraphIndex,
+            racers: resetRacers,
+            results: [],
+            raceStats: null,
+            myFinished: false,
+            countdownEnd: null,
+            raceStartTime: null,
+          };
+        });
+        
+        // Update presence to not ready
+        if (channelRef.current) {
+          channelRef.current.track({
+            odId: myIdRef.current,
+            name: myNameRef.current,
+            ready: false,
+            progress: 0,
+            wpm: 0,
+            accuracy: 100,
+            finished: false,
+            time: 0,
+            isHost: isHostRef.current,
+            isSpectator: false,
+          });
+        }
+        break;
     }
   }, [calculateRaceStats, broadcast]);
 
@@ -969,6 +1017,90 @@ export function useRace() {
     }
   }, [broadcast]);
 
+  // Start a new round with the same players (host only)
+  // Takes a new paragraph from the caller
+  const startNewRound = useCallback((newParagraph, newParagraphIndex) => {
+    if (!isHostRef.current) return;
+    
+    // Broadcast new round to all players
+    broadcast('new_round', { 
+      paragraph: newParagraph, 
+      paragraphIndex: newParagraphIndex,
+    });
+    
+    // Update host's raceData
+    if (raceDataRef.current) {
+      raceDataRef.current.paragraph = newParagraph;
+      raceDataRef.current.paragraphIndex = newParagraphIndex;
+      raceDataRef.current.status = 'waiting';
+      raceDataRef.current.raceStartTime = null;
+      // Reset racers
+      raceDataRef.current.racers = raceDataRef.current.racers.map(r => ({
+        ...r,
+        ready: false,
+        finished: false,
+        progress: 0,
+        wpm: 0,
+        accuracy: 100,
+        time: 0,
+        position: undefined,
+        wordSpeeds: [],
+        keystrokeData: [],
+      }));
+    }
+    
+    // Update host state
+    setState(prev => {
+      const resetRacers = prev.racers.map(r => ({
+        ...r,
+        ready: false,
+        finished: false,
+        progress: 0,
+        wpm: 0,
+        accuracy: 100,
+        time: 0,
+        position: undefined,
+        wordSpeeds: [],
+        keystrokeData: [],
+      }));
+      
+      return {
+        ...prev,
+        status: RaceStatus.WAITING,
+        paragraph: newParagraph,
+        paragraphIndex: newParagraphIndex,
+        racers: resetRacers,
+        results: [],
+        raceStats: null,
+        myFinished: false,
+        countdownEnd: null,
+        raceStartTime: null,
+      };
+    });
+    
+    // Update host presence
+    if (channelRef.current) {
+      channelRef.current.track({
+        odId: myIdRef.current,
+        name: myNameRef.current,
+        ready: false,
+        progress: 0,
+        wpm: 0,
+        accuracy: 100,
+        finished: false,
+        time: 0,
+        isHost: true,
+        isSpectator: false,
+        raceState: {
+          status: 'waiting',
+          paragraph: newParagraph,
+          paragraphIndex: newParagraphIndex,
+          joinKey: raceDataRef.current?.joinKey,
+        },
+      });
+    }
+  }, [broadcast]);
+
   // Update progress - real-time via broadcast (unlimited!)
   const updateProgress = useCallback((progress, wpm, accuracy, position) => {
     broadcast('progress', { odId: myIdRef.current, progress, wpm, accuracy, position });
@@ -1154,40 +1286,6 @@ export function useRace() {
     setState(prev => ({ ...prev, raceStats: null }));
   }, []);
 
-  // Generate shareable results URL
-  const generateShareUrl = useCallback(() => {
-    if (!state.raceStats) return null;
-    
-    const { allResults, paragraph } = state.raceStats;
-    
-    // Version 2 format - more comprehensive
-    // v2|charCount,wordCount,timestamp|name,wpm,acc,time,ws1-ws2-ws3...|name,...
-    const meta = [
-      paragraph?.length || 0,
-      Math.round((paragraph?.length || 0) / 5),
-      Date.now(),
-    ].join(',');
-    
-    const racers = allResults.map(r => {
-      const parts = [
-        r.name,
-        Math.round(r.wpm * 10) / 10, // 1 decimal
-        Math.round(r.accuracy * 10) / 10,
-        Math.round(r.time),
-      ];
-      // Add word speeds if available (dash-separated for compactness)
-      if (r.wordSpeeds && r.wordSpeeds.length > 0) {
-        parts.push(r.wordSpeeds.join('-'));
-      }
-      return parts.join(',');
-    }).join('|');
-    
-    const data = `v2|${meta}|${racers}`;
-    const encoded = btoa(encodeURIComponent(data));
-    
-    return `${window.location.origin}${window.location.pathname}?r=${encoded}`;
-  }, [state.raceStats]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1209,11 +1307,11 @@ export function useRace() {
     setReady,
     updateName,
     startRace,
+    startNewRound,
     updateProgress,
     finishRace,
     leaveRace,
     clearRaceStats,
-    generateShareUrl,
     setRealtimeMode,
     isInRace: state.status !== RaceStatus.IDLE && state.status !== RaceStatus.FINISHED,
     hasRaceStats: state.raceStats !== null,
@@ -1221,185 +1319,4 @@ export function useRace() {
     finishedCount,
     totalCount,
   };
-}
-
-// Utility to parse shared results from URL
-export function parseSharedResults(encoded) {
-  try {
-    const data = decodeURIComponent(atob(encoded));
-    
-    // Check version
-    if (data.startsWith('v2|')) {
-      return parseV2(data);
-    }
-    
-    // Legacy v1 format
-    return parseV1(data);
-  } catch (e) {
-    console.error('Failed to parse shared results:', e);
-    return null;
-  }
-}
-
-function parseV1(data) {
-  const [meta, resultsStr] = data.split('::');
-  const [charCount, wordCount] = meta.split('|').map(Number);
-  
-  const results = resultsStr.split(';').map((r, i) => {
-    const [name, wpm, accuracy, time] = r.split('|');
-    return {
-      id: `shared_${i}`,
-      name,
-      wpm: Number(wpm),
-      accuracy: Number(accuracy),
-      time: Number(time),
-      position: i + 1,
-      wordSpeeds: [],
-    };
-  });
-  
-  return computeDerivedStats(results, charCount, wordCount, null);
-}
-
-function parseV2(data) {
-  const parts = data.split('|');
-  const [charCount, wordCount, timestamp] = parts[1].split(',').map(Number);
-  
-  const results = [];
-  for (let i = 2; i < parts.length; i++) {
-    const racerParts = parts[i].split(',');
-    const name = racerParts[0];
-    const wpm = Number(racerParts[1]);
-    const accuracy = Number(racerParts[2]);
-    const time = Number(racerParts[3]);
-    const wordSpeeds = racerParts[4] ? racerParts[4].split('-').map(Number) : [];
-    
-    results.push({
-      id: `shared_${i - 2}`,
-      name,
-      wpm,
-      accuracy,
-      time,
-      position: i - 1,
-      wordSpeeds,
-    });
-  }
-  
-  return computeDerivedStats(results, charCount, wordCount, timestamp);
-}
-
-function computeDerivedStats(results, charCount, wordCount, timestamp) {
-  const racerCount = results.length;
-  
-  // Basic aggregates
-  const wpms = results.map(r => r.wpm);
-  const accuracies = results.map(r => r.accuracy);
-  const times = results.map(r => r.time);
-  
-  const avgWpm = wpms.reduce((a, b) => a + b, 0) / racerCount;
-  const avgAccuracy = accuracies.reduce((a, b) => a + b, 0) / racerCount;
-  const avgTime = times.reduce((a, b) => a + b, 0) / racerCount;
-  
-  const maxWpm = Math.max(...wpms);
-  const minWpm = Math.min(...wpms);
-  const maxAccuracy = Math.max(...accuracies);
-  const minAccuracy = Math.min(...accuracies);
-  const fastestTime = Math.min(...times);
-  const slowestTime = Math.max(...times);
-  
-  // Standard deviations
-  const wpmStdDev = Math.sqrt(wpms.reduce((sum, w) => sum + Math.pow(w - avgWpm, 2), 0) / racerCount);
-  const accStdDev = Math.sqrt(accuracies.reduce((sum, a) => sum + Math.pow(a - avgAccuracy, 2), 0) / racerCount);
-  
-  // Winner stats
-  const winner = results[0];
-  const runnerUp = results[1];
-  const marginWpm = runnerUp ? winner.wpm - runnerUp.wpm : 0;
-  const marginTime = runnerUp ? runnerUp.time - winner.time : 0;
-  
-  // Word-level stats (if available)
-  const allWordSpeeds = results.flatMap(r => r.wordSpeeds || []);
-  const hasWordSpeeds = allWordSpeeds.length > 0;
-  
-  let wordSpeedStats = null;
-  if (hasWordSpeeds) {
-    const avgWordSpeed = allWordSpeeds.reduce((a, b) => a + b, 0) / allWordSpeeds.length;
-    const maxWordSpeed = Math.max(...allWordSpeeds);
-    const minWordSpeed = Math.min(...allWordSpeeds);
-    const wordSpeedStdDev = Math.sqrt(
-      allWordSpeeds.reduce((sum, w) => sum + Math.pow(w - avgWordSpeed, 2), 0) / allWordSpeeds.length
-    );
-    
-    // Per-word averages across racers
-    const wordCount = Math.max(...results.map(r => r.wordSpeeds?.length || 0));
-    const perWordAvg = [];
-    for (let i = 0; i < wordCount; i++) {
-      const speedsAtPos = results.map(r => r.wordSpeeds?.[i]).filter(s => s !== undefined);
-      if (speedsAtPos.length > 0) {
-        perWordAvg.push(Math.round(speedsAtPos.reduce((a, b) => a + b, 0) / speedsAtPos.length));
-      }
-    }
-    
-    wordSpeedStats = {
-      avgWordSpeed,
-      maxWordSpeed,
-      minWordSpeed,
-      wordSpeedStdDev,
-      wordSpeedRange: maxWordSpeed - minWordSpeed,
-      perWordAvg,
-    };
-  }
-  
-  // Characters per second for winner
-  const winnerCps = charCount / (winner.time / 1000);
-  
-  return {
-    results,
-    charCount,
-    wordCount,
-    timestamp,
-    racerCount,
-    
-    // Aggregates
-    avgWpm,
-    avgAccuracy,
-    avgTime,
-    
-    // Extremes
-    maxWpm,
-    minWpm,
-    wpmSpread: maxWpm - minWpm,
-    maxAccuracy,
-    minAccuracy,
-    accuracySpread: maxAccuracy - minAccuracy,
-    fastestTime,
-    slowestTime,
-    timeSpread: slowestTime - fastestTime,
-    
-    // Distributions
-    wpmStdDev,
-    accStdDev,
-    
-    // Competition
-    winner,
-    marginWpm,
-    marginTime,
-    winnerCps,
-    
-    // Word-level
-    wordSpeedStats,
-    hasWordSpeeds,
-    
-    // Include raw decoded string for inspection
-    rawEncoded: `v2|${[charCount, wordCount, timestamp].join(',')}|${results.map(r => [r.name, r.wpm, r.accuracy, r.time, (r.wordSpeeds || []).join('-')].join(',')).join('|')}`,
-  };
-}
-
-// Utility to just decode and return the raw string
-export function decodeShareUrl(encoded) {
-  try {
-    return decodeURIComponent(atob(encoded));
-  } catch (e) {
-    return null;
-  }
 }

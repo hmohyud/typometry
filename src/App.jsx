@@ -4,14 +4,14 @@ import { getKeyDistance } from "./keyboard";
 import { KeyboardHeatmap, KeyboardFlowMap } from "./KeyboardViz";
 import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
 import { useGlobalStats } from "./useGlobalStats";
-import { useRace, parseSharedResults } from "./useRace";
+import { useRace } from "./useRace";
 import {
   RaceLobby,
   RaceCountdown,
   RaceProgressPanel,
   RaceResults,
   RaceStatsPanel,
-  SharedResultsView,
+  LobbyPresenceIndicator,
   RACER_COLORS,
   getRacerColorIndex,
 } from "./RaceMode";
@@ -89,6 +89,16 @@ const STAT_ROUND = {
 
 // Flatten all paragraphs into one pool with indices
 const ALL_PARAGRAPHS = Object.values(sentences).flat();
+
+// For races, exclude technical/coding paragraphs for better experience
+const RACE_PARAGRAPHS = [
+  ...(sentences.narrative || []),
+  ...(sentences.reflective || []),
+  ...(sentences.descriptive || []),
+  ...(sentences.instructional || []),
+  ...(sentences.dialogue || []),
+  ...(sentences.questions || []),
+];
 
 // localStorage keys
 const STORAGE_KEYS = {
@@ -1088,15 +1098,19 @@ const saveToStorage = (key, value) => {
 };
 
 // Get next paragraph (avoiding completed ones)
-const getNextParagraph = (completedIndices) => {
-  const available = ALL_PARAGRAPHS.map((text, index) => ({
+const getNextParagraph = (completedIndices, forRace = false) => {
+  // For races, use filtered paragraphs (no technical/coding)
+  const paragraphs = forRace ? RACE_PARAGRAPHS : ALL_PARAGRAPHS;
+  
+  const available = paragraphs.map((text, index) => ({
     text,
-    index,
+    index: forRace ? ALL_PARAGRAPHS.indexOf(text) : index, // Map back to global index
   })).filter(({ index }) => !completedIndices.includes(index));
 
   if (available.length === 0) {
     // All done - reset and start over
-    return { text: ALL_PARAGRAPHS[0], index: 0, reset: true };
+    const firstPara = paragraphs[0];
+    return { text: firstPara, index: ALL_PARAGRAPHS.indexOf(firstPara), reset: true };
   }
 
   const choice = available[Math.floor(Math.random() * available.length)];
@@ -1514,7 +1528,6 @@ const HistoryDetailView = ({ entry, paragraph, onBack, onPracticeAgain, fmt }) =
 
 // Race Detail View - shows full stats for a past race
 const RaceDetailView = ({ race, onBack, fmt }) => {
-  const [copiedShare, setCopiedShare] = useState(false);
   const [expandedRacer, setExpandedRacer] = useState(null);
   
   if (!race) return null;
@@ -1525,14 +1538,6 @@ const RaceDetailView = ({ race, onBack, fmt }) => {
     const mins = Math.floor(seconds / 60);
     const secs = (seconds % 60).toFixed(1);
     return `${mins}m ${secs}s`;
-  };
-  
-  const handleCopyShare = () => {
-    if (race.shareUrl) {
-      navigator.clipboard.writeText(race.shareUrl);
-      setCopiedShare(true);
-      setTimeout(() => setCopiedShare(false), 2000);
-    }
   };
   
   // Create word speed data for sentence flow from paragraph and racer's wordSpeeds
@@ -1733,11 +1738,6 @@ const RaceDetailView = ({ race, onBack, fmt }) => {
       
       {/* Actions */}
       <div className="race-detail-actions">
-        {race.shareUrl && (
-          <button className="share-race-btn" onClick={handleCopyShare}>
-            {copiedShare ? 'copied!' : 'copy share link'}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -3480,11 +3480,11 @@ function App() {
     setReady: setRaceReady,
     updateName: updateRaceName,
     startRace,
+    startNewRound,
     updateProgress: updateRaceProgress,
     finishRace,
     leaveRace,
     clearRaceStats,
-    generateShareUrl,
     setRealtimeMode,
     isInRace,
     hasRaceStats,
@@ -3504,16 +3504,6 @@ function App() {
   const clearHoldInterval = useRef(null);
   const completeHintRef = useRef(null);
   const restartHintRef = useRef(null);
-
-  // Check for shared results URL
-  const [sharedResultsData, setSharedResultsData] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const encoded = params.get("r");
-    if (encoded) {
-      return parseSharedResults(encoded);
-    }
-    return null;
-  });
 
   // Load completed indices on mount
   const [completedIndices, setCompletedIndices] = useState(() =>
@@ -3679,8 +3669,6 @@ function App() {
         // Character stats
         charCount: raceState.raceStats.paragraph?.length || 0,
         wordCount: Math.round((raceState.raceStats.paragraph?.length || 0) / 5),
-        // Share URL
-        shareUrl: generateShareUrl(),
       };
       
       const newRaceHistory = [raceEntry, ...existingHistory].slice(0, 50); // Keep last 50 races
@@ -3702,7 +3690,7 @@ function App() {
         saveToStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: currentStreak.best });
       }
     }
-  }, [raceState.status, raceState.raceStats, generateShareUrl]);
+  }, [raceState.status, raceState.raceStats]);
 
   useEffect(() => {
     containerRef.current?.focus();
@@ -5037,6 +5025,7 @@ function App() {
         const words = currentText.split(/(\s+)/); // Split keeping spaces
         const wordSpeedsData = [];
         let charIdx = 0;
+        let prevWordEndTime = startTime.current; // Start from typing start time
         
         for (const word of words) {
           if (word.trim().length === 0) {
@@ -5055,12 +5044,27 @@ function App() {
           let wordErrors = wordKeystrokes.filter(k => !k.correct).length;
           
           if (wordKeystrokes.length >= 2) {
+            // Multi-char word: time between first and last keystroke
             const firstTs = wordKeystrokes[0].timestamp;
             const lastTs = wordKeystrokes[wordKeystrokes.length - 1].timestamp;
             wordTime = lastTs - firstTs;
             if (wordTime > 0) {
               wordWpm = ((word.length / 5) / (wordTime / 60000));
             }
+          } else if (wordKeystrokes.length === 1) {
+            // Single-char word (like "a", "I"): use time from previous word end
+            // For first word, prevWordEndTime is startTime.current
+            wordTime = wordKeystrokes[0].timestamp - prevWordEndTime;
+            if (wordTime > 0 && wordTime < 5000) { // Sanity check: less than 5 seconds
+              // For single char + space, measure as if it were a 2-char sequence
+              // This gives more reasonable WPM for short words
+              wordWpm = ((word.length / 5) / (wordTime / 60000));
+            }
+          }
+          
+          // Update prevWordEndTime for next iteration (include space after word)
+          if (wordKeystrokes.length > 0) {
+            prevWordEndTime = wordKeystrokes[wordKeystrokes.length - 1].timestamp;
           }
           
           wordSpeedsData.push({
@@ -5396,21 +5400,6 @@ function App() {
     setClearHoldProgress(0);
   };
 
-  // If viewing shared results, show that instead
-  if (sharedResultsData) {
-    return (
-      <div className="app-wrapper shared-results-wrapper">
-        <SharedResultsView 
-          data={sharedResultsData}
-          onGoToApp={() => {
-            setSharedResultsData(null);
-            window.history.pushState({}, "", window.location.pathname);
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="app-wrapper" onClick={() => containerRef.current?.focus()}>
       <div
@@ -5422,6 +5411,7 @@ function App() {
         {/* Stats icon button - positioned absolutely */}
         {!isActive &&
           !isComplete &&
+          !isInRace &&
           ((cumulativeStats && cumulativeStats.sessions > 0) ||
             (globalAverages && globalAverages.total_sessions > 0)) && (
             <button
@@ -9966,7 +9956,6 @@ function App() {
               <RaceStatsPanel
                 raceStats={raceState.raceStats}
                 fmt={fmt}
-                shareUrl={generateShareUrl()}
               />
             ) : statsView === "history" || statsView === "race-history" ? (
               /* Combined history view */
@@ -10054,6 +10043,17 @@ function App() {
           />
         )}
 
+        {/* Floating lobby presence indicator - shows during race & after */}
+        {(isInRace || raceState.status === "finished") && raceState.status !== "waiting" && raceState.status !== "connecting" && raceState.status !== "idle" && (
+          <LobbyPresenceIndicator
+            racers={raceState.racers}
+            spectators={raceState.spectators}
+            myId={raceState.myId}
+            isHost={raceState.isHost}
+            raceStatus={raceState.status}
+          />
+        )}
+
         {isInRace && raceState.status === "countdown" && (
           <RaceCountdown endTime={raceState.countdownEnd} />
         )}
@@ -10062,14 +10062,18 @@ function App() {
           <RaceResults
             results={raceState.results}
             myId={raceState.myId}
-            shareUrl={generateShareUrl()}
+            isHost={raceState.isHost}
             isWaitingForOthers={raceState.status !== "finished"}
             onPlayAgain={() => {
-              const { raceId, joinKey, paragraph, paragraphIndex } = createRace(currentText, currentIndex);
-              joinRace(raceId, racerName, paragraph, paragraphIndex, true, false, joinKey);
-              // Don't show joinKey in URL bar - host doesn't need it visible
-              window.history.pushState({}, "", `?race=${raceId}`);
-              // Reset typing state for new race
+              // Only host can start a new round
+              if (raceState.isHost) {
+                // Get a new paragraph for the next round
+                const { text: newText, index: newIndex } = getNextParagraph(completedIndices, true);
+                setCurrentText(newText);
+                setCurrentIndex(newIndex);
+                startNewRound(newText, newIndex);
+              }
+              // Reset local typing state (everyone does this)
               setTyped('');
               setKeystrokeData([]);
               setRawKeyEvents([]);
@@ -10100,8 +10104,8 @@ function App() {
             <button
               className="reset-btn pvp-btn"
               onClick={() => {
-                // Get a fresh paragraph for the race
-                const { text: newText, index: newIndex } = getNextParagraph(completedIndices);
+                // Get a fresh paragraph for the race (filtered for race mode)
+                const { text: newText, index: newIndex } = getNextParagraph(completedIndices, true);
                 setCurrentText(newText);
                 setCurrentIndex(newIndex);
                 setTyped('');

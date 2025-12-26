@@ -792,6 +792,17 @@
   opacity: 0.85;
 }
 
+.waiting-for-host {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 /* PvP Stats Panel - New Design */
 .pvp-stats {
   padding: 0.5rem 0;
@@ -1849,5 +1860,159 @@
   
   .race-keyboard .keyboard-viz {
     transform: scale(0.75);
+  }
+}
+
+/* Lobby Presence Indicator */
+.lobby-presence {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+}
+
+.presence-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-dim);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.presence-toggle:hover {
+  background: var(--bg);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.lobby-presence.expanded .presence-toggle {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.presence-count {
+  font-weight: 600;
+  min-width: 1rem;
+  text-align: center;
+}
+
+.presence-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-dim);
+  border-radius: 8px;
+  padding: 0.5rem 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.presence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.75rem 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--text-dim);
+  margin-bottom: 0.25rem;
+}
+
+.host-badge {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.6rem;
+}
+
+.presence-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.presence-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.presence-item.disconnected {
+  opacity: 0.5;
+}
+
+.presence-item.spectator {
+  opacity: 0.7;
+}
+
+.presence-status {
+  font-size: 0.7rem;
+  width: 1rem;
+  text-align: center;
+}
+
+.presence-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.you-indicator {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  margin-left: 0.25rem;
+}
+
+.host-indicator {
+  color: #f59e0b;
+  font-size: 0.7rem;
+}
+
+.presence-divider {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.75rem 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.presence-legend {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem 0.25rem;
+  border-top: 1px solid var(--text-dim);
+  margin-top: 0.25rem;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+@media (max-width: 600px) {
+  .lobby-presence {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  
+  .presence-toggle {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+  }
+  
+  .presence-dropdown {
+    min-width: 160px;
   }
 }

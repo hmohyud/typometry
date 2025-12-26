@@ -501,21 +501,8 @@ export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, i
 }
 
 // Race results screen
-export function RaceResults({ results, myId, onPlayAgain, onLeave, shareUrl, isWaitingForOthers }) {
-  const [copied, setCopied] = useState(false);
-  
+export function RaceResults({ results, myId, isHost, onPlayAgain, onLeave, isWaitingForOthers }) {
   const formatTime = (ms) => (ms / 1000).toFixed(1) + 's';
-  
-  const handleShare = async () => {
-    if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
   
   const finishedCount = results.length;
   
@@ -550,15 +537,13 @@ export function RaceResults({ results, myId, onPlayAgain, onLeave, shareUrl, isW
         <button onClick={onLeave} className="result-btn">
           leave
         </button>
-        {shareUrl && !isWaitingForOthers && (
-          <button onClick={handleShare} className="result-btn">
-            {copied ? 'copied!' : 'share'}
+        {!isWaitingForOthers && isHost && (
+          <button onClick={onPlayAgain} className="result-btn primary">
+            next round
           </button>
         )}
-        {!isWaitingForOthers && (
-          <button onClick={onPlayAgain} className="result-btn primary">
-            race again
-          </button>
+        {!isWaitingForOthers && !isHost && (
+          <span className="waiting-for-host">waiting for host...</span>
         )}
       </div>
     </div>
@@ -856,20 +841,7 @@ function RaceKeyboards({ results, myId }) {
 }
 
 // Race Stats Panel - for the Race tab in stats view
-export function RaceStatsPanel({ raceStats, fmt, shareUrl }) {
-  const [copied, setCopied] = useState(false);
-  
-  const handleShare = async () => {
-    if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-  
+export function RaceStatsPanel({ raceStats, fmt }) {
   if (!raceStats) {
     return (
       <div className="race-stats-empty">
@@ -929,11 +901,6 @@ export function RaceStatsPanel({ raceStats, fmt, shareUrl }) {
           <span className="waiting-indicator">
             waiting for {racerCount - finishedCount} more...
           </span>
-        )}
-        {shareUrl && !stillWaiting && (
-          <button className="pvp-share" onClick={handleShare}>
-            {copied ? 'copied!' : 'share results'}
-          </button>
         )}
       </div>
 
@@ -1161,186 +1128,104 @@ export function RaceStatsPanel({ raceStats, fmt, shareUrl }) {
   );
 }
 
-// Parse shared results - re-export from useRace.js
-// (imported at top of file, but also available here for backward compat)
-
-// Shared Results View - standalone page for shared links
-export function SharedResultsView({ data, onGoToApp }) {
-  if (!data) {
-    return (
-      <div className="shared-results-error">
-        <p>invalid results link</p>
-        <button onClick={onGoToApp} className="go-to-app-btn">go to typometry</button>
-      </div>
-    );
-  }
+export function LobbyPresenceIndicator({ racers, spectators = [], myId, isHost, raceStatus }) {
+  const [expanded, setExpanded] = useState(false);
   
-  const { 
-    results, 
-    charCount, 
-    wordCount, 
-    racerCount,
-    avgWpm,
-    avgAccuracy,
-    avgTime,
-    maxWpm,
-    minWpm,
-    wpmSpread,
-    wpmStdDev,
-    accStdDev,
-    fastestTime,
-    slowestTime,
-    winner,
-    marginWpm,
-    marginTime,
-    winnerCps,
-    wordSpeedStats,
-    hasWordSpeeds,
-    timestamp,
-  } = data;
-
-  const formatTime = (ms) => {
-    const seconds = ms / 1000;
-    if (seconds < 60) return `${seconds.toFixed(1)}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(1);
-    return `${mins}m ${secs}s`;
+  if (!racers || racers.length === 0) return null;
+  
+  const onlineRacers = racers.filter(r => !r.disconnected);
+  const disconnectedRacers = racers.filter(r => r.disconnected);
+  const totalOnline = onlineRacers.length + spectators.length;
+  
+  const getStatusIcon = (racer) => {
+    if (racer.disconnected) return '⚫'; // offline
+    if (racer.finished) return '✓';
+    if (racer.ready) return '●'; // ready
+    return '○'; // not ready
   };
   
-  const formatDate = (ts) => {
-    if (!ts) return null;
-    return new Date(ts).toLocaleDateString(undefined, { 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const getStatusColor = (racer) => {
+    if (racer.disconnected) return '#6b7280'; // gray
+    if (racer.finished) return '#10b981'; // green
+    if (racer.ready) return '#6ecf6e'; // accent green
+    return '#f59e0b'; // amber - not ready
   };
-  
+
   return (
-    <div className="shared-results">
-      <div className="shared-header">
-        <span className="shared-title">race results</span>
-        <button onClick={onGoToApp} className="go-to-app-btn">try typometry</button>
-      </div>
+    <div className={`lobby-presence ${expanded ? 'expanded' : ''}`}>
+      <button 
+        className="presence-toggle"
+        onClick={() => setExpanded(!expanded)}
+        title="Show lobby members"
+      >
+        <span className="presence-count">{totalOnline}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      </button>
       
-      {/* Winner Hero */}
-      <div className="shared-winner">
-        <span className="winner-label">winner</span>
-        <span className="winner-name">{winner.name}</span>
-        <div className="winner-stats">
-          <span>{Math.round(winner.wpm * 10) / 10} wpm</span>
-          <span>{Math.round(winner.accuracy * 10) / 10}%</span>
-          <span>{formatTime(winner.time)}</span>
-        </div>
-      </div>
-      
-      {/* Standings with bars */}
-      <div className="shared-standings">
-        {results.map((racer, index) => {
-          const barWidth = wpmSpread > 0 
-            ? ((racer.wpm - minWpm) / wpmSpread) * 100 
-            : 100;
-          return (
-            <div key={racer.id} className="shared-standing">
-              <span className="standing-pos">{index + 1}</span>
-              <div className="standing-info">
-                <span className="standing-name">{racer.name}</span>
-                <div className="standing-bar">
-                  <div className="standing-fill" style={{ width: `${barWidth}%` }} />
-                </div>
+      {expanded && (
+        <div className="presence-dropdown">
+          <div className="presence-header">
+            <span>in lobby</span>
+            {isHost && <span className="host-badge">host</span>}
+          </div>
+          
+          <div className="presence-list">
+            {onlineRacers.map(racer => (
+              <div key={racer.id} className="presence-item">
+                <span 
+                  className="presence-status"
+                  style={{ color: getStatusColor(racer) }}
+                >
+                  {getStatusIcon(racer)}
+                </span>
+                <span className="presence-name">
+                  {racer.name}
+                  {racer.id === myId && <span className="you-indicator">(you)</span>}
+                </span>
+                {racer.isHost && <span className="host-indicator">★</span>}
               </div>
-              <span className="standing-wpm">{Math.round(racer.wpm)}</span>
-            </div>
-          );
-        })}
-      </div>
-      
-      {/* Competition Stats */}
-      <div className="shared-stats-grid">
-        {marginWpm > 0 && (
-          <div className="shared-stat">
-            <span className="stat-value">{marginWpm.toFixed(1)}</span>
-            <span className="stat-label">wpm margin</span>
+            ))}
+            
+            {disconnectedRacers.length > 0 && (
+              <>
+                <div className="presence-divider">offline</div>
+                {disconnectedRacers.map(racer => (
+                  <div key={racer.id} className="presence-item disconnected">
+                    <span className="presence-status" style={{ color: '#6b7280' }}>⚫</span>
+                    <span className="presence-name">{racer.name}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {spectators.length > 0 && (
+              <>
+                <div className="presence-divider">watching</div>
+                {spectators.map(spec => (
+                  <div key={spec.id} className="presence-item spectator">
+                    <span className="presence-status">👁</span>
+                    <span className="presence-name">
+                      {spec.name}
+                      {spec.id === myId && <span className="you-indicator">(you)</span>}
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
-        )}
-        {marginTime > 0 && (
-          <div className="shared-stat">
-            <span className="stat-value">{(marginTime / 1000).toFixed(1)}s</span>
-            <span className="stat-label">time gap</span>
-          </div>
-        )}
-        <div className="shared-stat">
-          <span className="stat-value">{avgWpm.toFixed(0)}</span>
-          <span className="stat-label">avg wpm</span>
-        </div>
-        <div className="shared-stat">
-          <span className="stat-value">{wpmSpread.toFixed(0)}</span>
-          <span className="stat-label">wpm spread</span>
-        </div>
-        <div className="shared-stat">
-          <span className="stat-value">{wpmStdDev.toFixed(1)}</span>
-          <span className="stat-label">wpm σ</span>
-        </div>
-        <div className="shared-stat">
-          <span className="stat-value">{avgAccuracy.toFixed(1)}%</span>
-          <span className="stat-label">avg accuracy</span>
-        </div>
-        <div className="shared-stat">
-          <span className="stat-value">{winnerCps.toFixed(1)}</span>
-          <span className="stat-label">cps (winner)</span>
-        </div>
-        <div className="shared-stat">
-          <span className="stat-value">{formatTime(avgTime)}</span>
-          <span className="stat-label">avg time</span>
-        </div>
-      </div>
-      
-      {/* Word Speed Stats */}
-      {hasWordSpeeds && wordSpeedStats && (
-        <div className="shared-word-stats">
-          <div className="word-stats-header">word-level analysis</div>
-          <div className="shared-stats-grid">
-            <div className="shared-stat">
-              <span className="stat-value">{Math.round(wordSpeedStats.avgWordSpeed)}</span>
-              <span className="stat-label">avg word wpm</span>
-            </div>
-            <div className="shared-stat">
-              <span className="stat-value">{wordSpeedStats.maxWordSpeed}</span>
-              <span className="stat-label">fastest word</span>
-            </div>
-            <div className="shared-stat">
-              <span className="stat-value">{wordSpeedStats.minWordSpeed}</span>
-              <span className="stat-label">slowest word</span>
-            </div>
-            <div className="shared-stat">
-              <span className="stat-value">{wordSpeedStats.wordSpeedRange}</span>
-              <span className="stat-label">word range</span>
-            </div>
+          
+          <div className="presence-legend">
+            <span><span style={{color: '#6ecf6e'}}>●</span> ready</span>
+            <span><span style={{color: '#f59e0b'}}>○</span> not ready</span>
+            <span><span style={{color: '#10b981'}}>✓</span> finished</span>
           </div>
         </div>
       )}
-      
-      {/* Meta */}
-      <div className="shared-meta">
-        <span>{racerCount} racer{racerCount !== 1 ? 's' : ''}</span>
-        <span>·</span>
-        <span>{charCount} chars</span>
-        <span>·</span>
-        <span>~{wordCount} words</span>
-        {timestamp && (
-          <>
-            <span>·</span>
-            <span>{formatDate(timestamp)}</span>
-          </>
-        )}
-      </div>
-      
-      {/* Raw Data Expander */}
-      <details className="shared-raw-data">
-        <summary>view raw data</summary>
-        <pre>{JSON.stringify(data, null, 2)}</pre>
-      </details>
     </div>
   );
 }
@@ -1352,5 +1237,5 @@ export default {
   RaceProgressPanel,
   RaceResults,
   RaceStatsPanel,
-  SharedResultsView,
+  LobbyPresenceIndicator,
 };
