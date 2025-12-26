@@ -524,13 +524,21 @@ h1 {
 
 .stat-grid.primary {
   grid-template-columns: repeat(4, 1fr);
+  justify-items: center;
 }
 
 .stat-grid.secondary {
+  display: grid;
   grid-template-columns: repeat(4, 1fr);
-  padding: 1rem;
+  gap: 1.25rem 1rem;
+  padding: 1rem 1.5rem;
   background: var(--bg-secondary);
   border-radius: 8px;
+}
+
+.stat-grid.secondary .stat,
+.stat-grid.secondary .tooltip-wrapper {
+  text-align: center;
 }
 
 .stat {
@@ -556,6 +564,7 @@ h1 {
   letter-spacing: 0.05em;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
 }
 
@@ -890,7 +899,7 @@ h1 {
 
 .behavioral-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -1589,6 +1598,7 @@ footer {
 
 .stat-grid .tooltip-wrapper {
   display: block;
+  text-align: center;
 }
 
 .patterns-grid .tooltip-wrapper {
@@ -1714,9 +1724,14 @@ footer {
     font-size: 1.1rem;
   }
   
-  .stat-grid.primary,
+  .stat-grid.primary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
   .stat-grid.secondary {
     grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 0.75rem;
+    padding: 1rem;
   }
   
   .stat-value {

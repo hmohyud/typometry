@@ -8840,7 +8840,6 @@ function App() {
                 {/* Global Finger Stats - matches keyboard section position in This Paragraph */}
                 {fingerAverages && Object.keys(fingerAverages).length > 0 && (
                   <div className="finger-section">
-                    <h3>Finger Performance (Global Average)</h3>
                     <FingerHands
                       fingerStats={Object.fromEntries(
                         Object.entries(fingerAverages).map(([finger, data]) => [
@@ -9284,14 +9283,12 @@ function App() {
                               </span>
                             </div>
                           </Tooltip>
-                          <Tooltip content="Overall accuracy across all users">
+                          <Tooltip content="Total sessions completed by all users">
                             <div className="stat small">
                               <span className="stat-value">
-                                {fmt.dec(lifetimeStats.lifetimeAccuracy)}%
+                                {fmt.count(globalAverages?.total_sessions || 0)}
                               </span>
-                              <span className="stat-label">
-                                global accuracy
-                              </span>
+                              <span className="stat-label">total sessions</span>
                             </div>
                           </Tooltip>
                           <Tooltip content="Total errors made by all users">
