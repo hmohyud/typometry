@@ -461,6 +461,12 @@ h1 {
   pointer-events: none;
 }
 
+/* Multiple ghosts at same position - gradient background */
+.char.ghost-cursor.ghost-multiple::before {
+  background: linear-gradient(135deg, var(--ghost-color) 50%, var(--ghost-color-2) 50%);
+  opacity: 0.5;
+}
+
 /* Ghost cursor name label - always visible above the cursor */
 .char.ghost-cursor::after {
   content: attr(data-ghost);
@@ -478,6 +484,12 @@ h1 {
   pointer-events: none;
   z-index: 10;
   text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+}
+
+/* Multiple ghosts - show count badge */
+.char.ghost-cursor.ghost-multiple::after {
+  content: attr(data-ghost-count) " here";
+  background: linear-gradient(135deg, var(--ghost-color) 50%, var(--ghost-color-2) 50%);
 }
 
 .hint {
@@ -902,6 +914,10 @@ h1 {
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.behavioral-grid.four-col {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .behavioral-card {
@@ -1623,7 +1639,9 @@ footer {
 .keyboard-header-right .tooltip-wrapper,
 .histograms-header-row .tooltip-wrapper,
 .graph-card .tooltip-wrapper,
-.bigrams > .tooltip-wrapper {
+.bigrams > .tooltip-wrapper,
+.histogram-item .tooltip-wrapper,
+.histogram-expanded-header .tooltip-wrapper {
   display: block;
 }
 
@@ -1759,7 +1777,8 @@ footer {
     grid-column: 1;
   }
   
-  .behavioral-grid {
+  .behavioral-grid,
+  .behavioral-grid.four-col {
     grid-template-columns: repeat(2, 1fr);
   }
   
@@ -1816,7 +1835,8 @@ footer {
     flex-direction: row;
   }
   
-  .behavioral-grid {
+  .behavioral-grid,
+  .behavioral-grid.four-col {
     grid-template-columns: 1fr;
   }
   

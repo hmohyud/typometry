@@ -5245,17 +5245,24 @@ function App() {
   );
 
   const renderText = () => {
-    // Get opponent positions for ghost cursors (only during active race)
+    // Get opponent positions for ghost cursors (during countdown and racing)
     const opponentPositions = {};
-    if (isInRace && raceState.status === "racing") {
+    if (isInRace && (raceState.status === "racing" || raceState.status === "countdown")) {
       raceState.racers.forEach((racer) => {
-        if (racer.id !== raceState.myId && !racer.finished && typeof racer.position === 'number' && racer.position >= 0) {
-          const colorIndex = getRacerColorIndex(racer.id, raceState.racers);
-          opponentPositions[racer.position] = {
-            name: racer.name,
-            colorIndex: colorIndex,
-            color: RACER_COLORS[colorIndex].hex,
-          };
+        if (racer.id !== raceState.myId && !racer.finished) {
+          // During countdown, everyone is at position 0
+          const pos = raceState.status === "countdown" ? 0 : (typeof racer.position === 'number' ? racer.position : 0);
+          if (pos >= 0) {
+            const colorIndex = getRacerColorIndex(racer.id, raceState.racers);
+            if (!opponentPositions[pos]) {
+              opponentPositions[pos] = [];
+            }
+            opponentPositions[pos].push({
+              name: racer.name,
+              colorIndex: colorIndex,
+              color: RACER_COLORS[colorIndex].hex,
+            });
+          }
         }
       });
     }
@@ -5275,18 +5282,30 @@ function App() {
         className += " space";
       }
 
-      // Check if an opponent's cursor is at this position
-      const opponent = opponentPositions[i];
-      if (opponent) {
+      // Check if opponents' cursors are at this position
+      const opponents = opponentPositions[i];
+      if (opponents && opponents.length > 0) {
         className += ` ghost-cursor`;
+        if (opponents.length > 1) {
+          className += ` ghost-multiple`;
+        }
       }
+
+      // Build name label and colors for multiple opponents
+      const ghostLabel = opponents ? opponents.map(o => o.name).join(', ') : undefined;
+      const primaryColor = opponents?.[0]?.color;
+      const secondaryColor = opponents?.[1]?.color;
 
       return (
         <span 
           key={i} 
           className={className} 
-          data-ghost={opponent?.name}
-          style={opponent ? { '--ghost-color': opponent.color } : undefined}
+          data-ghost={ghostLabel}
+          data-ghost-count={opponents?.length}
+          style={opponents ? { 
+            '--ghost-color': primaryColor,
+            '--ghost-color-2': secondaryColor || primaryColor,
+          } : undefined}
         >
           {char}
         </span>
@@ -6355,7 +6374,7 @@ function App() {
 
                     <h3 className="behavioral-header">Typing Profile</h3>
 
-                    <div className="behavioral-grid">
+                    <div className="behavioral-grid four-col">
                       <Tooltip
                         content={TIPS.correctionStyle(
                           stats.behavioral.momentumLabel
@@ -6425,9 +6444,7 @@ function App() {
                           </p>
                         </div>
                       </Tooltip>
-                    </div>
 
-                    <div className="behavioral-grid">
                       <Tooltip content={TIPS.handBalance}>
                         <div className="behavioral-card">
                           <div className="behavioral-main">
@@ -7678,7 +7695,7 @@ function App() {
                       Typing Profile (All Time)
                     </h3>
 
-                    <div className="behavioral-grid">
+                    <div className="behavioral-grid four-col">
                       <Tooltip
                         content={TIPS.correctionStyle(
                           cumulativeStats.behavioral.momentumLabel
@@ -7750,9 +7767,7 @@ function App() {
                           </p>
                         </div>
                       </Tooltip>
-                    </div>
 
-                    <div className="behavioral-grid">
                       <Tooltip content={TIPS.handBalance}>
                         <div className="behavioral-card">
                           <div className="behavioral-main">
