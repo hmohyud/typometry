@@ -6,12 +6,11 @@ import { Tooltip, TipTitle, TipText, TipHint } from "./Tooltip";
 import { useGlobalStats } from "./useGlobalStats";
 import { useRace } from "./useRace";
 import {
-  RaceLobby,
   RaceCountdown,
   RaceProgressPanel,
   RaceResults,
   RaceStatsPanel,
-  LobbyPresenceIndicator,
+  LobbyPanel,
   RACER_COLORS,
   getRacerColorIndex,
 } from "./RaceMode";
@@ -3486,6 +3485,11 @@ function App() {
     leaveRace,
     clearRaceStats,
     setRealtimeMode,
+    setStrictMode,
+    setLobbyName,
+    transferHost,
+    requestPlayerStats,
+    clearViewingStats,
     isInRace,
     hasRaceStats,
     waitingForOthers,
@@ -3556,7 +3560,21 @@ function App() {
     const history = loadFromStorage(STORAGE_KEYS.HISTORY, []);
     setCompletedCount(completedIndices.length);
     if (history.length > 0) {
-      setCumulativeStats(calculateCumulativeStats(history));
+      const stats = calculateCumulativeStats(history);
+      setCumulativeStats(stats);
+      // Save for sharing via race stats request
+      localStorage.setItem('typometry_cumulative_stats', JSON.stringify({
+        wpm: stats.wpm,
+        accuracy: stats.accuracy,
+        consistency: stats.consistency,
+        sessions: stats.sessions,
+        avgInterval: stats.avgInterval,
+        behavioral: {
+          maxBurst: stats.behavioral?.maxBurst,
+          flowRatio: stats.behavioral?.flowRatio,
+          rhythmScore: stats.behavioral?.rhythmScore,
+        },
+      }));
     }
     resetTest();
   }, []);
@@ -3566,6 +3584,7 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const raceId = params.get("race");
     let joinKey = params.get("join"); // Key required to participate
+    const spectateParam = params.get("spectate"); // Explicit spectate mode
     
     if (raceId && !isInRace) {
       // Check sessionStorage for joinKey (host recovering after refresh)
@@ -3573,23 +3592,45 @@ function App() {
         joinKey = sessionStorage.getItem(`typometry_race_key_${raceId}`);
       }
       
-      // No joinKey = spectator mode
-      const isSpectator = !joinKey;
+      // Spectator if: no joinKey OR explicit spectate=1
+      const isSpectator = !joinKey || spectateParam === '1';
       const name = isSpectator 
         ? `spectator` 
         : (localStorage.getItem("typometry_racer_name") || "guest");
       setRacerName(name);
       // Join as non-host - paragraph will be received from host via broadcast
       // Pass joinKey for validation (null if spectator)
-      joinRace(raceId, name, '', 0, false, isSpectator, joinKey);
+      joinRace(raceId, name, '', 0, false, isSpectator, isSpectator ? null : joinKey);
     }
   }, []);
 
-  // Sync race paragraph to currentText when received from host
+  // Reset typing state when new round starts (watches newRoundCounter from useRace)
+  const prevNewRoundCounter = useRef(raceState.newRoundCounter);
+  useEffect(() => {
+    // Only trigger on counter change (not initial mount)
+    if (raceState.newRoundCounter > 0 && raceState.newRoundCounter !== prevNewRoundCounter.current) {
+      // New round started - reset typing state
+      if (raceState.paragraph) {
+        setCurrentText(raceState.paragraph);
+        setCurrentIndex(raceState.paragraphIndex);
+      }
+      setTyped('');
+      setKeystrokeData([]);
+      setRawKeyEvents([]);
+      setIsActive(false);
+      setIsComplete(false);
+      setStats(null);
+      lastKeystrokeTime.current = null;
+      startTime.current = null;
+    }
+    prevNewRoundCounter.current = raceState.newRoundCounter;
+  }, [raceState.newRoundCounter, raceState.paragraph, raceState.paragraphIndex]);
+
+  // Sync race paragraph to currentText when received from host (non-hosts only) - for initial join
   useEffect(() => {
     if (raceState.paragraph && !raceState.isHost && currentText !== raceState.paragraph) {
-      // Sync paragraph during waiting, countdown, or start of racing
-      if (raceState.status === 'waiting' || raceState.status === 'countdown' || 
+      // Sync paragraph during countdown or start of racing (initial sync, not new round)
+      if (raceState.status === 'countdown' || 
           (raceState.status === 'racing' && typed.length === 0)) {
         setCurrentText(raceState.paragraph);
         setCurrentIndex(raceState.paragraphIndex);
@@ -3612,6 +3653,22 @@ function App() {
       startTime.current = performance.now();
     }
   }, [raceState.status, raceState.realtimeMode, isActive, raceState.isSpectator]);
+
+  // Dismiss stats view and reset typing state when countdown starts (prepare for race)
+  useEffect(() => {
+    if (raceState.status === 'countdown') {
+      setViewingPastStats(false);
+      setIsComplete(false);
+      // Reset typing state for the new paragraph
+      setTyped('');
+      setKeystrokeData([]);
+      setRawKeyEvents([]);
+      setIsActive(false);
+      setStats(null);
+      lastKeystrokeTime.current = null;
+      startTime.current = null;
+    }
+  }, [raceState.status]);
 
   // Auto-switch to race stats view when race finishes
   useEffect(() => {
@@ -4023,7 +4080,9 @@ function App() {
       archetypeDesc = "Accuracy above all else";
     }
 
-    const confidenceScore = Math.round(
+    // Use stored confidenceScore if available, otherwise recalculate
+    const avgConfidenceScore = Math.round(weightedAvg("confidenceScore"));
+    const confidenceScore = avgConfidenceScore > 0 ? avgConfidenceScore : Math.round(
       avgFlowRatio * 0.3 +
         avgRhythmScore * 0.2 +
         accuracy * 0.3 +
@@ -4901,8 +4960,8 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
-      // Block typing during race lobby/countdown
-      if (isInRace && (raceState.status === 'waiting' || raceState.status === 'countdown' || raceState.status === 'connecting')) {
+      // Block typing during countdown only (not waiting - users can practice)
+      if (isInRace && (raceState.status === 'countdown' || raceState.status === 'connecting')) {
         // Only allow Escape to potentially leave
         if (e.key !== 'Escape') {
           return;
@@ -4928,8 +4987,8 @@ function App() {
       }
 
       if (isComplete) {
-        // Shift+Enter to restart - but not during a race
-        if (e.key === "Enter" && e.shiftKey && !isInRace) {
+        // Shift+Enter to restart - allowed when not in race, or during waiting
+        if (e.key === "Enter" && e.shiftKey && (!isInRace || raceState.status === 'waiting')) {
           e.preventDefault();
           resetTest();
         }
@@ -5001,6 +5060,14 @@ function App() {
       };
 
       setKeystrokeData((prev) => [...prev, keystroke]);
+      
+      // In strict mode (for races), only advance if correct
+      const useStrictMode = isInRace && raceState.strictMode;
+      if (useStrictMode && !isCorrect) {
+        // Don't advance - user must backspace and correct
+        return;
+      }
+      
       setTyped((prev) => prev + e.key);
 
       // Update race progress if in a race
@@ -5088,6 +5155,23 @@ function App() {
         // Add wordSpeeds to finalStats
         finalStats.wordSpeeds = wordSpeedsData;
         
+        // Calculate adjusted WPM for non-strict mode (factors in uncorrected errors)
+        const typedFinal = typed + e.key; // Full typed string including this keystroke
+        const expectedWords = currentText.split(/\s+/).filter(w => w.length > 0);
+        const typedWords = typedFinal.split(/\s+/).filter(w => w.length > 0);
+        let correctWordCount = 0;
+        for (let i = 0; i < expectedWords.length; i++) {
+          if (typedWords[i] === expectedWords[i]) {
+            correctWordCount++;
+          }
+        }
+        const wordAccuracyRatio = expectedWords.length > 0 ? correctWordCount / expectedWords.length : 1;
+        const adjustedWpm = Math.round(finalStats.wpm * wordAccuracyRatio);
+        finalStats.adjustedWpm = adjustedWpm;
+        finalStats.correctWords = correctWordCount;
+        finalStats.totalWords = expectedWords.length;
+        finalStats.wordAccuracyRatio = wordAccuracyRatio;
+        
         setIsComplete(true);
         setStats(finalStats);
 
@@ -5109,7 +5193,11 @@ function App() {
             time: k.interval, // Use interval (time between keystrokes)
           }));
           
-          finishRace(finalStats.wpm, finalStats.accuracy, raceTime, wordSpeedsSimple, keystrokeSimple);
+          // In strict mode, use raw WPM (no errors possible)
+          // In non-strict mode, use adjusted WPM (factors in uncorrected errors)
+          const raceWpm = raceState.strictMode ? finalStats.wpm : adjustedWpm;
+          
+          finishRace(raceWpm, finalStats.accuracy, raceTime, wordSpeedsSimple, keystrokeSimple);
         }
 
         // Scroll to show complete hint after a brief delay
@@ -5167,6 +5255,7 @@ function App() {
             homeRowAdvantage: finalStats.behavioral.homeRowAdvantage,
             numberRowPenalty: finalStats.behavioral.numberRowPenalty,
             backspaceEfficiency: finalStats.behavioral.backspaceEfficiency,
+            confidenceScore: finalStats.behavioral.confidenceScore,
           },
         };
         const newHistory = [...history, historyEntry];
@@ -5224,7 +5313,21 @@ function App() {
         });
 
         // Update cumulative stats
-        setCumulativeStats(calculateCumulativeStats(newHistory));
+        const stats = calculateCumulativeStats(newHistory);
+        setCumulativeStats(stats);
+        // Save for sharing via race stats request
+        localStorage.setItem('typometry_cumulative_stats', JSON.stringify({
+          wpm: stats.wpm,
+          accuracy: stats.accuracy,
+          consistency: stats.consistency,
+          sessions: stats.sessions,
+          avgInterval: stats.avgInterval,
+          behavioral: {
+            maxBurst: stats.behavioral?.maxBurst,
+            flowRatio: stats.behavioral?.flowRatio,
+            rhythmScore: stats.behavioral?.rhythmScore,
+          },
+        }));
       }
     },
     [
@@ -5244,20 +5347,60 @@ function App() {
     ]
   );
 
-  const renderText = () => {
-    // Get opponent positions for ghost cursors (during countdown and racing)
-    const opponentPositions = {};
+  // Track countdown blur progress (0 = fully blurred, 1 = no blur)
+  const [countdownBlurProgress, setCountdownBlurProgress] = useState(0);
+  
+  useEffect(() => {
+    if (raceState.status === 'countdown' && raceState.countdownEnd) {
+      const updateBlur = () => {
+        const now = Date.now();
+        const remaining = raceState.countdownEnd - now;
+        const total = 3000; // 3 second countdown
+        const progress = Math.max(0, Math.min(1, 1 - (remaining / total)));
+        setCountdownBlurProgress(progress);
+      };
+      
+      updateBlur();
+      const interval = setInterval(updateBlur, 50);
+      return () => clearInterval(interval);
+    } else {
+      setCountdownBlurProgress(0);
+    }
+  }, [raceState.status, raceState.countdownEnd]);
+
+  // Track high-water-mark positions for each opponent to prevent backward jitter
+  const opponentHighWaterMark = useRef({});
+  
+  // Reset high water marks when race status changes to waiting/countdown
+  useEffect(() => {
+    if (raceState.status === 'waiting' || raceState.status === 'countdown') {
+      opponentHighWaterMark.current = {};
+    }
+  }, [raceState.status]);
+
+  // Memoize opponent positions to prevent ghost cursor jitter
+  const opponentPositions = useMemo(() => {
+    const positions = {};
+    const racers = raceState.racers || [];
     if (isInRace && (raceState.status === "racing" || raceState.status === "countdown")) {
-      raceState.racers.forEach((racer) => {
+      racers.forEach((racer) => {
         if (racer.id !== raceState.myId && !racer.finished) {
           // During countdown, everyone is at position 0
-          const pos = raceState.status === "countdown" ? 0 : (typeof racer.position === 'number' ? racer.position : 0);
+          let pos = raceState.status === "countdown" ? 0 : (typeof racer.position === 'number' ? racer.position : 0);
+          
+          // Enforce forward-only movement using high water mark
+          if (raceState.status === "racing") {
+            const prevPos = opponentHighWaterMark.current[racer.id] || 0;
+            pos = Math.max(pos, prevPos);
+            opponentHighWaterMark.current[racer.id] = pos;
+          }
+          
           if (pos >= 0) {
-            const colorIndex = getRacerColorIndex(racer.id, raceState.racers);
-            if (!opponentPositions[pos]) {
-              opponentPositions[pos] = [];
+            const colorIndex = getRacerColorIndex(racer.id, racers);
+            if (!positions[pos]) {
+              positions[pos] = [];
             }
-            opponentPositions[pos].push({
+            positions[pos].push({
               name: racer.name,
               colorIndex: colorIndex,
               color: RACER_COLORS[colorIndex].hex,
@@ -5266,7 +5409,16 @@ function App() {
         }
       });
     }
+    return positions;
+  }, [
+    isInRace,
+    raceState.status,
+    raceState.myId,
+    // Only recalculate when positions actually change
+    (raceState.racers || []).map(r => `${r.id}:${r.position}:${r.finished}`).join(',')
+  ]);
 
+  const renderText = () => {
     return currentText.split("").map((char, i) => {
       let className = "char";
 
@@ -5430,7 +5582,7 @@ function App() {
         {/* Stats icon button - positioned absolutely */}
         {!isActive &&
           !isComplete &&
-          !isInRace &&
+          (!isInRace || raceState.status === 'waiting' || raceState.status === 'finished') &&
           ((cumulativeStats && cumulativeStats.sessions > 0) ||
             (globalAverages && globalAverages.total_sessions > 0)) && (
             <button
@@ -5479,8 +5631,25 @@ function App() {
         </header>
 
         <main className="typing-area">
-          <div className={`text-display ${viewingPastStats ? "locked" : ""} ${isInRace && raceState.status === 'waiting' ? "race-blur" : ""}`}>
-            <div className="text-content">{renderText()}</div>
+          <div 
+            className={`text-display ${viewingPastStats ? "locked" : ""}`}
+            style={isInRace && raceState.status === 'countdown' ? {
+              '--countdown-blur': `${8 * (1 - countdownBlurProgress)}px`,
+              '--countdown-opacity': 0.4 + (0.6 * countdownBlurProgress),
+            } : undefined}
+          >
+            <div 
+              className="text-content"
+              style={isInRace && raceState.status === 'countdown' ? {
+                filter: `blur(var(--countdown-blur, 0px))`,
+                opacity: `var(--countdown-opacity, 1)`,
+                userSelect: 'none',
+                pointerEvents: 'none',
+                transition: 'filter 0.1s ease-out, opacity 0.1s ease-out',
+              } : undefined}
+            >
+              {renderText()}
+            </div>
             {viewingPastStats && (
               <div className="text-lock-overlay">
                 <div className="lock-icon">
@@ -5499,11 +5668,6 @@ function App() {
                   </svg>
                 </div>
                 <span className="lock-hint">shift+enter to resume</span>
-              </div>
-            )}
-            {isInRace && raceState.status === 'waiting' && (
-              <div className="text-lock-overlay">
-                <span className="lock-hint">waiting for race to start...</span>
               </div>
             )}
           </div>
@@ -5530,7 +5694,7 @@ function App() {
           </div>
 
           {/* Race progress - below text, larger for peripheral vision */}
-          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results)) && (!raceState.myFinished || raceState.isSpectator || raceState.lateJoiner) && (
+          {isInRace && (raceState.status === "racing" || (raceState.status === "finished" && !raceState.results?.length)) && (!raceState.myFinished || raceState.isSpectator || raceState.lateJoiner) && (
             <RaceProgressPanel
               racers={raceState.racers}
               spectators={raceState.spectators}
@@ -5540,7 +5704,7 @@ function App() {
               lateJoiner={raceState.lateJoiner}
             />
           )}
-          {isComplete && !isInRace && (
+          {isComplete && (!isInRace || raceState.status === 'waiting') && (
             <div
               className={`complete-hint-container ${
                 showFixedHint ? "faded" : ""
@@ -5564,7 +5728,7 @@ function App() {
         </main>
 
         {/* Fixed floating hint when scrolled past the main hint */}
-        {isComplete && !isInRace && (
+        {isComplete && (!isInRace || raceState.status === 'waiting') && (
           <div className={`fixed-hint ${showFixedHint ? "visible" : ""}`}>
             {viewingPastStats ? (
               <>
@@ -5581,7 +5745,7 @@ function App() {
         {((isComplete && stats) ||
         (isComplete && statsView === "alltime" && cumulativeStats) ||
         (isComplete && statsView === "global" && globalAverages)) && 
-        !(isInRace && raceState.status !== "finished") ? (
+        !(isInRace && (raceState.status === "racing" || raceState.status === "countdown")) ? (
           <section className="stats">
             {/* Stats View Toggle - shows in different configurations based on available data */}
             {(() => {
@@ -9968,6 +10132,28 @@ function App() {
               <RaceStatsPanel
                 raceStats={raceState.raceStats}
                 fmt={fmt}
+                isHost={raceState.isHost}
+                isWaitingForOthers={raceState.status !== "finished"}
+                onPlayAgain={() => {
+                  if (raceState.isHost) {
+                    const { text: newText, index: newIndex } = getNextParagraph(completedIndices, true);
+                    setCurrentText(newText);
+                    setCurrentIndex(newIndex);
+                    startNewRound(newText, newIndex);
+                  }
+                  setTyped('');
+                  setKeystrokeData([]);
+                  setRawKeyEvents([]);
+                  setIsActive(false);
+                  setIsComplete(false);
+                  setStats(null);
+                  lastKeystrokeTime.current = null;
+                  startTime.current = null;
+                }}
+                onLeave={() => {
+                  leaveRace();
+                  window.history.pushState({}, "", window.location.pathname);
+                }}
               />
             ) : statsView === "history" || statsView === "race-history" ? (
               /* Combined history view */
@@ -10027,9 +10213,9 @@ function App() {
           </section>
         ) : null}
 
-        {/* Race Mode UI */}
-        {isInRace && raceState.status === "waiting" && (
-          <RaceLobby
+        {/* Non-blocking Lobby Panel - visible during all race states */}
+        {(isInRace || raceState.status === "finished") && raceState.status !== "connecting" && raceState.status !== "idle" && (
+          <LobbyPanel
             raceId={raceState.raceId}
             racers={raceState.racers}
             spectators={raceState.spectators}
@@ -10037,11 +10223,37 @@ function App() {
             isHost={raceState.isHost}
             isSpectator={raceState.isSpectator}
             lateJoiner={raceState.lateJoiner}
+            raceStatus={raceState.status}
             realtimeMode={raceState.realtimeMode}
-            winStreak={loadFromStorage(STORAGE_KEYS.WIN_STREAK, { current: 0, best: 0 })}
+            strictMode={raceState.strictMode}
+            lobbyName={raceState.lobbyName}
+            hostDisconnectedAt={raceState.hostDisconnectedAt}
+            pendingHostId={raceState.pendingHostId}
+            hostTransferSeconds={raceState.hostTransferSeconds}
+            originalHostId={raceState.originalHostId}
+            viewingPlayerStats={raceState.viewingPlayerStats}
+            statsRequestPending={raceState.statsRequestPending}
             onRealtimeModeChange={setRealtimeMode}
+            onStrictModeChange={setStrictMode}
+            onLobbyNameChange={setLobbyName}
             onReady={setRaceReady}
-            onStart={startRace}
+            onStart={() => {
+              // Pick a fresh paragraph when starting race
+              const { text: newText, index: newIndex } = getNextParagraph(completedIndices, true);
+              // Reset host's typing state
+              setCurrentText(newText);
+              setCurrentIndex(newIndex);
+              setTyped('');
+              setKeystrokeData([]);
+              setRawKeyEvents([]);
+              setIsActive(false);
+              setIsComplete(false);
+              setStats(null);
+              lastKeystrokeTime.current = null;
+              startTime.current = null;
+              // Start race - broadcasts new paragraph to all racers
+              startRace(newText, newIndex);
+            }}
             onLeave={() => {
               leaveRace();
               window.history.pushState({}, "", window.location.pathname);
@@ -10050,19 +10262,28 @@ function App() {
               updateRaceName(newName);
               setRacerName(newName);
             }}
+            onRequestStats={requestPlayerStats}
+            onClearViewingStats={clearViewingStats}
+            onTransferHost={transferHost}
+            onRematch={() => {
+              if (raceState.isHost) {
+                const { text: newText, index: newIndex } = getNextParagraph(completedIndices, true);
+                setCurrentText(newText);
+                setCurrentIndex(newIndex);
+                // Reset host typing state
+                setTyped('');
+                setKeystrokeData([]);
+                setRawKeyEvents([]);
+                setIsActive(false);
+                setIsComplete(false);
+                setStats(null);
+                lastKeystrokeTime.current = null;
+                startTime.current = null;
+                startNewRound(newText, newIndex);
+              }
+            }}
             shareUrl={`${window.location.origin}${window.location.pathname}?race=${raceState.raceId}`}
             joinKey={raceState.joinKey}
-          />
-        )}
-
-        {/* Floating lobby presence indicator - shows during race & after */}
-        {(isInRace || raceState.status === "finished") && raceState.status !== "waiting" && raceState.status !== "connecting" && raceState.status !== "idle" && (
-          <LobbyPresenceIndicator
-            racers={raceState.racers}
-            spectators={raceState.spectators}
-            myId={raceState.myId}
-            isHost={raceState.isHost}
-            raceStatus={raceState.status}
           />
         )}
 
@@ -10070,7 +10291,7 @@ function App() {
           <RaceCountdown endTime={raceState.countdownEnd} />
         )}
 
-        {((raceState.status === "finished" && raceState.results) || (raceState.myFinished && raceState.results)) && (
+        {((raceState.status === "finished" && raceState.results?.length > 0) || (raceState.myFinished && raceState.results?.length > 0)) && statsView !== "race" && (
           <RaceResults
             results={raceState.results}
             myId={raceState.myId}
@@ -10137,9 +10358,9 @@ function App() {
               race a friend
             </button>
           )}
-          {isInRace && (
+          {isInRace && (raceState.status === 'countdown' || raceState.status === 'racing') && (
             <span className="race-lock-indicator">
-              paragraph locked for race
+              racing...
             </span>
           )}
           {!isInRace && (

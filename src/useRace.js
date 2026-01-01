@@ -4,6 +4,9 @@ import { supabase } from './supabase';
 // Supabase Realtime = unlimited messages, no write limits!
 // All race data flows through WebSocket broadcast, not database
 
+// Cap racers to keep broadcast manageable - host sends to all, all send back
+export const MAX_RACERS = 8;
+
 export const RaceStatus = {
   IDLE: 'idle',
   CONNECTING: 'connecting',
@@ -42,15 +45,27 @@ export function useRace() {
     myId: null,
     isHost: false,
     isSpectator: false,
-    lateJoiner: false, // True if joined while race was in progress
-    joinKey: null, // Key required to participate (not just spectate)
+    lateJoiner: false,
+    joinKey: null,
     myFinished: false,
     countdownEnd: null,
     raceStartTime: null,
     results: [],
     raceStats: null,
     error: null,
-    realtimeMode: true, // Timer starts at GO, not first keystroke
+    realtimeMode: true,
+    strictMode: false, // Non-blocking by default; can skip errors (shows adjusted WPM)
+    lobbyName: '', // Custom lobby name set by host
+    // Host transfer state
+    hostDisconnectedAt: null,
+    pendingHostId: null,
+    hostTransferSeconds: 60,
+    originalHostId: null, // Track who was host before disconnect
+    // Stats viewing
+    viewingPlayerStats: null,
+    statsRequestPending: null,
+    // New round trigger - increments when new round starts, used by App.jsx to reset typing
+    newRoundCounter: 0,
   });
 
   const myIdRef = useRef(generateRacerId());
@@ -58,6 +73,8 @@ export function useRace() {
   const raceDataRef = useRef(null);
   const isHostRef = useRef(false);
   const myNameRef = useRef('Anonymous');
+  const hostTransferTimerRef = useRef(null);
+  const originalHostIdRef = useRef(null); // For checking in presence sync
 
   // Broadcast to all peers
   const broadcast = useCallback((type, payload) => {
@@ -147,6 +164,8 @@ export function useRace() {
             raceStartTime: data.raceStartTime,
             racers: data.racers.length > 0 ? data.racers : prev.racers,
             realtimeMode: data.realtimeMode ?? prev.realtimeMode,
+            strictMode: data.strictMode ?? prev.strictMode,
+            lobbyName: data.lobbyName ?? prev.lobbyName,
           };
         });
         break;
@@ -183,7 +202,18 @@ export function useRace() {
         setState(prev => ({
           ...prev,
           realtimeMode: data.realtimeMode ?? prev.realtimeMode,
+          strictMode: data.strictMode ?? prev.strictMode,
         }));
+        break;
+
+      case 'lobby_name_update':
+        setState(prev => ({
+          ...prev,
+          lobbyName: data.lobbyName || '',
+        }));
+        if (raceDataRef.current) {
+          raceDataRef.current.lobbyName = data.lobbyName || '';
+        }
         break;
 
       case 'countdown':
@@ -333,13 +363,19 @@ export function useRace() {
         if (isHostRef.current && raceDataRef.current) {
           raceDataRef.current.status = 'finished';
           
-          // Update host presence to reflect finished status
+          // Unready all racers in host data
+          raceDataRef.current.racers = raceDataRef.current.racers.map(r => ({
+            ...r,
+            ready: false,
+          }));
+          
+          // Update host presence to reflect finished status (unready)
           if (channelRef.current) {
             const myRacer = data.results.find(r => r.id === myIdRef.current);
             channelRef.current.track({
               odId: myIdRef.current,
               name: myNameRef.current,
-              ready: true,
+              ready: false, // Unready after race
               progress: 100,
               wpm: myRacer?.wpm || 0,
               accuracy: myRacer?.accuracy || 100,
@@ -349,6 +385,23 @@ export function useRace() {
               raceState: {
                 status: 'finished',
               },
+            });
+          }
+        } else {
+          // Non-host: update presence to unready
+          if (channelRef.current) {
+            const myRacer = data.results.find(r => r.id === myIdRef.current);
+            channelRef.current.track({
+              odId: myIdRef.current,
+              name: myNameRef.current,
+              ready: false, // Unready after race
+              progress: 100,
+              wpm: myRacer?.wpm || 0,
+              accuracy: myRacer?.accuracy || 100,
+              finished: true,
+              time: myRacer?.time || 0,
+              isHost: false,
+              isSpectator: false,
             });
           }
         }
@@ -371,6 +424,12 @@ export function useRace() {
             });
           }
           
+          // Unready all racers in state
+          const unreadyRacers = prev.racers.map(r => ({
+            ...r,
+            ready: false,
+          }));
+          
           const raceStats = calculateRaceStats(data.results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
           // Check if I'm in the results (meaning I finished)
           const myResultExists = data.results.some(r => r.id === prev.myId);
@@ -378,6 +437,7 @@ export function useRace() {
             ...prev,
             status: RaceStatus.FINISHED,
             results: data.results,
+            racers: unreadyRacers,
             raceStats,
             myFinished: prev.myFinished || myResultExists,
             // Convert late joiner back to regular racer
@@ -389,6 +449,9 @@ export function useRace() {
 
       case 'new_round':
         // Host initiated a new round - reset to lobby with new paragraph
+        // Skip for host since they already updated state in startNewRound
+        if (isHostRef.current) break;
+        
         setState(prev => {
           // Reset all racers to not ready, not finished
           const resetRacers = prev.racers.map(r => ({
@@ -415,6 +478,11 @@ export function useRace() {
             myFinished: false,
             countdownEnd: null,
             raceStartTime: null,
+            // Reset spectator/late joiner status so ready button shows
+            isSpectator: false,
+            lateJoiner: false,
+            // Increment counter to trigger typing reset in App.jsx
+            newRoundCounter: prev.newRoundCounter + 1,
           };
         });
         
@@ -432,6 +500,129 @@ export function useRace() {
             isHost: isHostRef.current,
             isSpectator: false,
           });
+        }
+        break;
+
+      case 'stats_request':
+        // Someone is requesting our stats
+        if (data.targetId === myIdRef.current && data.requesterId) {
+          const cumulativeStats = JSON.parse(localStorage.getItem('typometry_cumulative_stats') || 'null');
+          if (cumulativeStats) {
+            broadcast('stats_response', {
+              requesterId: data.requesterId,
+              odId: myIdRef.current,
+              stats: cumulativeStats,
+            });
+          }
+        }
+        break;
+
+      case 'stats_response':
+        // Received stats we requested
+        if (data.requesterId === myIdRef.current && data.stats) {
+          setState(prev => ({
+            ...prev,
+            viewingPlayerStats: {
+              odId: data.odId,
+              stats: data.stats,
+            },
+            statsRequestPending: null,
+          }));
+        }
+        break;
+
+      case 'host_reclaimed':
+        // Original host came back and reclaimed host - cancel transfer
+        if (hostTransferTimerRef.current) {
+          clearInterval(hostTransferTimerRef.current);
+          hostTransferTimerRef.current = null;
+        }
+        originalHostIdRef.current = null;
+        setState(prev => ({
+          ...prev,
+          hostDisconnectedAt: null,
+          pendingHostId: null,
+          hostTransferSeconds: 60,
+          originalHostId: null,
+        }));
+        break;
+
+      case 'host_transferred':
+        // Host manually transferred to someone else
+        if (hostTransferTimerRef.current) {
+          clearInterval(hostTransferTimerRef.current);
+          hostTransferTimerRef.current = null;
+        }
+        originalHostIdRef.current = null;
+        
+        // Check if we're the new host
+        if (data.newHostId === myIdRef.current) {
+          isHostRef.current = true;
+          // Store in sessionStorage so we can reclaim after refresh
+          sessionStorage.setItem(`typometry_host_${data.raceId}`, myIdRef.current);
+          
+          setState(prev => {
+            raceDataRef.current = {
+              racers: prev.racers,
+              paragraph: prev.paragraph,
+              paragraphIndex: prev.paragraphIndex,
+              status: prev.status === RaceStatus.RACING ? 'racing' : 
+                      prev.status === RaceStatus.FINISHED ? 'finished' : 'waiting',
+              raceStartTime: prev.raceStartTime,
+              joinKey: prev.joinKey,
+            };
+            return {
+              ...prev,
+              isHost: true,
+              hostDisconnectedAt: null,
+              pendingHostId: null,
+              hostTransferSeconds: 60,
+              originalHostId: null,
+            };
+          });
+          
+          // Update presence to reflect new host status
+          if (channelRef.current) {
+            setState(prev => {
+              const myRacer = prev.racers.find(r => r.id === myIdRef.current);
+              channelRef.current.track({
+                odId: myIdRef.current,
+                name: myNameRef.current,
+                ready: myRacer?.ready ?? false,
+                progress: myRacer?.progress || 0,
+                wpm: myRacer?.wpm || 0,
+                accuracy: myRacer?.accuracy || 100,
+                finished: myRacer?.finished || false,
+                time: myRacer?.time || 0,
+                isHost: true,
+                raceState: {
+                  paragraph: prev.paragraph,
+                  paragraphIndex: prev.paragraphIndex,
+                  status: prev.status === RaceStatus.RACING ? 'racing' : 
+                          prev.status === RaceStatus.FINISHED ? 'finished' : 'waiting',
+                  raceStartTime: prev.raceStartTime,
+                  joinKey: prev.joinKey,
+                },
+              });
+              return prev;
+            });
+          }
+        } else {
+          // We're not the new host
+          if (data.oldHostId === myIdRef.current) {
+            // We were the old host, remove our host status
+            isHostRef.current = false;
+            raceDataRef.current = null;
+            sessionStorage.removeItem(`typometry_host_${data.raceId}`);
+          }
+          setState(prev => ({
+            ...prev,
+            isHost: false,
+            hostDisconnectedAt: null,
+            pendingHostId: null,
+            hostTransferSeconds: 60,
+            originalHostId: null,
+          }));
         }
         break;
     }
@@ -537,16 +728,22 @@ export function useRace() {
           const newPos = typeof pr.position === 'number' ? pr.position : -1;
           const finalPos = Math.max(existingPos, newPos);
           
+          // In WAITING status (after rematch), prefer presence values for finished/ready/progress
+          // since new_round resets these. During racing, keep sticky/max values.
+          const isWaiting = prev.status === RaceStatus.WAITING;
+          
           return {
             ...pr,
-            progress: Math.max(pr.progress, source.progress || 0),
-            wpm: source.wpm > 0 ? source.wpm : pr.wpm,
-            accuracy: source.accuracy < 100 ? source.accuracy : pr.accuracy,
-            finished: pr.finished || source.finished,
-            time: source.time || pr.time,
+            // In waiting, use presence value. During race, keep max.
+            progress: isWaiting ? pr.progress : Math.max(pr.progress, source.progress || 0),
+            wpm: isWaiting ? pr.wpm : (source.wpm > 0 ? source.wpm : pr.wpm),
+            accuracy: isWaiting ? pr.accuracy : (source.accuracy < 100 ? source.accuracy : pr.accuracy),
+            // In waiting, use presence value. During race, keep true if either is true.
+            finished: isWaiting ? pr.finished : (pr.finished || source.finished),
+            time: isWaiting ? pr.time : (source.time || pr.time),
             wordSpeeds: source.wordSpeeds || pr.wordSpeeds,
             keystrokeData: source.keystrokeData || pr.keystrokeData,
-            position: finalPos >= 0 ? finalPos : undefined,
+            position: isWaiting ? pr.position : (finalPos >= 0 ? finalPos : undefined),
             disconnected: false, // They're back online
           };
         }
@@ -576,7 +773,12 @@ export function useRace() {
       }
       
       // If we just joined and there's race state from host, sync it
-      if (raceStateFromHost && !isHostRef.current && prev.status === RaceStatus.WAITING) {
+      // IMPORTANT: Only run this for INITIAL joins, not after new_round
+      // Check if we're already in the racers list - if so, we're not a new joiner
+      const alreadyInRace = racers.some(r => r.id === prev.myId);
+      const isInitialJoin = !alreadyInRace && prev.status === RaceStatus.WAITING;
+      
+      if (raceStateFromHost && !isHostRef.current && isInitialJoin) {
         let newStatus = prev.status;
         if (raceStateFromHost.status === 'racing') newStatus = RaceStatus.RACING;
         else if (raceStateFromHost.status === 'countdown') newStatus = RaceStatus.COUNTDOWN;
@@ -591,9 +793,14 @@ export function useRace() {
         const hasValidKey = prev.joinKey && hostJoinKey && prev.joinKey === hostJoinKey;
         const invalidKey = hostJoinKey && !hasValidKey && !prev.isSpectator;
         
+        // Check if race is full (MAX_RACERS reached and we're not already in)
+        const activeRacers = racers.filter(r => !r.disconnected && !r.isSpectator);
+        const isAlreadyRacer = activeRacers.some(r => r.id === prev.myId);
+        const raceFull = activeRacers.length >= MAX_RACERS && !isAlreadyRacer;
+        
         // If race is already in progress and we're not reconnecting, convert to spectator
         const raceInProgress = newStatus === RaceStatus.RACING || newStatus === RaceStatus.COUNTDOWN;
-        const shouldBeSpectator = (raceInProgress && !prev.isSpectator && !isReconnecting) || invalidKey;
+        const shouldBeSpectator = (raceInProgress && !prev.isSpectator && !isReconnecting) || invalidKey || raceFull;
         
         return {
           ...prev,
@@ -603,13 +810,19 @@ export function useRace() {
           paragraphIndex: raceStateFromHost.paragraphIndex || prev.paragraphIndex,
           status: newStatus,
           raceStartTime: raceStateFromHost.raceStartTime || prev.raceStartTime,
+          // Sync host's settings
+          realtimeMode: raceStateFromHost.realtimeMode ?? prev.realtimeMode,
+          strictMode: raceStateFromHost.strictMode ?? prev.strictMode,
           isSpectator: shouldBeSpectator || prev.isSpectator,
           lateJoiner: raceInProgress && shouldBeSpectator, // Flag to show "waiting for race to end" message
         };
       }
       
       // Even if not syncing race state, validate joinKey on first presence sync
-      if (raceStateFromHost && !isHostRef.current && !prev.isSpectator && prev.status !== RaceStatus.IDLE) {
+      // But ONLY during active race states (countdown/racing) - not during waiting or finished
+      // This prevents incorrectly converting returning participants to spectators after a new round
+      const raceActive = prev.status === RaceStatus.COUNTDOWN || prev.status === RaceStatus.RACING;
+      if (raceStateFromHost && !isHostRef.current && !prev.isSpectator && raceActive) {
         const hostJoinKey = raceStateFromHost.joinKey;
         const hasValidKey = prev.joinKey && hostJoinKey && prev.joinKey === hostJoinKey;
         if (hostJoinKey && !hasValidKey) {
@@ -623,14 +836,33 @@ export function useRace() {
         }
       }
       
-      // Check if host left - need to elect new host
+      // Sync settings from host in WAITING status (for guests who join after settings changed)
+      if (raceStateFromHost && !isHostRef.current && prev.status === RaceStatus.WAITING) {
+        const settingsChanged = 
+          (raceStateFromHost.realtimeMode !== undefined && raceStateFromHost.realtimeMode !== prev.realtimeMode) ||
+          (raceStateFromHost.strictMode !== undefined && raceStateFromHost.strictMode !== prev.strictMode);
+        if (settingsChanged) {
+          return {
+            ...prev,
+            racers,
+            spectators: presenceSpectators,
+            realtimeMode: raceStateFromHost.realtimeMode ?? prev.realtimeMode,
+            strictMode: raceStateFromHost.strictMode ?? prev.strictMode,
+          };
+        }
+      }
+      
+      // Check if host left - start transfer timer instead of immediate election
       if (!hostPresent && racers.length > 0 && prev.status !== RaceStatus.IDLE && prev.status !== RaceStatus.FINISHED) {
-        // Elect new host - first by alphabetical ID (deterministic)
+        // Determine who would be the new host (first by alphabetical ID)
         const sortedRacers = [...racers].sort((a, b) => a.id.localeCompare(b.id));
-        const newHostId = sortedRacers[0].id;
+        const pendingHostId = sortedRacers[0].id;
         
-        if (newHostId === prev.myId) {
-          // We are the new host - take over
+        // Check if WE are the original host trying to reclaim (after refresh)
+        // We check sessionStorage since our state was reset on refresh
+        const wasHost = sessionStorage.getItem(`typometry_host_${prev.raceId}`);
+        if (wasHost === myIdRef.current) {
+          // We're the original host rejoining - reclaim!
           isHostRef.current = true;
           const currentStatus = prev.status === RaceStatus.RACING ? 'racing' : 
                                 prev.status === RaceStatus.FINISHED ? 'finished' : 'waiting';
@@ -640,16 +872,23 @@ export function useRace() {
             paragraphIndex: prev.paragraphIndex,
             status: currentStatus,
             raceStartTime: prev.raceStartTime,
-            joinKey: prev.joinKey, // Preserve joinKey for validation
+            joinKey: prev.joinKey,
           };
           
-          // Update our presence to reflect host status with race state
+          // Clear timer (might be running on other clients)
+          if (hostTransferTimerRef.current) {
+            clearInterval(hostTransferTimerRef.current);
+            hostTransferTimerRef.current = null;
+          }
+          originalHostIdRef.current = null;
+          
+          // Update presence and broadcast reclaim
           if (channelRef.current) {
-            const myRacer = racers.find(r => r.id === prev.myId);
+            const myRacer = racers.find(r => r.id === myIdRef.current);
             channelRef.current.track({
-              odId: prev.myId,
+              odId: myIdRef.current,
               name: myNameRef.current,
-              ready: myRacer?.ready || true,
+              ready: myRacer?.ready ?? false,
               progress: myRacer?.progress || 0,
               wpm: myRacer?.wpm || 0,
               accuracy: myRacer?.accuracy || 100,
@@ -661,16 +900,163 @@ export function useRace() {
                 paragraphIndex: prev.paragraphIndex,
                 status: currentStatus,
                 raceStartTime: prev.raceStartTime,
-                joinKey: prev.joinKey, // Include for new joiner validation
+                joinKey: prev.joinKey,
               },
             });
           }
           
-          // Check if we need to end the race
-          setTimeout(() => checkAllFinished(), 100);
+          broadcast('host_reclaimed', { hostId: myIdRef.current });
           
-          return { ...prev, racers, isHost: true };
+          return {
+            ...prev,
+            racers,
+            spectators: presenceSpectators,
+            isHost: true,
+            hostDisconnectedAt: null,
+            pendingHostId: null,
+            hostTransferSeconds: 60,
+            originalHostId: null,
+          };
         }
+        
+        // If timer not already running, start it
+        if (!prev.hostDisconnectedAt && !hostTransferTimerRef.current) {
+          const disconnectedAt = Date.now();
+          
+          // Find the original host from previous racers list
+          const previousHost = prev.racers.find(r => r.isHost);
+          const origHostId = previousHost?.id || null;
+          originalHostIdRef.current = origHostId;
+          
+          // Start countdown timer
+          hostTransferTimerRef.current = setInterval(() => {
+            setState(currentState => {
+              const elapsed = Math.floor((Date.now() - disconnectedAt) / 1000);
+              const remaining = Math.max(0, 60 - elapsed);
+              
+              if (remaining <= 0) {
+                // Time's up - transfer host
+                clearInterval(hostTransferTimerRef.current);
+                hostTransferTimerRef.current = null;
+                originalHostIdRef.current = null;
+                
+                // Recalculate pending host from current racers (original might have left)
+                const currentRacers = currentState.racers.filter(r => !r.disconnected);
+                if (currentRacers.length === 0) {
+                  return {
+                    ...currentState,
+                    hostDisconnectedAt: null,
+                    pendingHostId: null,
+                    hostTransferSeconds: 60,
+                    originalHostId: null,
+                  };
+                }
+                
+                const sortedCurrentRacers = [...currentRacers].sort((a, b) => a.id.localeCompare(b.id));
+                const actualNewHostId = sortedCurrentRacers[0].id;
+                
+                // Check if we should become host
+                if (actualNewHostId === myIdRef.current) {
+                  isHostRef.current = true;
+                  // Store in sessionStorage so we can reclaim after refresh
+                  sessionStorage.setItem(`typometry_host_${currentState.raceId}`, myIdRef.current);
+                  
+                  const currentStatus = currentState.status === RaceStatus.RACING ? 'racing' : 
+                                        currentState.status === RaceStatus.FINISHED ? 'finished' : 'waiting';
+                  raceDataRef.current = { 
+                    racers: currentState.racers, 
+                    paragraph: currentState.paragraph, 
+                    paragraphIndex: currentState.paragraphIndex,
+                    status: currentStatus,
+                    raceStartTime: currentState.raceStartTime,
+                    joinKey: currentState.joinKey,
+                  };
+                  
+                  // Update presence to reflect new host
+                  if (channelRef.current) {
+                    const myRacer = currentState.racers.find(r => r.id === myIdRef.current);
+                    channelRef.current.track({
+                      odId: myIdRef.current,
+                      name: myNameRef.current,
+                      ready: myRacer?.ready ?? false,
+                      progress: myRacer?.progress || 0,
+                      wpm: myRacer?.wpm || 0,
+                      accuracy: myRacer?.accuracy || 100,
+                      finished: myRacer?.finished || false,
+                      time: myRacer?.time || 0,
+                      isHost: true,
+                      raceState: {
+                        paragraph: currentState.paragraph,
+                        paragraphIndex: currentState.paragraphIndex,
+                        status: currentStatus,
+                        raceStartTime: currentState.raceStartTime,
+                        joinKey: currentState.joinKey,
+                      },
+                    });
+                  }
+                  
+                  return {
+                    ...currentState,
+                    isHost: true,
+                    hostDisconnectedAt: null,
+                    pendingHostId: null,
+                    hostTransferSeconds: 60,
+                    originalHostId: null,
+                  };
+                }
+                
+                return {
+                  ...currentState,
+                  hostDisconnectedAt: null,
+                  pendingHostId: null,
+                  hostTransferSeconds: 60,
+                  originalHostId: null,
+                };
+              }
+              
+              // Update countdown and pending host (might change if people leave)
+              const currentRacers = currentState.racers.filter(r => !r.disconnected);
+              const sortedCurrentRacers = [...currentRacers].sort((a, b) => a.id.localeCompare(b.id));
+              const currentPendingHostId = sortedCurrentRacers.length > 0 ? sortedCurrentRacers[0].id : null;
+              
+              return {
+                ...currentState,
+                hostTransferSeconds: remaining,
+                pendingHostId: currentPendingHostId,
+              };
+            });
+          }, 1000);
+          
+          return {
+            ...prev,
+            racers,
+            spectators: presenceSpectators,
+            hostDisconnectedAt: disconnectedAt,
+            pendingHostId,
+            hostTransferSeconds: 60,
+            originalHostId: origHostId,
+          };
+        }
+        
+        return { ...prev, racers, spectators: presenceSpectators };
+      }
+      
+      // Host is present - clear any transfer timer
+      if (hostPresent && prev.hostDisconnectedAt) {
+        if (hostTransferTimerRef.current) {
+          clearInterval(hostTransferTimerRef.current);
+          hostTransferTimerRef.current = null;
+        }
+        originalHostIdRef.current = null;
+        return {
+          ...prev,
+          racers,
+          spectators: presenceSpectators,
+          hostDisconnectedAt: null,
+          pendingHostId: null,
+          hostTransferSeconds: 60,
+          originalHostId: null,
+        };
       }
       
       return { ...prev, racers, spectators: presenceSpectators };
@@ -680,7 +1066,7 @@ export function useRace() {
     if (isHostRef.current && raceDataRef.current) {
       raceDataRef.current.racers = presenceRacers;
     }
-  }, [checkAllFinished]);
+  }, [checkAllFinished, broadcast]);
 
   // Handle presence join
   const handlePresenceJoin = useCallback(({ newPresences }) => {
@@ -694,6 +1080,8 @@ export function useRace() {
           raceStartTime: raceDataRef.current.raceStartTime || null,
           racers: raceDataRef.current.racers || [],
           realtimeMode: raceDataRef.current.realtimeMode ?? true,
+          strictMode: raceDataRef.current.strictMode ?? false,
+          lobbyName: raceDataRef.current.lobbyName || '',
         });
       }, 100);
     }
@@ -715,6 +1103,11 @@ export function useRace() {
   const joinRace = useCallback(async (raceId, name, paragraph = '', paragraphIndex = 0, asHost = false, asSpectator = false, joinKey = null) => {
     const myId = myIdRef.current;
     isHostRef.current = asHost;
+    
+    // Store host status in sessionStorage so we can reclaim after refresh
+    if (asHost) {
+      sessionStorage.setItem(`typometry_host_${raceId}`, myId);
+    }
 
     setState(prev => ({
       ...prev,
@@ -733,7 +1126,7 @@ export function useRace() {
     }));
 
     if (asHost) {
-      raceDataRef.current = { paragraph, paragraphIndex, racers: [], realtimeMode: true, joinKey };
+      raceDataRef.current = { paragraph, paragraphIndex, racers: [], realtimeMode: true, strictMode: false, joinKey, lobbyName: '' };
     }
 
     // Subscribe to Supabase Realtime channel
@@ -791,11 +1184,13 @@ export function useRace() {
             time: 0,
             isHost: asHost,
             isSpectator: asSpectator,
-            // Host broadcasts joinKey so joiners can validate
+            // Host broadcasts joinKey and settings so joiners can sync
             ...(asHost && raceDataRef.current?.joinKey ? {
               raceState: {
                 status: 'waiting',
                 joinKey: raceDataRef.current.joinKey,
+                realtimeMode: raceDataRef.current.realtimeMode ?? true,
+                strictMode: raceDataRef.current.strictMode ?? false,
               }
             } : {}),
           });
@@ -934,7 +1329,7 @@ export function useRace() {
   }, [broadcast]);
 
   // Start the race (host only)
-  const startRace = useCallback(() => {
+  const startRace = useCallback((newParagraph, newParagraphIndex) => {
     if (!isHostRef.current) return;
 
     const countdownEnd = Date.now() + 3000;
@@ -942,8 +1337,15 @@ export function useRace() {
     // Get current realtimeMode from state
     setState(prev => {
       const realtimeMode = prev.realtimeMode;
-      const paragraph = raceDataRef.current?.paragraph || prev.paragraph;
-      const paragraphIndex = raceDataRef.current?.paragraphIndex ?? prev.paragraphIndex;
+      // Use new paragraph if provided, otherwise fall back to existing
+      const paragraph = newParagraph || raceDataRef.current?.paragraph || prev.paragraph;
+      const paragraphIndex = typeof newParagraphIndex === 'number' ? newParagraphIndex : (raceDataRef.current?.paragraphIndex ?? prev.paragraphIndex);
+      
+      // Update raceDataRef with new paragraph
+      if (raceDataRef.current) {
+        raceDataRef.current.paragraph = paragraph;
+        raceDataRef.current.paragraphIndex = paragraphIndex;
+      }
       
       broadcast('countdown', { 
         endTime: countdownEnd, 
@@ -1001,6 +1403,8 @@ export function useRace() {
         ...prev,
         status: RaceStatus.COUNTDOWN,
         countdownEnd,
+        paragraph,
+        paragraphIndex,
       };
     });
   }, [broadcast]);
@@ -1009,11 +1413,86 @@ export function useRace() {
   const setRealtimeMode = useCallback((enabled) => {
     if (!isHostRef.current) return;
     
-    setState(prev => ({ ...prev, realtimeMode: enabled }));
+    setState(prev => {
+      // Update presence with new settings
+      if (channelRef.current && raceDataRef.current) {
+        const myRacer = prev.racers.find(r => r.id === myIdRef.current);
+        channelRef.current.track({
+          odId: myIdRef.current,
+          name: myNameRef.current,
+          ready: myRacer?.ready ?? false,
+          progress: myRacer?.progress || 0,
+          wpm: myRacer?.wpm || 0,
+          accuracy: myRacer?.accuracy || 100,
+          finished: myRacer?.finished || false,
+          time: myRacer?.time || 0,
+          isHost: true,
+          raceState: {
+            status: 'waiting',
+            paragraph: prev.paragraph,
+            paragraphIndex: prev.paragraphIndex,
+            joinKey: raceDataRef.current.joinKey,
+            realtimeMode: enabled,
+            strictMode: raceDataRef.current.strictMode ?? false,
+          },
+        });
+      }
+      return { ...prev, realtimeMode: enabled };
+    });
     broadcast('settings_update', { realtimeMode: enabled });
     
     if (raceDataRef.current) {
       raceDataRef.current.realtimeMode = enabled;
+    }
+  }, [broadcast]);
+
+  // Set strict mode - must correct errors to advance (host only)
+  const setStrictMode = useCallback((enabled) => {
+    if (!isHostRef.current) return;
+    
+    setState(prev => {
+      // Update presence with new settings
+      if (channelRef.current && raceDataRef.current) {
+        const myRacer = prev.racers.find(r => r.id === myIdRef.current);
+        channelRef.current.track({
+          odId: myIdRef.current,
+          name: myNameRef.current,
+          ready: myRacer?.ready ?? false,
+          progress: myRacer?.progress || 0,
+          wpm: myRacer?.wpm || 0,
+          accuracy: myRacer?.accuracy || 100,
+          finished: myRacer?.finished || false,
+          time: myRacer?.time || 0,
+          isHost: true,
+          raceState: {
+            status: 'waiting',
+            paragraph: prev.paragraph,
+            paragraphIndex: prev.paragraphIndex,
+            joinKey: raceDataRef.current.joinKey,
+            realtimeMode: raceDataRef.current.realtimeMode ?? true,
+            strictMode: enabled,
+          },
+        });
+      }
+      return { ...prev, strictMode: enabled };
+    });
+    broadcast('settings_update', { strictMode: enabled });
+    
+    if (raceDataRef.current) {
+      raceDataRef.current.strictMode = enabled;
+    }
+  }, [broadcast]);
+
+  // Set lobby name (host only)
+  const setLobbyName = useCallback((name) => {
+    if (!isHostRef.current) return;
+    
+    const lobbyName = (name || '').slice(0, 30); // Max 30 chars
+    setState(prev => ({ ...prev, lobbyName }));
+    broadcast('lobby_name_update', { lobbyName });
+    
+    if (raceDataRef.current) {
+      raceDataRef.current.lobbyName = lobbyName;
     }
   }, [broadcast]);
 
@@ -1075,6 +1554,11 @@ export function useRace() {
         myFinished: false,
         countdownEnd: null,
         raceStartTime: null,
+        // Reset spectator/late joiner (for consistency)
+        isSpectator: false,
+        lateJoiner: false,
+        // Increment counter (host also uses this for consistency)
+        newRoundCounter: prev.newRoundCounter + 1,
       };
     });
     
@@ -1096,6 +1580,8 @@ export function useRace() {
           paragraph: newParagraph,
           paragraphIndex: newParagraphIndex,
           joinKey: raceDataRef.current?.joinKey,
+          realtimeMode: raceDataRef.current?.realtimeMode ?? true,
+          strictMode: raceDataRef.current?.strictMode ?? false,
         },
       });
     }
@@ -1151,7 +1637,7 @@ export function useRace() {
       const presenceData = {
         odId: myId,
         name: myNameRef.current,
-        ready: true,
+        ready: false, // Race is over, not ready for next
         progress: 100,
         wpm,
         accuracy,
@@ -1212,7 +1698,7 @@ export function useRace() {
           channelRef.current.track({
             odId: myId,
             name: myNameRef.current,
-            ready: true,
+            ready: false, // Race is over, not ready for next
             progress: 100,
             wpm,
             accuracy,
@@ -1245,15 +1731,81 @@ export function useRace() {
     });
   }, [broadcast, calculateRaceStats]);
 
+  // Manually transfer host to another racer
+  const transferHost = useCallback((newHostId) => {
+    if (!isHostRef.current) {
+      console.warn('Only the host can transfer host');
+      return false;
+    }
+    
+    if (!newHostId || newHostId === myIdRef.current) {
+      console.warn('Invalid transfer target');
+      return false;
+    }
+    
+    setState(prev => {
+      // Verify target is a valid racer
+      const targetRacer = prev.racers.find(r => r.id === newHostId && !r.disconnected);
+      if (!targetRacer) {
+        console.warn('Target racer not found or disconnected');
+        return prev;
+      }
+      
+      // Clear our host status
+      isHostRef.current = false;
+      raceDataRef.current = null;
+      sessionStorage.removeItem(`typometry_host_${prev.raceId}`);
+      
+      // Broadcast the transfer
+      broadcast('host_transferred', { 
+        oldHostId: myIdRef.current, 
+        newHostId,
+        raceId: prev.raceId,
+      });
+      
+      // Update presence to remove host status
+      if (channelRef.current) {
+        const myRacer = prev.racers.find(r => r.id === myIdRef.current);
+        channelRef.current.track({
+          odId: myIdRef.current,
+          name: myNameRef.current,
+          ready: myRacer?.ready ?? false,
+          progress: myRacer?.progress || 0,
+          wpm: myRacer?.wpm || 0,
+          accuracy: myRacer?.accuracy || 100,
+          finished: myRacer?.finished || false,
+          time: myRacer?.time || 0,
+          isHost: false,
+        });
+      }
+      
+      return {
+        ...prev,
+        isHost: false,
+      };
+    });
+    
+    return true;
+  }, [broadcast]);
+
   // Leave race
   const leaveRace = useCallback(async () => {
-    // Clean up joinKey from sessionStorage
+    // Clean up sessionStorage
     setState(prev => {
       if (prev.raceId) {
         sessionStorage.removeItem(`typometry_race_key_${prev.raceId}`);
+        sessionStorage.removeItem(`typometry_host_${prev.raceId}`);
+        sessionStorage.removeItem('typometry_active_race');
       }
       return prev;
     });
+    
+    // Clear host transfer timer
+    if (hostTransferTimerRef.current) {
+      clearInterval(hostTransferTimerRef.current);
+      hostTransferTimerRef.current = null;
+    }
+    originalHostIdRef.current = null;
     
     if (channelRef.current) {
       await supabase.removeChannel(channelRef.current);
@@ -1278,6 +1830,13 @@ export function useRace() {
       raceStartTime: null,
       results: [],
       error: null,
+      lobbyName: '',
+      hostDisconnectedAt: null,
+      pendingHostId: null,
+      hostTransferSeconds: 60,
+      originalHostId: null,
+      viewingPlayerStats: null,
+      statsRequestPending: null,
     }));
   }, []);
 
@@ -1286,11 +1845,44 @@ export function useRace() {
     setState(prev => ({ ...prev, raceStats: null }));
   }, []);
 
+  // Request to view another player's stats
+  const requestPlayerStats = useCallback((targetId) => {
+    if (!channelRef.current) return;
+    
+    setState(prev => ({ ...prev, statsRequestPending: targetId }));
+    broadcast('stats_request', { 
+      targetId, 
+      requesterId: myIdRef.current 
+    });
+    
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      setState(prev => {
+        if (prev.statsRequestPending === targetId) {
+          return { ...prev, statsRequestPending: null };
+        }
+        return prev;
+      });
+    }, 5000);
+  }, [broadcast]);
+
+  // Clear stats viewing
+  const clearViewingStats = useCallback(() => {
+    setState(prev => ({ 
+      ...prev, 
+      viewingPlayerStats: null,
+      statsRequestPending: null,
+    }));
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+      }
+      if (hostTransferTimerRef.current) {
+        clearInterval(hostTransferTimerRef.current);
       }
     };
   }, []);
@@ -1313,6 +1905,11 @@ export function useRace() {
     leaveRace,
     clearRaceStats,
     setRealtimeMode,
+    setStrictMode,
+    setLobbyName,
+    transferHost,
+    requestPlayerStats,
+    clearViewingStats,
     isInRace: state.status !== RaceStatus.IDLE && state.status !== RaceStatus.FINISHED,
     hasRaceStats: state.raceStats !== null,
     waitingForOthers,

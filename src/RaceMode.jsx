@@ -1,54 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { KeyboardHeatmap } from './KeyboardViz';
-
-// Custom Tooltip component - appears above element
-function Tooltip({ children, text, position = 'top' }) {
-  const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
-  const triggerRef = useRef(null);
-  const tooltipRef = useRef(null);
-
-  const showTooltip = useCallback(() => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setCoords({
-        x: rect.left + rect.width / 2,
-        y: rect.top,
-      });
-      setVisible(true);
-    }
-  }, []);
-
-  const hideTooltip = useCallback(() => {
-    setVisible(false);
-  }, []);
-
-  return (
-    <span 
-      ref={triggerRef}
-      className="tooltip-trigger"
-      onMouseEnter={showTooltip}
-      onMouseLeave={hideTooltip}
-      onFocus={showTooltip}
-      onBlur={hideTooltip}
-    >
-      {children}
-      {visible && text && (
-        <span 
-          ref={tooltipRef}
-          className="custom-tooltip"
-          style={{
-            left: coords.x,
-            top: coords.y,
-          }}
-        >
-          {text}
-          <span className="tooltip-arrow" />
-        </span>
-      )}
-    </span>
-  );
-}
+import { Tooltip } from './Tooltip';
 
 // Editable name component
 function EditableName({ name, isYou, onNameChange }) {
@@ -170,10 +123,10 @@ export function RaceLobby({
   };
 
   // Generate URL based on link type
-  // Join URL includes the secret key, spectate URL does not
+  // Join URL includes the secret key, spectate URL has spectate=1
   const currentUrl = linkType === 'join' && joinKey
     ? `${shareUrl}&join=${joinKey}`
-    : shareUrl; // Spectate = just the race ID, no key
+    : `${shareUrl}&spectate=1`;
 
   const handleCopy = async () => {
     try {
@@ -217,20 +170,27 @@ export function RaceLobby({
       <div className="invite-section">
         <div className="invite-type-row">
           <span className="invite-type-label">share link:</span>
-          <div className="invite-type-toggle">
-            <button 
-              className={`type-btn ${linkType === 'join' ? 'active' : ''}`}
-              onClick={() => setLinkType('join')}
-            >
-              join race
-            </button>
-            <button 
-              className={`type-btn ${linkType === 'spectate' ? 'active' : ''}`}
-              onClick={() => setLinkType('spectate')}
-            >
-              watch only
-            </button>
-          </div>
+          {/* Only show join option if user has joinKey */}
+          {joinKey ? (
+            <div className="invite-type-toggle">
+              <button 
+                className={`type-btn ${linkType === 'join' ? 'active' : ''}`}
+                onClick={() => setLinkType('join')}
+              >
+                join race
+              </button>
+              <button 
+                className={`type-btn ${linkType === 'spectate' ? 'active' : ''}`}
+                onClick={() => setLinkType('spectate')}
+              >
+                watch only
+              </button>
+            </div>
+          ) : (
+            <div className="invite-type-toggle">
+              <button className="type-btn active" disabled>watch only</button>
+            </div>
+          )}
         </div>
         <div className="invite-bar">
           <div className="invite-url" onClick={handleUrlClick}>
@@ -451,23 +411,23 @@ export function RacerProgress({ racer, isYou, colorIndex = 0 }) {
 }
 
 // Race progress panel showing all racers
-export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, isSpectator, lateJoiner = false }) {
+export function RaceProgressPanel({ racers = [], spectators = [], myId, myFinished, isSpectator, lateJoiner = false }) {
+  const safeRacers = Array.isArray(racers) ? racers : [];
+  
   const sortedRacers = useMemo(() => {
-    // Sort: you first, then by progress/finish position
-    return [...racers].sort((a, b) => {
+    // Sort: you first, then by stable ID order (not progress, to prevent jitter during typing)
+    // Progress-based reordering during a race is distracting
+    return [...safeRacers].sort((a, b) => {
       // Always put yourself first
       if (a.id === myId) return -1;
       if (b.id === myId) return 1;
-      // Then sort by finish position or progress
-      if (a.finished && b.finished) return (a.position || 0) - (b.position || 0);
-      if (a.finished) return -1;
-      if (b.finished) return 1;
-      return b.progress - a.progress;
+      // Sort by ID for stable ordering (prevents list from jumping around)
+      return a.id.localeCompare(b.id);
     });
-  }, [racers, myId]);
+  }, [safeRacers, myId]);
 
-  const finishedCount = racers.filter(r => r.finished).length;
-  const totalCount = racers.length;
+  const finishedCount = safeRacers.filter(r => r.finished).length;
+  const totalCount = safeRacers.length;
 
   return (
     <div className="race-progress-panel">
@@ -520,12 +480,15 @@ export function RaceProgressPanel({ racers, spectators = [], myId, myFinished, i
 }
 
 // Race results screen with podium
-export function RaceResults({ results, myId, isHost, onPlayAgain, onLeave, isWaitingForOthers }) {
+export function RaceResults({ results = [], myId, isHost, onPlayAgain, onLeave, isWaitingForOthers }) {
   const formatTime = (ms) => (ms / 1000).toFixed(1) + 's';
   
+  // Ensure results is an array
+  const safeResults = Array.isArray(results) ? results : [];
+  
   // Split into podium (top 3) and rest
-  const podiumRacers = results.slice(0, 3);
-  const remainingRacers = results.slice(3);
+  const podiumRacers = safeResults.slice(0, 3);
+  const remainingRacers = safeResults.slice(3);
   
   // Reorder for podium display: 2nd, 1st, 3rd
   const podiumOrder = [];
@@ -620,12 +583,16 @@ function WordSpeedMap({ results, paragraph, myId }) {
   const words = paragraph.split(/\s+/).filter(w => w.length > 0);
   if (words.length === 0) return null;
   
-  // Get all word speeds and calculate min/max for color scaling
+  // Get all word speeds and calculate percentile-based normalization
   const allSpeeds = results.flatMap(r => r.wordSpeeds || []).filter(s => s > 0);
   if (allSpeeds.length === 0) return null;
   
-  const minSpeed = Math.min(...allSpeeds);
-  const maxSpeed = Math.max(...allSpeeds);
+  // Use percentiles to avoid outliers skewing the color scale
+  const sortedSpeeds = [...allSpeeds].sort((a, b) => a - b);
+  const p10Index = Math.floor(sortedSpeeds.length * 0.1);
+  const p90Index = Math.floor(sortedSpeeds.length * 0.9);
+  const minSpeed = sortedSpeeds[p10Index] || sortedSpeeds[0];
+  const maxSpeed = sortedSpeeds[p90Index] || sortedSpeeds[sortedSpeeds.length - 1];
   const speedRange = maxSpeed - minSpeed || 1;
   
   // Calculate average speed per word position
@@ -637,10 +604,12 @@ function WordSpeedMap({ results, paragraph, myId }) {
     return Math.round(speedsAtPosition.reduce((a, b) => a + b, 0) / speedsAtPosition.length);
   });
   
-  // Color function: red (slow) -> yellow -> green (fast)
+  // Color function: red (slow) -> yellow -> green (fast), clamped to percentile range
   const getSpeedColor = (speed, opacity = 1) => {
     if (!speed || speed <= 0) return `rgba(100, 100, 100, ${opacity * 0.3})`;
-    const normalized = (speed - minSpeed) / speedRange;
+    // Clamp to percentile range
+    const clampedSpeed = Math.max(minSpeed, Math.min(maxSpeed, speed));
+    const normalized = (clampedSpeed - minSpeed) / speedRange;
     // HSL: 0 = red, 60 = yellow, 120 = green
     const hue = normalized * 120;
     return `hsla(${hue}, 70%, 45%, ${opacity})`;
@@ -899,7 +868,7 @@ function RaceKeyboards({ results, myId }) {
 }
 
 // Race Stats Panel - for the Race tab in stats view
-export function RaceStatsPanel({ raceStats, fmt }) {
+export function RaceStatsPanel({ raceStats, fmt, isHost, isWaitingForOthers, onPlayAgain, onLeave }) {
   if (!raceStats) {
     return (
       <div className="race-stats-empty">
@@ -936,6 +905,13 @@ export function RaceStatsPanel({ raceStats, fmt }) {
     return `${mins}m ${secs}s`;
   };
 
+  const getMedal = (place) => {
+    if (place === 1) return '🥇';
+    if (place === 2) return '🥈';
+    if (place === 3) return '🥉';
+    return '';
+  };
+
   // Calculate interesting derived stats
   const winner = allResults[0];
   const runnerUp = allResults[1];
@@ -953,6 +929,46 @@ export function RaceStatsPanel({ raceStats, fmt }) {
 
   return (
     <div className="pvp-stats">
+      {/* Mini Podium at top */}
+      <div className="pvp-mini-podium">
+        {allResults.slice(0, 3).map((racer, idx) => {
+          const isYou = racer.id === myResult?.id;
+          const colorIndex = getRacerColorIndex(racer.id, allResults);
+          const color = RACER_COLORS[colorIndex];
+          return (
+            <div key={racer.id} className={`mini-podium-entry ${isYou ? 'you' : ''}`}>
+              <span className="mini-medal">{getMedal(idx + 1)}</span>
+              <span className="mini-name" style={{ color: isYou ? 'var(--text)' : color.hex }}>
+                {racer.name}
+                {isYou && <span className="you-tag">you</span>}
+              </span>
+              <span className="mini-wpm">{Math.round(racer.wpm)} wpm</span>
+              <span className="mini-time">{formatTime(racer.time)}</span>
+            </div>
+          );
+        })}
+        
+        {/* Actions */}
+        <div className="mini-podium-actions">
+          {onLeave && (
+            <button onClick={onLeave} className="mini-action-btn leave">
+              leave
+            </button>
+          )}
+          {isWaitingForOthers && (
+            <span className="mini-waiting">waiting for others...</span>
+          )}
+          {!isWaitingForOthers && isHost && onPlayAgain && (
+            <button onClick={onPlayAgain} className="mini-action-btn next">
+              next round
+            </button>
+          )}
+          {!isWaitingForOthers && !isHost && (
+            <span className="mini-waiting">waiting for host...</span>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
       <div className="pvp-header">
         {stillWaiting && (
@@ -1134,8 +1150,9 @@ export function RaceStatsPanel({ raceStats, fmt }) {
       {/* Standings */}
       <div className="pvp-standings">
         {allResults.map((racer, index) => {
-          const barWidth = wpmSpread > 0 
-            ? ((racer.wpm - slowestWpm) / wpmSpread) * 100 
+          // Bar width relative to fastest racer (100% for winner)
+          const barWidth = fastestWpm > 0 
+            ? (racer.wpm / fastestWpm) * 100 
             : 100;
           const colorIndex = getRacerColorIndex(racer.id, allResults);
           const color = RACER_COLORS[colorIndex];
@@ -1288,6 +1305,667 @@ export function LobbyPresenceIndicator({ racers, spectators = [], myId, isHost, 
   );
 }
 
+// Player Stats Modal - shows when clicking another player's name
+export function PlayerStatsModal({ playerStats, onClose }) {
+  if (!playerStats?.stats) return null;
+  
+  const { stats } = playerStats;
+  
+  return (
+    <div className="player-stats-modal-overlay" onClick={onClose}>
+      <div className="player-stats-modal" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>×</button>
+        <h3>Player Stats</h3>
+        <div className="player-stats-grid">
+          <div className="stat-item">
+            <span className="stat-value">{stats.wpm || '-'}</span>
+            <span className="stat-label">avg WPM</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{stats.accuracy || '-'}%</span>
+            <span className="stat-label">accuracy</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{stats.sessions || 0}</span>
+            <span className="stat-label">sessions</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{stats.behavioral?.maxBurst || '-'}</span>
+            <span className="stat-label">best burst</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{stats.consistency || '-'}%</span>
+            <span className="stat-label">consistency</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{stats.avgInterval || '-'}ms</span>
+            <span className="stat-label">keystroke</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Non-blocking Lobby Panel - collapsible sidebar
+const MAX_RACERS = 8;
+
+export function LobbyPanel({ 
+  raceId, 
+  racers = [], 
+  spectators = [],
+  myId, 
+  isHost,
+  isSpectator,
+  lateJoiner = false,
+  raceStatus,
+  realtimeMode,
+  strictMode = false,
+  lobbyName = '',
+  hostDisconnectedAt,
+  pendingHostId,
+  hostTransferSeconds,
+  originalHostId,
+  viewingPlayerStats,
+  statsRequestPending,
+  onRealtimeModeChange,
+  onStrictModeChange,
+  onLobbyNameChange,
+  onReady, 
+  onStart, 
+  onLeave,
+  onNameChange,
+  onRequestStats,
+  onClearViewingStats,
+  onTransferHost,
+  onRematch,
+  shareUrl,
+  joinKey 
+}) {
+  // Safety check for racers
+  const safeRacers = Array.isArray(racers) ? racers : [];
+  
+  const [expanded, setExpanded] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const [linkType, setLinkType] = useState('join');
+  const [editingLobbyName, setEditingLobbyName] = useState(false);
+  const [lobbyNameValue, setLobbyNameValue] = useState(lobbyName);
+  
+  // Hold state for transfer
+  const [transferHoldProgress, setTransferHoldProgress] = useState({});
+  const transferTimerRef = useRef(null);
+  
+  // Double-click leave confirmation
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const leaveConfirmTimerRef = useRef(null);
+  
+  // Tooltip state
+  const [tooltipText, setTooltipText] = useState('');
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  
+  const urlRef = useRef(null);
+  const lobbyNameInputRef = useRef(null);
+
+  // Sync ready state
+  useEffect(() => {
+    const myRacer = safeRacers.find(r => r.id === myId);
+    if (myRacer) setIsReady(myRacer.ready);
+  }, [safeRacers, myId]);
+
+  // Sync lobby name
+  useEffect(() => {
+    setLobbyNameValue(lobbyName);
+  }, [lobbyName]);
+
+  // Focus lobby name input
+  useEffect(() => {
+    if (editingLobbyName && lobbyNameInputRef.current) {
+      lobbyNameInputRef.current.focus();
+      lobbyNameInputRef.current.select();
+    }
+  }, [editingLobbyName]);
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      if (transferTimerRef.current) clearInterval(transferTimerRef.current);
+      if (leaveConfirmTimerRef.current) clearTimeout(leaveConfirmTimerRef.current);
+    };
+  }, []);
+
+  // Tooltip handlers
+  const [tooltipGetter, setTooltipGetter] = useState(null);
+  
+  const showTooltip = (text) => (e) => {
+    setTooltipText(text);
+    setTooltipGetter(null);
+    setTooltipPos({ x: e.clientX, y: e.clientY });
+  };
+  
+  // Dynamic tooltip that recalculates text on each render
+  const showDynamicTooltip = (getter) => (e) => {
+    setTooltipText(getter());
+    setTooltipGetter(() => getter);
+    setTooltipPos({ x: e.clientX, y: e.clientY });
+  };
+  
+  const moveTooltip = (e) => {
+    if (tooltipText || tooltipGetter) {
+      setTooltipPos({ x: e.clientX, y: e.clientY });
+      // Update dynamic tooltip text
+      if (tooltipGetter) {
+        setTooltipText(tooltipGetter());
+      }
+    }
+  };
+  
+  const hideTooltip = () => {
+    setTooltipText('');
+    setTooltipGetter(null);
+  };
+
+  // URL handling - shareUrl already contains ?race=xxx, so we append parameters
+  // If user doesn't have joinKey (spectator), always use watch link
+  const currentUrl = (linkType === 'watch' || !joinKey)
+    ? `${shareUrl}&spectate=1`
+    : `${shareUrl}&join=${joinKey}`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const handleReadyToggle = () => {
+    const newReady = !isReady;
+    setIsReady(newReady);
+    onReady(newReady);
+  };
+
+  const handleLobbyNameSubmit = () => {
+    const trimmed = lobbyNameValue.trim();
+    if (trimmed !== lobbyName && onLobbyNameChange) {
+      onLobbyNameChange(trimmed);
+    }
+    setEditingLobbyName(false);
+  };
+
+  const handleLobbyNameKeyDown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') handleLobbyNameSubmit();
+    else if (e.key === 'Escape') {
+      setLobbyNameValue(lobbyName);
+      setEditingLobbyName(false);
+    }
+  };
+
+  // Transfer host hold (1.2s)
+  const startTransferHold = (targetId) => (e) => {
+    e.stopPropagation();
+    const startTime = Date.now();
+    setTransferHoldProgress({ [targetId]: 0 });
+    
+    transferTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, (elapsed / 1200) * 100);
+      setTransferHoldProgress({ [targetId]: progress });
+      
+      if (elapsed >= 1200) {
+        clearInterval(transferTimerRef.current);
+        transferTimerRef.current = null;
+        setTransferHoldProgress({});
+        onTransferHost(targetId);
+      }
+    }, 16);
+  };
+
+  const cancelTransferHold = () => {
+    if (transferTimerRef.current) {
+      clearInterval(transferTimerRef.current);
+      transferTimerRef.current = null;
+    }
+    setTransferHoldProgress({});
+  };
+
+  // Double-click to leave
+  const handleLeaveClick = () => {
+    if (leaveConfirm) {
+      // Second click - leave
+      if (leaveConfirmTimerRef.current) clearTimeout(leaveConfirmTimerRef.current);
+      setLeaveConfirm(false);
+      onLeave();
+    } else {
+      // First click - ask confirmation
+      setLeaveConfirm(true);
+      leaveConfirmTimerRef.current = setTimeout(() => {
+        setLeaveConfirm(false);
+      }, 3000);
+    }
+  };
+
+  // Derived state
+  const allReady = safeRacers.length >= 2 && safeRacers.every(r => r.ready);
+  const showStartButton = isHost && !isSpectator && raceStatus === 'waiting';
+  const canStart = showStartButton && allReady;
+  const canRematch = isHost && raceStatus === 'finished';
+  const activeRacerCount = safeRacers.filter(r => !r.disconnected).length;
+
+  const getStatusIndicator = (racer) => {
+    if (racer.finished) return { symbol: '✓', cls: 'finished', tip: 'Finished' };
+    if (racer.ready) return { symbol: '●', cls: 'ready', tip: 'Ready' };
+    return { symbol: '○', cls: '', tip: 'Not ready' };
+  };
+
+  // Collapsed view
+  if (!expanded) {
+    return (
+      <div className="lobby-panel collapsed">
+        <button className="lobby-panel-toggle" onClick={() => setExpanded(true)}>
+          <div className="collapsed-racers">
+            {safeRacers.slice(0, 5).map((racer) => {
+              const status = getStatusIndicator(racer);
+              const isYou = racer.id === myId;
+              return (
+                <div key={racer.id} className={`collapsed-racer ${isYou ? 'you' : ''} ${racer.disconnected ? 'disconnected' : ''}`}>
+                  <span className={`collapsed-status ${status.cls}`}>{status.symbol}</span>
+                  <span className="collapsed-name">{racer.name}</span>
+                  {racer.isHost && <span className="collapsed-host">★</span>}
+                </div>
+              );
+            })}
+            {safeRacers.length > 5 && <div className="collapsed-more">+{safeRacers.length - 5}</div>}
+          </div>
+          <svg className="expand-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="lobby-panel expanded">
+      {/* Header */}
+      <div className="lobby-panel-header">
+        {isHost && raceStatus === 'waiting' ? (
+          editingLobbyName ? (
+            <input
+              ref={lobbyNameInputRef}
+              type="text"
+              className="lobby-name-input"
+              value={lobbyNameValue}
+              onChange={(e) => setLobbyNameValue(e.target.value)}
+              onBlur={handleLobbyNameSubmit}
+              onKeyDown={handleLobbyNameKeyDown}
+              onKeyUp={(e) => e.stopPropagation()}
+              placeholder="lobby name..."
+              maxLength={30}
+            />
+          ) : (
+            <span 
+              className="lobby-name-editable" 
+              onClick={() => setEditingLobbyName(true)}
+              onMouseEnter={showTooltip('Click to rename')}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              {lobbyName || 'lobby'}
+              <svg className="edit-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </span>
+          )
+        ) : (
+          <span className="lobby-title">{lobbyName || 'lobby'}</span>
+        )}
+        <button 
+          className="lobby-panel-collapse" 
+          onClick={() => setExpanded(false)}
+          onMouseEnter={showTooltip('Collapse')}
+          onMouseMove={moveTooltip}
+          onMouseLeave={hideTooltip}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Host Transfer Warning */}
+      {hostDisconnectedAt && (
+        <div className="host-transfer-warning">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <div className="host-transfer-info">
+            <span className="host-transfer-text">host disconnected</span>
+            <span className="host-transfer-countdown">{hostTransferSeconds}s</span>
+          </div>
+        </div>
+      )}
+
+      {/* Share Link */}
+      <div className="lobby-share-section">
+        <div className="share-label">share {joinKey ? linkType : 'watch'} link:</div>
+        {/* Only show link type toggle if user has joinKey (can share join links) */}
+        {joinKey ? (
+          <div className="link-type-toggle">
+            <button 
+              className={linkType === 'join' ? 'active' : ''} 
+              onClick={() => setLinkType('join')}
+              onMouseEnter={showTooltip('Recipients can race')}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              join
+            </button>
+            <button 
+              className={linkType === 'watch' ? 'active' : ''} 
+              onClick={() => setLinkType('watch')}
+              onMouseEnter={showTooltip('Recipients can only watch')}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              watch
+            </button>
+          </div>
+        ) : (
+          <div className="link-type-toggle">
+            <button className="active" disabled>watch only</button>
+          </div>
+        )}
+        <div className="share-url-row">
+          <div className="url-bar-container">
+            {showLink ? (
+              <input
+                ref={urlRef}
+                type="text"
+                className="url-input"
+                value={currentUrl}
+                readOnly
+                onClick={(e) => e.target.select()}
+              />
+            ) : (
+              <div className="url-hidden">••••••••••••</div>
+            )}
+            <button 
+              className="eye-toggle-btn"
+              onClick={() => setShowLink(!showLink)}
+              onMouseEnter={showDynamicTooltip(() => showLink ? 'Hide link' : 'Show link')}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              {showLink ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          <button 
+            className="copy-btn" 
+            onClick={handleCopy}
+            onMouseEnter={showTooltip('Copy to clipboard')}
+            onMouseMove={moveTooltip}
+            onMouseLeave={hideTooltip}
+          >
+            {copied ? '✓' : 'copy'}
+          </button>
+        </div>
+      </div>
+
+      {/* Racers List */}
+      <div className="lobby-members">
+        <div className="members-header">
+          <span>racers</span>
+          <span 
+            className={`racer-count ${activeRacerCount >= MAX_RACERS ? 'full' : ''}`}
+            onMouseEnter={showTooltip(`Max ${MAX_RACERS} racers`)}
+            onMouseMove={moveTooltip}
+            onMouseLeave={hideTooltip}
+          >
+            {activeRacerCount}/{MAX_RACERS}
+          </span>
+        </div>
+        {safeRacers.map((racer) => {
+          const isYou = racer.id === myId;
+          const isRacerHost = racer.isHost;
+          const isPendingHost = racer.id === pendingHostId;
+          const status = getStatusIndicator(racer);
+          const canTransferTo = isHost && !isYou && !racer.disconnected && !isRacerHost;
+          const transferProgress = transferHoldProgress[racer.id] || 0;
+          
+          return (
+            <div key={racer.id} className={`lobby-member ${isYou ? 'you' : ''} ${racer.disconnected ? 'disconnected' : ''}`}>
+              <span 
+                className={`member-status ${status.cls}`}
+                onMouseEnter={showTooltip(status.tip)}
+                onMouseMove={moveTooltip}
+                onMouseLeave={hideTooltip}
+              >
+                {status.symbol}
+              </span>
+              <span className="member-name">
+                {isYou ? (
+                  <EditableName name={racer.name} isYou={true} onNameChange={onNameChange} />
+                ) : (
+                  <span 
+                    className="clickable-name"
+                    onClick={() => onRequestStats && onRequestStats(racer.id)}
+                    onMouseEnter={showTooltip('View stats')}
+                    onMouseMove={moveTooltip}
+                    onMouseLeave={hideTooltip}
+                  >
+                    {racer.name}
+                  </span>
+                )}
+                {isYou && <span className="you-badge">you</span>}
+              </span>
+              
+              {/* Host badge or transfer star */}
+              {isRacerHost ? (
+                <span className="host-badge" onMouseEnter={showTooltip('Host')} onMouseMove={moveTooltip} onMouseLeave={hideTooltip}>★</span>
+              ) : isPendingHost ? (
+                <span className="pending-host-badge" onMouseEnter={showTooltip('Becoming host')} onMouseMove={moveTooltip} onMouseLeave={hideTooltip}>→★</span>
+              ) : canTransferTo ? (
+                <button
+                  className={`transfer-star-btn ${transferProgress > 0 ? 'holding' : ''}`}
+                  onMouseDown={startTransferHold(racer.id)}
+                  onMouseUp={cancelTransferHold}
+                  onMouseLeave={(e) => { cancelTransferHold(); hideTooltip(); }}
+                  onTouchStart={startTransferHold(racer.id)}
+                  onTouchEnd={cancelTransferHold}
+                  onMouseEnter={showTooltip('Hold to make host')}
+                  onMouseMove={moveTooltip}
+                >
+                  <svg className="star-outline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                  <svg 
+                    className="star-fill" 
+                    width="14" 
+                    height="14" 
+                    viewBox="0 0 24 24" 
+                    fill="#f59e0b" 
+                    stroke="#f59e0b" 
+                    strokeWidth="2"
+                    style={{ clipPath: `inset(${100 - transferProgress}% 0 0 0)` }}
+                  >
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                </button>
+              ) : null}
+              
+              {statsRequestPending === racer.id && <span className="stats-loading">...</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Spectators */}
+      {spectators.length > 0 && (
+        <div className="lobby-spectators-list">
+          <div className="members-header">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <span onMouseEnter={showTooltip('Spectators')} onMouseMove={moveTooltip} onMouseLeave={hideTooltip}>
+              {spectators.length} watching
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Settings */}
+      {raceStatus === 'waiting' && (
+        <div className="lobby-settings-section">
+          <div className="setting-row">
+            <label 
+              className={`setting-toggle ${!isHost ? 'disabled' : ''}`}
+              onMouseEnter={showDynamicTooltip(() =>
+                strictMode 
+                  ? 'STRICT MODE ON: Must fix every error before advancing. Pure typing accuracy required.' 
+                  : 'STRICT MODE OFF: Can skip errors and keep typing. Final WPM adjusted by word accuracy.'
+              )}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              <input
+                type="checkbox"
+                checked={strictMode}
+                onChange={(e) => isHost && onStrictModeChange(e.target.checked)}
+                disabled={!isHost}
+              />
+              <span className="toggle-track"><span className="toggle-thumb" /></span>
+              <span className="toggle-label">strict mode</span>
+            </label>
+            <span className="setting-hint">{strictMode ? 'fix errors' : 'skip errors'}</span>
+          </div>
+          <div className="setting-row">
+            <label 
+              className={`setting-toggle ${!isHost ? 'disabled' : ''}`}
+              onMouseEnter={showDynamicTooltip(() =>
+                realtimeMode 
+                  ? 'REALTIME ON: Timer starts at GO for everyone simultaneously. Fair head-to-head racing.' 
+                  : 'REALTIME OFF: Timer starts when you begin typing. Better for practice sessions.'
+              )}
+              onMouseMove={moveTooltip}
+              onMouseLeave={hideTooltip}
+            >
+              <input
+                type="checkbox"
+                checked={realtimeMode}
+                onChange={(e) => isHost && onRealtimeModeChange(e.target.checked)}
+                disabled={!isHost}
+              />
+              <span className="toggle-track"><span className="toggle-thumb" /></span>
+              <span className="toggle-label">realtime</span>
+            </label>
+            <span className="setting-hint">{realtimeMode ? 'synced start' : 'own pace'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="lobby-actions-section">
+        {!isSpectator && raceStatus === 'waiting' && (
+          <button 
+            onClick={handleReadyToggle}
+            className={`lobby-action-btn ready ${isReady ? 'is-ready' : ''}`}
+            onMouseEnter={showDynamicTooltip(() => isReady ? 'Unready' : 'Ready up')}
+            onMouseMove={moveTooltip}
+            onMouseLeave={hideTooltip}
+          >
+            {isReady ? '✓ ready' : 'ready up'}
+          </button>
+        )}
+        
+        {showStartButton && (
+          <button 
+            onClick={canStart ? onStart : undefined}
+            className={`lobby-action-btn start ${!canStart ? 'disabled' : ''}`}
+            disabled={!canStart}
+            onMouseEnter={showDynamicTooltip(() => canStart ? 'Start race' : 'Waiting for all to ready')}
+            onMouseMove={moveTooltip}
+            onMouseLeave={hideTooltip}
+          >
+            start race
+          </button>
+        )}
+        
+        {canRematch && (
+          <button 
+            onClick={onRematch}
+            className="lobby-action-btn rematch"
+            onMouseEnter={showTooltip('New race, same players')}
+            onMouseMove={moveTooltip}
+            onMouseLeave={hideTooltip}
+          >
+            rematch
+          </button>
+        )}
+        
+        <button 
+          className={`lobby-action-btn leave ${leaveConfirm ? 'confirming' : ''}`}
+          onClick={handleLeaveClick}
+          onMouseEnter={showDynamicTooltip(() => leaveConfirm ? 'Click again to confirm' : 'Leave lobby')}
+          onMouseMove={moveTooltip}
+          onMouseLeave={hideTooltip}
+        >
+          {leaveConfirm ? 'are you sure?' : 'leave'}
+        </button>
+      </div>
+
+      {/* Status Messages */}
+      {isSpectator && raceStatus === 'waiting' && (
+        <div className="lobby-status spectator">watching...</div>
+      )}
+      {lateJoiner && (
+        <div className="lobby-status late">joining next race...</div>
+      )}
+
+      {/* Player Stats Modal - rendered via portal */}
+      {viewingPlayerStats && ReactDOM.createPortal(
+        <PlayerStatsModal playerStats={viewingPlayerStats} onClose={onClearViewingStats} />,
+        document.body
+      )}
+      
+      {/* Tooltip - rendered via portal to avoid affecting layout */}
+      {/* Always show tooltip to the LEFT of mouse for lobby panel (which is on right side of screen) */}
+      {tooltipText && ReactDOM.createPortal(
+        <div 
+          className="cursor-tooltip lobby-tooltip"
+          style={{ 
+            left: tooltipPos.x - 12,
+            top: tooltipPos.y + 40 > window.innerHeight ? tooltipPos.y - 30 : tooltipPos.y + 12,
+            transform: 'translateX(-100%)'
+          }}
+        >
+          {tooltipText}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+
 export default {
   RaceLobby,
   RaceCountdown,
@@ -1296,4 +1974,6 @@ export default {
   RaceResults,
   RaceStatsPanel,
   LobbyPresenceIndicator,
+  LobbyPanel,
+  PlayerStatsModal,
 };
