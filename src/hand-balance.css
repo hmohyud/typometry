@@ -1,0 +1,207 @@
+/* Hand Balance Component */
+.hand-balance {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 1rem;
+}
+
+.hand-balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.hb-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.hand-balance-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hand-balance-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hb-hand-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 80px;
+}
+
+.hb-hand-svg {
+  width: 60px;
+  height: 60px;
+  opacity: 0.8;
+}
+
+.hb-hand-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hb-hand-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hb-hand-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hb-hand-value.better {
+  color: var(--fast);
+}
+
+.hb-bar-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hb-bar {
+  height: 24px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.hb-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.hb-bar-fill.left {
+  border-radius: 12px 0 0 12px;
+}
+
+.hb-bar-fill.right {
+  border-radius: 0 12px 12px 0;
+}
+
+.hb-bar-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-muted);
+  transform: translateX(-50%);
+  opacity: 0.5;
+}
+
+.hb-bar-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hb-difference {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.hb-difference.balanced {
+  color: var(--fast);
+}
+
+.hb-diff-value {
+  color: var(--fast);
+  font-weight: 500;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .hand-balance-content {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .hb-hand-section {
+    flex: 0 0 auto;
+  }
+  
+  .hb-bar-section {
+    flex: 1 1 100%;
+    order: 3;
+  }
+  
+  .hb-hand-svg {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+/* Best/Worst fingers section */
+.hb-fingers-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hb-finger-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hb-finger-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hb-finger-stat.right {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.hb-finger-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+}
+
+.hb-finger-value {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.hb-finger-value.good {
+  color: var(--fast);
+}
+
+.hb-finger-value.bad {
+  color: var(--text-muted);
+}

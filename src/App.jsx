@@ -14,6 +14,8 @@ import {
   RACER_COLORS,
   getRacerColorIndex,
 } from "./RaceMode";
+import HandBalance from "./HandBalance";
+
 
 // Number formatting utilities
 const formatNumber = (num, options = {}) => {
@@ -2833,6 +2835,7 @@ const FingerHands = ({ fingerStats }) => {
   );
 };
 
+
 // Mini hand SVG for chord diagram - reuses the same polylines and fingertip positions
 const MiniHandSVG = ({
   finger,
@@ -3931,7 +3934,7 @@ function App() {
           : 0;
       fingerStats[f].accuracy =
         fingerStats[f].total > 0
-          ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 100)
+          ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 1000) / 10
           : 100;
     });
 
@@ -4774,7 +4777,7 @@ function App() {
           : 0;
       fingerStats[f].accuracy =
         fingerStats[f].total > 0
-          ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 100)
+          ? Math.round((fingerStats[f].correct / fingerStats[f].total) * 1000) / 10
           : 100;
     });
 
@@ -6359,6 +6362,11 @@ function App() {
                   <FingerHands fingerStats={stats.fingerStats} />
                 )}
 
+                {/* Hand Balance */}
+                {stats.fingerStats && (
+                  <HandBalance fingerStats={stats.fingerStats} />
+                )}
+
                 {/* Finger Transitions Chord Diagram */}
                 {stats.fingerTransitions &&
                   Object.keys(stats.fingerTransitions).length > 0 && (
@@ -7635,6 +7643,11 @@ function App() {
                 {/* Finger Performance for All Time */}
                 {cumulativeStats.fingerStats && (
                   <FingerHands fingerStats={cumulativeStats.fingerStats} />
+                )}
+
+                {/* Hand Balance for All Time */}
+                {cumulativeStats.fingerStats && (
+                  <HandBalance fingerStats={cumulativeStats.fingerStats} />
                 )}
 
                 {/* Finger Transitions for All Time */}
@@ -9026,6 +9039,18 @@ function App() {
                           {
                             avgInterval: data.avg_interval,
                             accuracy: Math.round(data.avg_accuracy * 100),
+                            total: data.total_presses,
+                          },
+                        ])
+                      )}
+                    />
+                    <HandBalance
+                      fingerStats={Object.fromEntries(
+                        Object.entries(fingerAverages).map(([finger, data]) => [
+                          finger,
+                          {
+                            avgInterval: data.avg_interval,
+                            accuracy: Math.round(data.avg_accuracy * 1000) / 10, // One decimal place
                             total: data.total_presses,
                           },
                         ])
