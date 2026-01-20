@@ -15,6 +15,8 @@ import {
   getRacerColorIndex,
 } from "./RaceMode";
 import HandBalance from "./HandBalance";
+import RhythmConsistency from "./RhythmConsistency";
+import SpeedSegments from "./SpeedSegments";
 
 
 // Number formatting utilities
@@ -1189,9 +1191,9 @@ const SentenceFlow = ({ wordSpeeds, avgWpm, showTooltips = true }) => {
       <div className="sentence-flow-header">
         <span className="flow-title">sentence flow</span>
         <div className="flow-legend">
-          <span className="legend-item slow">slow</span>
-          <span className="legend-gradient"></span>
           <span className="legend-item fast">fast</span>
+          <span className="legend-gradient"></span>
+          <span className="legend-item slow">slow</span>
         </div>
       </div>
       <div className="sentence-flow-words">
@@ -6336,6 +6338,14 @@ function App() {
                     wordSpeeds={stats.wordSpeeds} 
                     avgWpm={stats.wpm} 
                   />
+                )}
+
+                {/* Rhythm and Speed Segments */}
+                {stats.intervals && stats.intervals.length > 10 && (
+                  <div className="rhythm-segments-row">
+                    <RhythmConsistency intervals={stats.intervals} />
+                    <SpeedSegments intervals={stats.intervals} text={currentText} />
+                  </div>
                 )}
 
                 {/* Keyboard Visualizations */}

@@ -1,0 +1,457 @@
+/* ============================================
+   Rhythm Consistency Component
+   ============================================ */
+
+.rhythm-consistency {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rhythm-consistency.small {
+  padding: 12px;
+}
+
+.rhythm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rhythm-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.rhythm-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rhythm-ring {
+  flex-shrink: 0;
+}
+
+.rhythm-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rhythm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rhythm-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+}
+
+.rhythm-stat-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small variant adjustments */
+.rhythm-consistency.small .rhythm-header {
+  margin-bottom: 8px;
+}
+
+.rhythm-consistency.small .rhythm-title {
+  font-size: 12px;
+}
+
+.rhythm-consistency.small .rhythm-content {
+  gap: 12px;
+}
+
+.rhythm-consistency.small .rhythm-stat-value {
+  font-size: 12px;
+}
+
+/* ============================================
+   Speed Segments Component
+   ============================================ */
+
+.speed-segments {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.speed-segments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  min-height: 20px;
+  gap: 8px;
+}
+
+.speed-segments-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.speed-segments-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.speed-segments-hover-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.hover-type {
+  font-weight: 500;
+  min-width: 40px; /* fits "Normal" */
+}
+
+.hover-type.burst {
+  color: var(--fast, #98c379);
+}
+
+.hover-type.normal {
+  color: var(--text-muted, #888);
+}
+
+.hover-type.pause {
+  color: var(--incorrect, #e06c75);
+}
+
+.hover-detail {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hover-keys {
+  min-width: 46px; /* fits "99 keys" */
+}
+
+.hover-time {
+  min-width: 38px; /* fits "999ms" */
+}
+
+/* Full paragraph preview with highlighting */
+.speed-segments-para-preview {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  height: 42px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+
+.speed-segments-para-preview::-webkit-scrollbar {
+  height: 4px;
+}
+
+.speed-segments-para-preview::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.speed-segments-para-preview::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+.para-text-dim {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.para-highlight {
+  font-weight: 600;
+  padding: 2px 1px;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.para-highlight.burst {
+  color: var(--fast, #98c379);
+  background: rgba(152, 195, 121, 0.2);
+}
+
+.para-highlight.normal {
+  color: var(--text-primary);
+  background: rgba(136, 136, 136, 0.2);
+}
+
+.para-highlight.pause {
+  color: var(--incorrect, #e06c75);
+  background: rgba(224, 108, 117, 0.2);
+}
+
+.speed-segments-bar-container {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 6px 0;
+  min-width: 0;
+}
+
+.speed-segments-bar {
+  display: flex;
+  height: 20px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+  position: relative;
+  min-width: 0;
+}
+
+.speed-segment {
+  height: 100%;
+  min-width: 2px;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+
+.speed-segment:hover,
+.speed-segment.hovered {
+  opacity: 1 !important;
+  filter: brightness(1.2);
+}
+
+.speed-segment.burst {
+  background: var(--fast, #98c379);
+  opacity: 0.85;
+}
+
+.speed-segment.normal {
+  background: var(--text-muted, #888);
+  opacity: 0.35;
+}
+
+.speed-segment.pause {
+  background: var(--incorrect, #e06c75);
+  opacity: 0.85;
+}
+
+.speed-segments-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.legend-item.burst {
+  color: var(--fast, #98c379);
+}
+
+.legend-item.normal {
+  color: var(--text-muted, #888);
+}
+
+.legend-item.pause {
+  color: var(--incorrect, #e06c75);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+/* ============================================
+   Rhythm Segments Row (This Paragraph layout)
+   ============================================ */
+
+.rhythm-segments-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.rhythm-segments-row .rhythm-consistency {
+  min-width: 160px;
+  max-width: 200px;
+}
+
+.rhythm-segments-row .speed-segments {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .rhythm-segments-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  /* Rhythm consistency: inline centered layout on mobile */
+  .rhythm-segments-row .rhythm-consistency {
+    min-width: unset;
+    max-width: unset;
+    background: none;
+    border-radius: 0;
+    padding: 8px 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 16px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-header {
+    margin-bottom: 0;
+    gap: 6px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-content {
+    gap: 12px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-ring {
+    transform: scale(0.75);
+    margin: -10px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-stats {
+    flex-direction: row;
+    gap: 16px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-stat {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-stat-label {
+    font-size: 10px;
+  }
+  
+  .rhythm-segments-row .rhythm-consistency .rhythm-stat-value {
+    font-size: 12px;
+  }
+  
+  .speed-segments-hover-info {
+    font-size: 10px;
+    gap: 5px;
+  }
+  
+  .speed-segments-hover-info .hover-type {
+    min-width: 36px;
+  }
+  
+  .speed-segments-hover-info .hover-keys {
+    min-width: 42px;
+  }
+  
+  .speed-segments-hover-info .hover-time {
+    min-width: 34px;
+  }
+  
+  .speed-segments-para-preview {
+    font-size: 11px;
+    height: 38px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Override general rhythm-content styles only outside the row context */
+  .rhythm-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .rhythm-stats {
+    flex-direction: row;
+    gap: 16px;
+  }
+  
+  .rhythm-stat {
+    align-items: center;
+  }
+  
+  /* Keep row context horizontal */
+  .rhythm-segments-row .rhythm-consistency .rhythm-content {
+    flex-direction: row;
+  }
+  
+  .speed-segments-legend {
+    font-size: 10px;
+    gap: 8px;
+  }
+  
+  .speed-segments-title-row {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  
+  .speed-segments-hover-info {
+    font-size: 10px;
+    gap: 4px;
+  }
+  
+  .speed-segments-hover-info .hover-type {
+    min-width: 32px;
+  }
+  
+  .speed-segments-hover-info .hover-keys {
+    min-width: 38px;
+  }
+  
+  .speed-segments-hover-info .hover-time {
+    min-width: 30px;
+  }
+  
+  .speed-segments-para-preview {
+    font-size: 10px;
+    height: 34px;
+    padding: 6px 8px;
+  }
+}
