@@ -620,9 +620,9 @@ function WordSpeedMap({ results, paragraph, myId }) {
       <div className="speed-map-header">
         <span className="speed-map-title">word speeds</span>
         <div className="speed-map-legend">
-          <span className="legend-slow">slow</span>
+          <span className="legend-slow">fast</span>
           <div className="legend-gradient" />
-          <span className="legend-fast">fast</span>
+          <span className="legend-fast">slow</span>
         </div>
       </div>
       
