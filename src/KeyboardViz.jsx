@@ -57,13 +57,13 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
   const [hoveredKey, setHoveredKey] = useState(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [showShiftLayer, setShowShiftLayer] = useState(false)
-  
+
   // Organize stats by base key with shifted variants
   const organizedStats = useMemo(() => {
     if (!keyStats || Object.keys(keyStats).length === 0) return {}
-    
+
     const organized = {}
-    
+
     KEYBOARD_ROWS.flat().forEach(baseKey => {
       if (baseKey === ' ') {
         const spaceStats = keyStats[' '] || keyStats['space']
@@ -72,14 +72,14 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
         }
         return
       }
-      
+
       const isLetter = /^[a-z]$/.test(baseKey)
       const shiftedChar = isLetter ? baseKey.toUpperCase() : SHIFT_MAP[baseKey]
-      
+
       const baseStats = keyStats[baseKey] || keyStats[baseKey.toLowerCase()]
       // For letters, check for uppercase version; for symbols, check shifted symbol
       const shiftedStats = shiftedChar ? keyStats[shiftedChar] : null
-      
+
       if (baseStats || shiftedStats) {
         organized[baseKey] = {
           base: baseStats,
@@ -88,20 +88,20 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
         }
       }
     })
-    
+
     return organized
   }, [keyStats])
-  
+
   // Check if any shifted data exists
   const hasAnyShiftedData = useMemo(() => {
     return Object.values(organizedStats).some(s => s.shifted)
   }, [organizedStats])
-  
+
   const { colors } = useMemo(() => {
     if (!organizedStats || Object.keys(organizedStats).length === 0) {
       return { colors: {} }
     }
-    
+
     // Get stats for current layer
     const currentLayerStats = {}
     Object.entries(organizedStats).forEach(([key, data]) => {
@@ -112,18 +112,18 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
         currentLayerStats[key] = stats
       }
     })
-    
+
     if (Object.keys(currentLayerStats).length === 0) return { colors: {} }
-    
-    const values = Object.values(currentLayerStats).map(s => 
+
+    const values = Object.values(currentLayerStats).map(s =>
       mode === 'speed' ? s.avgInterval : (s.accuracy !== undefined ? s.accuracy : 1)
     ).filter(v => v > 0)
-    
+
     if (values.length === 0) return { colors: {} }
-    
+
     const max = Math.max(...values)
     const min = Math.min(...values)
-    
+
     const cols = {}
     Object.entries(currentLayerStats).forEach(([key, stats]) => {
       const val = mode === 'speed' ? stats.avgInterval : (stats.accuracy !== undefined ? stats.accuracy : 1)
@@ -137,13 +137,13 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
       }
       cols[key] = interpolateColor(val, min, max, coldColor, hotColor)
     })
-    
+
     return { colors: cols }
   }, [organizedStats, mode, showShiftLayer])
 
   const totalWidth = 14 * (KEY_WIDTH + KEY_GAP)
   const totalHeight = 5 * (KEY_HEIGHT + KEY_GAP)
-  
+
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     setMousePos({
@@ -151,7 +151,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
       y: e.clientY - rect.top
     })
   }
-  
+
   const getSpeedColor = (avgInterval) => {
     if (!keyStats || Object.keys(keyStats).length === 0) return 'var(--text)'
     const speeds = Object.values(keyStats).map(s => s.avgInterval).filter(v => v > 0)
@@ -172,7 +172,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
       return `rgb(${r},${g},${b})`
     }
   }
-  
+
   const getAccuracyColor = (accuracy) => {
     if (accuracy >= 0.95) return 'rgb(110, 207, 110)'
     if (accuracy >= 0.9) return 'rgb(180, 195, 80)'
@@ -180,17 +180,17 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
     if (accuracy >= 0.7) return 'rgb(232, 140, 60)'
     return 'rgb(232, 92, 92)'
   }
-  
+
   const hoveredData = hoveredKey ? organizedStats[hoveredKey] : null
-  const hoveredStats = hoveredData 
-    ? ((!showShiftLayer || hoveredKey === ' ') ? hoveredData.base : hoveredData.shifted) 
+  const hoveredStats = hoveredData
+    ? ((!showShiftLayer || hoveredKey === ' ') ? hoveredData.base : hoveredData.shifted)
     : null
 
   return (
     <div className="keyboard-viz">
-      <svg 
-        width={totalWidth} 
-        height={totalHeight} 
+      <svg
+        width={totalWidth}
+        height={totalHeight}
         viewBox={`0 0 ${totalWidth} ${totalHeight}`}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveredKey(null)}
@@ -201,19 +201,19 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
             const width = key === ' ' ? KEY_WIDTH * 6 + KEY_GAP * 5 : KEY_WIDTH
             const keyX = x
             x += width + KEY_GAP
-            
+
             const keyY = rowIndex * (KEY_HEIGHT + KEY_GAP)
             const keyData = organizedStats[key]
             const isLetter = /^[a-z]$/.test(key)
             const shiftedChar = isLetter ? key.toUpperCase() : SHIFT_MAP[key]
-            
+
             // Get stats and color for current layer
             // Space uses base stats in both layers (same key)
             const useBaseStats = !showShiftLayer || key === ' '
             const currentStats = keyData ? (useBaseStats ? keyData.base : keyData.shifted) : null
             const bgColor = currentStats ? (colors[key] || 'var(--bg-tertiary)') : 'var(--bg-tertiary)'
             const hasData = !!currentStats
-            
+
             // Display character based on layer
             // Now letters show uppercase in shift layer (capitals are tracked)
             // Space shows on both layers
@@ -221,12 +221,12 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
             if (showShiftLayer && key !== ' ') {
               label = shiftedChar || key
             }
-            
+
             // Keys without shift data show dimmed
             const noShiftData = showShiftLayer && !keyData?.shifted && key !== ' '
-            
+
             return (
-              <g 
+              <g
                 key={`${rowIndex}-${keyIndex}`}
                 onMouseEnter={() => setHoveredKey(key)}
                 style={{ cursor: 'default' }}
@@ -261,10 +261,10 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
           })
         })}
       </svg>
-      
+
       {/* Tooltip */}
       {hoveredKey && hoveredStats && (
-        <div 
+        <div
           className="keyboard-key-tooltip"
           style={{
             position: 'absolute',
@@ -283,7 +283,7 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
           <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text)' }}>
             {hoveredKey === ' ' ? 'space' : (showShiftLayer ? (hoveredData?.shiftedChar || hoveredKey) : hoveredKey)}
           </div>
-          
+
           <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <span><span style={{ color: getSpeedColor(hoveredStats.avgInterval || 0), fontWeight: 500 }}>{Math.round(hoveredStats.avgInterval || 0)}ms</span> avg</span>
             <span><span style={{ color: getAccuracyColor(hoveredStats.accuracy || 1), fontWeight: 500 }}>{Math.round((hoveredStats.accuracy || 1) * 100)}%</span> accuracy</span>
@@ -291,22 +291,23 @@ export const KeyboardHeatmap = ({ keyStats, mode = 'speed', comparisonStats = nu
           </div>
         </div>
       )}
-      
+
       <div className="keyboard-legend">
         <span className="legend-label">{mode === 'speed' ? 'fast' : 'accurate'}</span>
         <div className="legend-gradient" style={{
           background: 'linear-gradient(to right, rgb(110, 207, 110), rgb(232, 92, 92))'
         }} />
         <span className="legend-label">{mode === 'speed' ? 'slow' : 'error-prone'}</span>
-        
+
         {/* Shift layer toggle */}
         {hasAnyShiftedData && (
-          <button 
+          <button
             className={`shift-layer-toggle ${showShiftLayer ? 'active' : ''}`}
             onClick={() => setShowShiftLayer(!showShiftLayer)}
             title={showShiftLayer ? 'Show base keys' : 'Show shifted keys'}
           >
-            ⇧
+            <span className="shift-label">Shift</span>
+            <span className="shift-icon">⇧</span>
           </button>
         )}
       </div>
@@ -318,14 +319,14 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
   // Original dimensions (will be scaled via viewBox and CSS)
   const fullWidth = 14 * (KEY_WIDTH + KEY_GAP)
   const fullHeight = 5 * (KEY_HEIGHT + KEY_GAP)
-  
+
   // Display dimensions (smaller for side-by-side)
   const displayWidth = fullWidth * 0.65
   const displayHeight = fullHeight * 0.65
 
   const arrows = useMemo(() => {
     if (!topBigrams || topBigrams.length === 0) return []
-    
+
     return topBigrams
       .filter(({ bigram }) => {
         const from = KEY_COORDS[bigram[0]]
@@ -335,25 +336,25 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
       .map(({ bigram, avg, accuracy }, index) => {
         const from = KEY_COORDS[bigram[0]]
         const to = KEY_COORDS[bigram[1]]
-        
+
         // Calculate arrow with slight curve for visibility
         const dx = to.x - from.x
         const dy = to.y - from.y
         const len = Math.sqrt(dx * dx + dy * dy)
-        
+
         // Shorten arrow to not overlap keys
         const shortenBy = 14
         const startX = from.x + (dx / len) * shortenBy
         const startY = from.y + (dy / len) * shortenBy
         const endX = to.x - (dx / len) * shortenBy
         const endY = to.y - (dy / len) * shortenBy
-        
+
         // Control point for curve (perpendicular offset)
         const midX = (startX + endX) / 2
         const midY = (startY + endY) / 2
         const perpX = -dy / len * 15 * (index % 2 === 0 ? 1 : -1)
         const perpY = dx / len * 15 * (index % 2 === 0 ? 1 : -1)
-        
+
         return {
           key: bigram,
           path: `M ${startX} ${startY} Q ${midX + perpX} ${midY + perpY} ${endX} ${endY}`,
@@ -369,7 +370,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
 
   // Colors: green for good (fast/accurate), red for bad (slow/error-prone)
   const color = flowType === 'slow' ? 'var(--incorrect)' : 'var(--fast)'
-  
+
   // Label based on mode
   let label
   if (mode === 'accuracy') {
@@ -388,7 +389,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
             const width = key === ' ' ? KEY_WIDTH * 6 + KEY_GAP * 5 : KEY_WIDTH
             const keyX = x
             x += width + KEY_GAP
-            
+
             return (
               <rect
                 key={`${rowIndex}-${keyIndex}`}
@@ -405,7 +406,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
             )
           })
         })}
-        
+
         {/* Draw arrows */}
         <defs>
           <marker
@@ -419,7 +420,7 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
             <path d="M 0 0 L 8 4 L 0 8 z" fill={color} />
           </marker>
         </defs>
-        
+
         {arrows.map(({ key, path, opacity, avg, accuracy }) => (
           <g key={key}>
             <path
@@ -430,8 +431,8 @@ export const KeyboardFlowMap = ({ topBigrams = [], flowType = 'slow', mode = 'sp
               opacity={opacity}
               markerEnd={`url(#arrow-${flowType}-${mode})`}
             />
-            <title>{key[0]} → {key[1]}: {mode === 'accuracy' 
-              ? `${Math.round((accuracy || 1) * 100)}% accurate` 
+            <title>{key[0]} → {key[1]}: {mode === 'accuracy'
+              ? `${Math.round((accuracy || 1) * 100)}% accurate`
               : `${Math.round(avg)}ms avg`}</title>
           </g>
         ))}
