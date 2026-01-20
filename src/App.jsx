@@ -839,6 +839,20 @@ const TIPS = {
       <TipHint>Hover fingers to see detailed timing</TipHint>
     </>
   ),
+  fingerAccuracy: (
+    <>
+      <TipTitle>Finger Accuracy</TipTitle>
+      <TipText>
+        Shows error rate for each finger. Finger color indicates accuracy
+        relative to your overall average.
+      </TipText>
+      <TipText>
+        • <span style={{ color: "#98c379" }}>Green</span> = more accurate
+        • <span style={{ color: "#e06c75" }}>Red</span> = more errors
+      </TipText>
+      <TipHint>Hover fingers to see detailed accuracy</TipHint>
+    </>
+  ),
   keyboardHeatmap: (
     <>
       <TipTitle>Keyboard Heatmap</TipTitle>
@@ -2550,6 +2564,7 @@ const MiniKeyboard = ({ highlightKeys, color }) => {
 const FingerHands = ({ fingerStats }) => {
   const [hovered, setHovered] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [mode, setMode] = useState('speed'); // 'speed' or 'accuracy'
   const containerRef = useRef(null);
 
   const fingers = [
@@ -2567,35 +2582,58 @@ const FingerHands = ({ fingerStats }) => {
   const speeds = fingers
     .map((f) => fingerStats[f]?.avgInterval || 0)
     .filter((v) => v > 0);
-  const accs = fingers.map((f) => fingerStats[f]?.accuracy || 0);
+  const accs = fingers.map((f) => fingerStats[f]?.accuracy || 0).filter((v) => v > 0);
   const avgSpeed =
     speeds.length > 0
       ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length)
       : 0;
   const avgAcc =
     accs.length > 0
-      ? Math.round(accs.reduce((a, b) => a + b, 0) / accs.length)
+      ? Math.round((accs.reduce((a, b) => a + b, 0) / accs.length) * 10) / 10
       : 0;
 
   const minSpeed = Math.min(...speeds);
   const maxSpeed = Math.max(...speeds);
+  const minAcc = Math.min(...accs);
+  const maxAcc = Math.max(...accs);
 
   const getColor = (finger) => {
     const data = fingerStats[finger];
     if (!data || data.total === 0) return "#3c3e41";
-    const speed = data.avgInterval;
-    if (maxSpeed === minSpeed) return "#98c379";
-    const t = (speed - minSpeed) / (maxSpeed - minSpeed);
-    if (t < 0.5) {
-      const r = Math.round(152 + 74 * t * 2);
-      const g = Math.round(195 - 12 * t * 2);
-      const b = Math.round(121 - 101 * t * 2);
-      return `rgb(${r},${g},${b})`;
+    
+    if (mode === 'speed') {
+      const speed = data.avgInterval;
+      if (maxSpeed === minSpeed) return "#98c379";
+      const t = (speed - minSpeed) / (maxSpeed - minSpeed);
+      // Green (fast) to Red (slow)
+      if (t < 0.5) {
+        const r = Math.round(152 + 74 * t * 2);
+        const g = Math.round(195 - 12 * t * 2);
+        const b = Math.round(121 - 101 * t * 2);
+        return `rgb(${r},${g},${b})`;
+      } else {
+        const r = Math.round(226 - 2 * (t - 0.5) * 2);
+        const g = Math.round(183 - 75 * (t - 0.5) * 2);
+        const b = Math.round(20 + 97 * (t - 0.5) * 2);
+        return `rgb(${r},${g},${b})`;
+      }
     } else {
-      const r = Math.round(226 - 2 * (t - 0.5) * 2);
-      const g = Math.round(183 - 75 * (t - 0.5) * 2);
-      const b = Math.round(20 + 97 * (t - 0.5) * 2);
-      return `rgb(${r},${g},${b})`;
+      // Accuracy mode - higher is better, so invert the gradient
+      const acc = data.accuracy;
+      if (maxAcc === minAcc) return "#98c379";
+      const t = 1 - (acc - minAcc) / (maxAcc - minAcc); // Invert so high acc = green
+      // Green (accurate) to Red (inaccurate)
+      if (t < 0.5) {
+        const r = Math.round(152 + 74 * t * 2);
+        const g = Math.round(195 - 12 * t * 2);
+        const b = Math.round(121 - 101 * t * 2);
+        return `rgb(${r},${g},${b})`;
+      } else {
+        const r = Math.round(226 - 2 * (t - 0.5) * 2);
+        const g = Math.round(183 - 75 * (t - 0.5) * 2);
+        const b = Math.round(20 + 97 * (t - 0.5) * 2);
+        return `rgb(${r},${g},${b})`;
+      }
     }
   };
 
@@ -2627,17 +2665,21 @@ const FingerHands = ({ fingerStats }) => {
           <span className="finger-hands-note">*conventional placement</span>
         </div>
         <div className="finger-hands-right">
-          <div className="finger-hands-avg">
-            avg:{" "}
-            <Tooltip content="Average speed across all fingers — lower is faster">
-              <span className="fh-speed">{fmt.int(avgSpeed)}ms</span>
-            </Tooltip>
-            {" · "}
-            <Tooltip content="Average accuracy across all fingers — higher means fewer errors">
-              <span className="fh-acc">{fmt.int(avgAcc)}%</span>
-            </Tooltip>
+          <div className="heatmap-toggle">
+            <button
+              className={`mini-toggle ${mode === 'speed' ? 'active' : ''}`}
+              onClick={() => setMode('speed')}
+            >
+              Speed
+            </button>
+            <button
+              className={`mini-toggle ${mode === 'accuracy' ? 'active' : ''}`}
+              onClick={() => setMode('accuracy')}
+            >
+              Accuracy
+            </button>
           </div>
-          <Tooltip content={TIPS.fingerSpeed}>
+          <Tooltip content={mode === 'speed' ? TIPS.fingerSpeed : TIPS.fingerAccuracy}>
             <button className="help-btn" type="button" aria-label="Help">
               ?
             </button>

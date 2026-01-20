@@ -203,5 +203,5 @@
 }
 
 .hb-finger-value.bad {
-  color: var(--text-muted);
+  color: var(--incorrect);
 }
