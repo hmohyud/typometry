@@ -109,6 +109,7 @@
   gap: 12px;
   min-width: 0;
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .speed-segments-title {
@@ -123,8 +124,6 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
@@ -216,6 +215,40 @@
 .para-highlight.pause {
   color: var(--incorrect, #e06c75);
   background: rgba(224, 108, 117, 0.2);
+}
+
+/* Hoverable text segments */
+.para-segment {
+  cursor: pointer;
+  transition: opacity 0.1s ease;
+}
+
+.para-segment:hover {
+  opacity: 1;
+}
+
+/* Per-key intervals display */
+.hover-key-intervals {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--text-muted);
+}
+
+.key-interval {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+
+.key-interval.more {
+  color: var(--text-dim);
+  font-style: italic;
+  background: none;
 }
 
 .speed-segments-bar-container {
@@ -397,6 +430,10 @@
   .speed-segments-para-preview {
     font-size: 11px;
     height: 38px;
+  }
+  
+  .hover-key-intervals {
+    display: none;
   }
 }
 
