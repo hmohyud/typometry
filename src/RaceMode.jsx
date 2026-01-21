@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom';
 import { KeyboardHeatmap } from './KeyboardViz';
 import { Tooltip } from './Tooltip';
+import RhythmConsistency from './RhythmConsistency';
+import SpeedSegments from './SpeedSegments';
 
 // Editable name component
 function EditableName({ name, isYou, onNameChange }) {
@@ -374,16 +376,35 @@ export const RACER_COLORS = [
   { name: 'orange', hex: '#f97316' },
 ];
 
-// Get stable color index for a racer based on all racers in the race
+// Get consistent color index based on user ID hash
+// This ensures the same user always gets the same color across all clients
+export function getColorIndexFromId(odId) {
+  if (!odId || typeof odId !== 'string') return 0;
+  
+  // djb2 hash algorithm - good distribution
+  let hash = 5381;
+  for (let i = 0; i < odId.length; i++) {
+    const char = odId.charCodeAt(i);
+    hash = ((hash << 5) + hash) ^ char; // hash * 33 ^ char
+  }
+  
+  // Ensure positive result and map to color range
+  const index = Math.abs(hash) % RACER_COLORS.length;
+  return index;
+}
+
+// Legacy function - now uses hash-based approach
 export function getRacerColorIndex(racerId, allRacers) {
-  // Sort all racers by ID for stable ordering
-  const sortedIds = [...allRacers].map(r => r.id).sort();
-  return sortedIds.indexOf(racerId) % RACER_COLORS.length;
+  return getColorIndexFromId(racerId);
 }
 
 // Progress bar for a single racer
 export function RacerProgress({ racer, isYou, colorIndex = 0 }) {
-  const color = RACER_COLORS[colorIndex];
+  // Defensive check - ensure colorIndex is valid
+  const safeColorIndex = (typeof colorIndex === 'number' && colorIndex >= 0 && colorIndex < RACER_COLORS.length) 
+    ? colorIndex 
+    : 0;
+  const color = RACER_COLORS[safeColorIndex];
   
   return (
     <div className={`racer-progress ${isYou ? 'you' : ''} ${racer.finished ? 'finished' : ''} ${racer.disconnected ? 'disconnected' : ''}`}>
@@ -1193,6 +1214,21 @@ export function RaceStatsPanel({ raceStats, fmt, isHost, isWaitingForOthers, onP
       {/* Keyboard Visualization */}
       <RaceKeyboards results={allResults} myId={myResult?.id} />
 
+      {/* Rhythm Analysis - for current user */}
+      {myResult?.keystrokeData && myResult.keystrokeData.length > 5 && (
+        <div className="race-rhythm-section">
+          <div className="rhythm-segments-row">
+            <RhythmConsistency 
+              intervals={myResult.keystrokeData.map(k => k.time).filter(t => t && t > 0)} 
+            />
+            <SpeedSegments 
+              intervals={myResult.keystrokeData.map(k => k.time).filter(t => t && t > 0)} 
+              text={paragraph}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Text Info */}
       <div className="pvp-text-info">
         <span>{paragraph?.length || 0} chars</span>
@@ -1381,7 +1417,10 @@ export function LobbyPanel({
   onTransferHost,
   onRematch,
   shareUrl,
-  joinKey 
+  joinKey,
+  // Chat props
+  chatMessages = [],
+  onSendChat,
 }) {
   // Safety check for racers
   const safeRacers = Array.isArray(racers) ? racers : [];
@@ -1961,6 +2000,138 @@ export function LobbyPanel({
         </div>,
         document.body
       )}
+      
+      {/* Lobby Chat */}
+      {onSendChat && (
+        <LobbyChat
+          messages={chatMessages}
+          onSend={onSendChat}
+          racers={safeRacers}
+          myId={myId}
+        />
+      )}
+    </div>
+  );
+}
+
+// Lobby Chat Component
+export function LobbyChat({ messages, onSend, racers, myId }) {
+  const [input, setInput] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (isExpanded && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isExpanded]);
+
+  // Focus input when expanded
+  useEffect(() => {
+    if (isExpanded) {
+      // Small delay to ensure panel is visible
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [isExpanded]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (input.trim()) {
+      onSend(input.trim());
+      setInput('');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    e.stopPropagation(); // Prevent typing handler from catching these
+    if (e.key === 'Escape') {
+      setIsExpanded(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  // Get name from current racers (for live updates) or fall back to stored name
+  const getNameForUser = (odId, storedName) => {
+    const racer = racers.find(r => r.id === odId);
+    return racer?.name || storedName || 'Unknown';
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const unreadCount = isExpanded ? 0 : messages.length;
+
+  return (
+    <div className={`lobby-chat-wrapper ${isExpanded ? 'expanded' : 'collapsed'}`}>
+      {/* Toggle button - only shown when collapsed */}
+      {!isExpanded && (
+        <button 
+          className="lobby-chat-toggle"
+          onClick={() => setIsExpanded(true)}
+          title="Open chat"
+        >
+          <span className="chat-icon">💬</span>
+          <span className="chat-label">chat</span>
+          {unreadCount > 0 && (
+            <span className="chat-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+          )}
+        </button>
+      )}
+
+      {/* Chat panel */}
+      <div className={`lobby-chat-panel ${isExpanded ? 'visible' : ''}`}>
+        <div className="lobby-chat-header">
+          <span>lobby chat</span>
+          <button className="chat-close" onClick={() => setIsExpanded(false)}>hide</button>
+        </div>
+        <div className="lobby-chat-messages">
+          {messages.length === 0 ? (
+            <div className="chat-empty">No messages yet. Say hi! 👋</div>
+          ) : (
+            messages.map(msg => {
+              const isMe = msg.odId === myId;
+              const colorIndex = getColorIndexFromId(msg.odId);
+              const color = RACER_COLORS[colorIndex];
+              const displayName = getNameForUser(msg.odId, msg.name);
+              return (
+                <div key={msg.id} className={`chat-message ${isMe ? 'me' : ''}`}>
+                  <div className="chat-meta">
+                    <span 
+                      className="chat-name" 
+                      style={{ color: isMe ? 'var(--accent)' : color.hex }}
+                    >
+                      {displayName}
+                    </span>
+                    <span className="chat-time">{formatTime(msg.timestamp)}</span>
+                  </div>
+                  <div className="chat-text">{msg.message}</div>
+                </div>
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <form className="lobby-chat-input" onSubmit={handleSubmit}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            maxLength={500}
+            autoComplete="off"
+          />
+          <button type="submit" disabled={!input.trim()}>
+            send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1976,4 +2147,5 @@ export default {
   LobbyPresenceIndicator,
   LobbyPanel,
   PlayerStatsModal,
+  LobbyChat,
 };

@@ -66,6 +66,8 @@ export function useRace() {
     statsRequestPending: null,
     // New round trigger - increments when new round starts, used by App.jsx to reset typing
     newRoundCounter: 0,
+    // Chat
+    chatMessages: [], // Array of { id, odId, name, message, timestamp }
   });
 
   const myIdRef = useRef(generateRacerId());
@@ -88,7 +90,7 @@ export function useRace() {
   }, []);
 
   // Calculate race stats
-  const calculateRaceStats = useCallback((results, myId, paragraph, paragraphIndex, raceId) => {
+  const calculateRaceStats = useCallback((results, myId, paragraph, paragraphIndex, raceId, roundNumber = 0) => {
     const myResult = results.find(r => r.id === myId) || null;
     const allWpms = results.map(r => r.wpm);
     const allAccuracies = results.map(r => r.accuracy);
@@ -100,6 +102,8 @@ export function useRace() {
       paragraph,
       paragraphIndex,
       raceId,
+      roundId: `${raceId}_round${roundNumber}`, // Unique ID per round
+      roundNumber,
       startTime: Date.now(),
       endTime: Date.now(),
       racerCount: results.length,
@@ -319,7 +323,7 @@ export function useRace() {
               .map((r, i) => ({ ...r, position: i + 1 }));
             
             // Calculate progressive race stats
-            const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+            const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId, prev.newRoundCounter);
             raceStats.racerCount = updatedRacers.length;
             raceStats.finishedCount = finishedRacers.length;
             raceStats.isComplete = allFinished;
@@ -430,7 +434,7 @@ export function useRace() {
             ready: false,
           }));
           
-          const raceStats = calculateRaceStats(data.results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+          const raceStats = calculateRaceStats(data.results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId, prev.newRoundCounter);
           // Check if I'm in the results (meaning I finished)
           const myResultExists = data.results.some(r => r.id === prev.myId);
           return {
@@ -501,6 +505,27 @@ export function useRace() {
             isSpectator: false,
           });
         }
+        break;
+
+      case 'chat':
+        // Someone sent a chat message - skip if already received (dedupe by id)
+        setState(prev => {
+          if (prev.chatMessages.some(m => m.id === data.id)) return prev;
+          
+          return {
+            ...prev,
+            chatMessages: [
+              ...prev.chatMessages,
+              {
+                id: data.id || `msg_${Date.now()}`,
+                odId: data.odId,
+                name: data.name,
+                message: (data.message || '').slice(0, 500), // Enforce max length
+                timestamp: data.timestamp || Date.now(),
+              }
+            ].slice(-50), // Keep last 50 messages
+          };
+        });
         break;
 
       case 'stats_request':
@@ -643,7 +668,7 @@ export function useRace() {
 
       broadcast('race_finished', { results });
 
-      const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+      const raceStats = calculateRaceStats(results, prev.myId, prev.paragraph, prev.paragraphIndex, prev.raceId, prev.newRoundCounter);
 
       return {
         ...prev,
@@ -1679,7 +1704,7 @@ export function useRace() {
         .sort((a, b) => b.wpm - a.wpm)
         .map((r, i) => ({ ...r, position: i + 1 }));
 
-      const raceStats = calculateRaceStats(results, myId, prev.paragraph, prev.paragraphIndex, prev.raceId);
+      const raceStats = calculateRaceStats(results, myId, prev.paragraph, prev.paragraphIndex, prev.raceId, prev.newRoundCounter);
       raceStats.racerCount = updatedRacers.length;
       raceStats.finishedCount = finishedRacers.length;
       raceStats.isComplete = allFinished;
@@ -1837,6 +1862,7 @@ export function useRace() {
       originalHostId: null,
       viewingPlayerStats: null,
       statsRequestPending: null,
+      chatMessages: [],
     }));
   }, []);
 
@@ -1875,6 +1901,33 @@ export function useRace() {
     }));
   }, []);
 
+  // Send chat message
+  const sendChat = useCallback((message) => {
+    if (!channelRef.current || !message.trim()) return;
+    
+    const trimmedMessage = message.trim().slice(0, 500); // Max 500 chars
+    const chatMessage = {
+      id: `msg_${Date.now()}_${myIdRef.current}`,
+      odId: myIdRef.current,
+      name: myNameRef.current,
+      message: trimmedMessage,
+      timestamp: Date.now(),
+    };
+    
+    // Add to own state first (will be deduped by ID when broadcast returns)
+    setState(prev => ({
+      ...prev,
+      chatMessages: [...prev.chatMessages, chatMessage].slice(-50),
+    }));
+    
+    broadcast('chat', chatMessage);
+  }, [broadcast]);
+
+  // Clear chat (for new lobby)
+  const clearChat = useCallback(() => {
+    setState(prev => ({ ...prev, chatMessages: [] }));
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1910,6 +1963,8 @@ export function useRace() {
     transferHost,
     requestPlayerStats,
     clearViewingStats,
+    sendChat,
+    clearChat,
     isInRace: state.status !== RaceStatus.IDLE && state.status !== RaceStatus.FINISHED,
     hasRaceStats: state.raceStats !== null,
     waitingForOthers,

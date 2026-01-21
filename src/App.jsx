@@ -3442,6 +3442,19 @@ function App() {
   const [currentText, setCurrentText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [typed, setTyped] = useState("");
+  const [shakeKey, setShakeKey] = useState(0); // Counter to restart shake animation
+  const [blockedChar, setBlockedChar] = useState(null); // { char, position, id }
+  const shakeTimeoutRef = useRef(null);
+  const blockedCharTimeoutRef = useRef(null);
+
+  // Cleanup timeout refs on unmount
+  useEffect(() => {
+    return () => {
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      if (blockedCharTimeoutRef.current) clearTimeout(blockedCharTimeoutRef.current);
+    };
+  }, []);
+
   const [isActive, setIsActive] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [viewingPastStats, setViewingPastStats] = useState(false); // True when viewing stats via button (not after completing)
@@ -3537,6 +3550,7 @@ function App() {
     transferHost,
     requestPlayerStats,
     clearViewingStats,
+    sendChat,
     isInRace,
     hasRaceStats,
     waitingForOthers,
@@ -3667,6 +3681,10 @@ function App() {
       setIsActive(false);
       setIsComplete(false);
       setStats(null);
+      setBlockedChar(null);
+      setShakeKey(0);
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      if (blockedCharTimeoutRef.current) clearTimeout(blockedCharTimeoutRef.current);
       lastKeystrokeTime.current = null;
       startTime.current = null;
     }
@@ -3729,8 +3747,9 @@ function App() {
     if (raceState.status === 'finished' && raceState.raceStats) {
       const existingHistory = loadFromStorage(STORAGE_KEYS.RACE_HISTORY, []);
       
-      // Check if this race is already saved (by raceId)
-      const alreadySaved = existingHistory.some(r => r.raceId === raceState.raceStats.raceId);
+      // Check if this round is already saved (by roundId for unique per-round saving)
+      const roundId = raceState.raceStats.roundId || raceState.raceStats.raceId;
+      const alreadySaved = existingHistory.some(r => r.roundId === roundId || r.raceId === roundId);
       if (alreadySaved) return;
       
       // Compute derived stats
@@ -3743,6 +3762,8 @@ function App() {
       
       const raceEntry = {
         raceId: raceState.raceStats.raceId || `race_${Date.now()}`,
+        roundId: roundId, // Unique per round
+        roundNumber: raceState.raceStats.roundNumber || 0,
         timestamp: Date.now(),
         paragraph: raceState.raceStats.paragraph,
         paragraphIndex: raceState.raceStats.paragraphIndex,
@@ -5007,6 +5028,11 @@ function App() {
 
   const handleKeyDown = useCallback(
     (e) => {
+      // Ignore keystrokes from input fields (chat, name editing, etc.)
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
       // Block typing during countdown only (not waiting - users can practice)
       if (isInRace && (raceState.status === 'countdown' || raceState.status === 'connecting')) {
         // Only allow Escape to potentially leave
@@ -5112,6 +5138,20 @@ function App() {
       const useStrictMode = isInRace && raceState.strictMode;
       if (useStrictMode && !isCorrect) {
         // Don't advance - user must backspace and correct
+        // Clear any existing timeouts from rapid presses
+        if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+        if (blockedCharTimeoutRef.current) clearTimeout(blockedCharTimeoutRef.current);
+        
+        // Show blocked character immediately
+        setBlockedChar({ char: e.key, position: typed.length, id: Date.now() });
+        blockedCharTimeoutRef.current = setTimeout(() => setBlockedChar(null), 600);
+        
+        // Restart shake animation by toggling off then on
+        setShakeKey(0);
+        requestAnimationFrame(() => {
+          setShakeKey(k => k + 1);
+          shakeTimeoutRef.current = setTimeout(() => setShakeKey(0), 200);
+        });
         return;
       }
       
@@ -5495,6 +5535,9 @@ function App() {
       const primaryColor = opponents?.[0]?.color;
       const secondaryColor = opponents?.[1]?.color;
 
+      // Check if this position has a blocked character (strict mode error)
+      const isBlocked = blockedChar && blockedChar.position === i;
+
       return (
         <span 
           key={i} 
@@ -5507,6 +5550,9 @@ function App() {
           } : undefined}
         >
           {char}
+          {isBlocked && (
+            <span key={blockedChar.id} className="blocked-char">{blockedChar.char}</span>
+          )}
         </span>
       );
     });
@@ -5619,7 +5665,13 @@ function App() {
   };
 
   return (
-    <div className="app-wrapper" onClick={() => containerRef.current?.focus()}>
+    <div className="app-wrapper" onClick={(e) => {
+      // Don't steal focus from input fields
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('.lobby-chat-wrapper')) {
+        return;
+      }
+      containerRef.current?.focus();
+    }}>
       <div
         className="container"
         ref={containerRef}
@@ -5679,7 +5731,8 @@ function App() {
 
         <main className="typing-area">
           <div 
-            className={`text-display ${viewingPastStats ? "locked" : ""}`}
+            className={`text-display ${viewingPastStats ? "locked" : ""} ${shakeKey > 0 ? "shake" : ""}`}
+            data-shake-key={shakeKey}
             style={isInRace && raceState.status === 'countdown' ? {
               '--countdown-blur': `${8 * (1 - countdownBlurProgress)}px`,
               '--countdown-opacity': 0.4 + (0.6 * countdownBlurProgress),
@@ -10224,6 +10277,10 @@ function App() {
                   setIsActive(false);
                   setIsComplete(false);
                   setStats(null);
+                  setBlockedChar(null);
+                  setShakeKey(0);
+                  if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+                  if (blockedCharTimeoutRef.current) clearTimeout(blockedCharTimeoutRef.current);
                   lastKeystrokeTime.current = null;
                   startTime.current = null;
                 }}
@@ -10361,6 +10418,8 @@ function App() {
             }}
             shareUrl={`${window.location.origin}${window.location.pathname}?race=${raceState.raceId}`}
             joinKey={raceState.joinKey}
+            chatMessages={raceState.chatMessages}
+            onSendChat={(raceState.status === 'waiting' || raceState.status === 'finished') ? sendChat : null}
           />
         )}
 
@@ -10390,6 +10449,10 @@ function App() {
               setIsActive(false);
               setIsComplete(false);
               setStats(null);
+              setBlockedChar(null);
+              setShakeKey(0);
+              if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+              if (blockedCharTimeoutRef.current) clearTimeout(blockedCharTimeoutRef.current);
               lastKeystrokeTime.current = null;
               startTime.current = null;
             }}
