@@ -4383,3 +4383,191 @@ footer {
     display: none;
   }
 }
+
+/* ============================================================
+   SkillRadar component
+   ============================================================ */
+.skill-radar {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1rem 1rem 0.85rem;
+  margin: 0 0 1.5rem;
+}
+
+.skill-radar .section-header-row {
+  margin-bottom: 0.5rem;
+}
+
+/* Match Skill Radar title size to Finger Transitions (.chord-title) */
+.skill-radar .section-header-row h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+  text-transform: none;
+}
+
+.skill-radar-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.skill-radar-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* HTML label card — own container per axis, holds label + value */
+.skill-radar-axis-card {
+  position: absolute;
+  z-index: 2;
+  min-width: 64px;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  line-height: 1.2;
+}
+
+.skill-radar-axis-card:hover {
+  background: var(--bg-tertiary);
+}
+
+.skill-radar-axis-card:focus {
+  outline: none;
+  background: var(--bg-tertiary);
+}
+
+.skill-radar-axis-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+.skill-radar-axis-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+
+.skill-radar-axis-value-num {
+  color: var(--accent);
+}
+
+.skill-radar-axis-value-max {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-radar-axis-value-unit {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+/* Tooltip body styles for skill radar */
+.skill-radar-tip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--bg-tertiary);
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.skill-radar-tip-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  padding: 0.15rem 0;
+  opacity: 0.65;
+  transition: opacity 0.15s;
+}
+
+.skill-radar-tip-row.active {
+  opacity: 1;
+}
+
+.skill-radar-tip-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.skill-radar-tip-swatch.skill-radar-tip-swatch-dashed {
+  background: transparent;
+  border: 1.5px dashed #5b9eff;
+}
+
+.skill-radar-tip-label {
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.skill-radar-tip-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-radar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+.skill-radar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.skill-radar-legend-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.skill-radar-legend-item.active {
+  opacity: 1;
+}
+
+.skill-radar-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.skill-radar-legend-dot.skill-radar-legend-dashed {
+  background: transparent !important;
+  border: 1.5px dashed #5b9eff;
+}
+

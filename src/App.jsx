@@ -17,6 +17,8 @@ import {
 import HandBalance from "./HandBalance";
 import RhythmConsistency from "./RhythmConsistency";
 import SpeedSegments from "./SpeedSegments";
+import SkillRadar from "./SkillRadar";
+import KeyboardRowSpeed from "./KeyboardRowSpeed";
 
 
 // Number formatting utilities
@@ -3468,7 +3470,6 @@ function App() {
   const [statsView, setStatsView] = useState("current"); // 'current' | 'alltime' | 'global' | 'history' | 'race-history'
   const [comparisonBase, setComparisonBase] = useState("none"); // 'none' | 'alltime' | 'global' | 'current'
   const [heatmapMode, setHeatmapMode] = useState("speed"); // 'speed' | 'accuracy'
-  const [rowSpeedShiftMode, setRowSpeedShiftMode] = useState(false); // false = base keys, true = shifted keys
   const [clearHoldProgress, setClearHoldProgress] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [showFixedHint, setShowFixedHint] = useState(false);
@@ -4076,6 +4077,146 @@ function App() {
       0
     );
 
+    // --- New metrics aggregation (with backfill from raw history) ---
+    // Old sessions don't have these fields, so we recompute them from each
+    // session's stored intervals/keyStats when missing.
+    const backfillSustainability = (h) => {
+      if (h.behavioral?.sustainabilityScore > 0) {
+        return h.behavioral.sustainabilityScore;
+      }
+      const intervals = h.intervals || [];
+      if (intervals.length < 8) return 0;
+      const quarterLen = Math.floor(intervals.length / 4);
+      const firstQuarter = intervals.slice(0, quarterLen);
+      const lastQuarter = intervals.slice(-quarterLen);
+      const firstAvg =
+        firstQuarter.reduce((a, b) => a + b, 0) / firstQuarter.length;
+      const lastAvg =
+        lastQuarter.reduce((a, b) => a + b, 0) / lastQuarter.length;
+      return lastAvg > 0 ? Math.round((firstAvg / lastAvg) * 100) : 100;
+    };
+
+    const backfillBurstWpm = (h) => {
+      if (h.behavioral?.burstWpm > 0) return h.behavioral.burstWpm;
+      const intervals = h.intervals || [];
+      if (intervals.length < 2) return 0;
+      // Build relative timestamps from cumulative intervals
+      const timestamps = [0];
+      for (let i = 0; i < intervals.length; i++) {
+        timestamps.push(timestamps[i] + intervals[i]);
+      }
+      let burst = 0;
+      const WINDOW_MS = 5000;
+      let left = 0;
+      for (let right = 1; right < timestamps.length; right++) {
+        while (left < right && timestamps[right] - timestamps[left] > WINDOW_MS) {
+          left++;
+        }
+        const windowMs = timestamps[right] - timestamps[left];
+        if (windowMs >= WINDOW_MS * 0.6) {
+          const windowChars = right - left + 1;
+          const windowMinutes = windowMs / 60000;
+          if (windowMinutes > 0) {
+            const w = windowChars / 5 / windowMinutes;
+            if (w > burst) burst = w;
+          }
+        }
+      }
+      return Math.round(burst);
+    };
+
+    const numberRowKeys = "1234567890";
+    const topRowKeys = "qwertyuiop";
+    const homeRowKeys = "asdfghjkl";
+    const bottomRowKeys = "zxcvbnm";
+    const backfillRowSpeeds = (h) => {
+      if (h.behavioral?.rowSpeeds && h.behavioral?.rowCounts) {
+        return { speeds: h.behavioral.rowSpeeds, counts: h.behavioral.rowCounts };
+      }
+      const speeds = { number: 0, top: 0, home: 0, bottom: 0 };
+      const counts = { number: 0, top: 0, home: 0, bottom: 0 };
+      const totals = { number: 0, top: 0, home: 0, bottom: 0 };
+      if (!h.keyStats) return { speeds, counts };
+      Object.entries(h.keyStats).forEach(([key, data]) => {
+        const lower = (key || "").toLowerCase();
+        let row = null;
+        if (numberRowKeys.includes(lower)) row = "number";
+        else if (topRowKeys.includes(lower)) row = "top";
+        else if (homeRowKeys.includes(lower)) row = "home";
+        else if (bottomRowKeys.includes(lower)) row = "bottom";
+        // weight by count of correct keystrokes that produced the avgInterval
+        const weight = (data && data.correct) || 0;
+        if (row && data && data.avgInterval > 0 && weight > 0) {
+          totals[row] += data.avgInterval * weight;
+          counts[row] += weight;
+        }
+      });
+      Object.keys(speeds).forEach((row) => {
+        speeds[row] = counts[row] > 0 ? Math.round(totals[row] / counts[row]) : 0;
+      });
+      return { speeds, counts };
+    };
+
+    // Burst WPM: best ever + weighted average (with backfill)
+    const burstWpms = behavioralHistory.map((h) => backfillBurstWpm(h));
+    const bestBurstWpm = burstWpms.length > 0 ? Math.max(...burstWpms, 0) : 0;
+    let burstSum = 0;
+    let burstWeight = 0;
+    behavioralHistory.forEach((h, i) => {
+      if (burstWpms[i] > 0) {
+        burstSum += burstWpms[i] * h.charCount;
+        burstWeight += h.charCount;
+      }
+    });
+    const avgBurstWpm = burstWeight > 0 ? Math.round(burstSum / burstWeight) : 0;
+
+    // Sustainability: weighted average across sessions (with backfill)
+    let sustainSum = 0;
+    let sustainWeight = 0;
+    behavioralHistory.forEach((h) => {
+      const score = backfillSustainability(h);
+      if (score > 0) {
+        sustainSum += score * h.charCount;
+        sustainWeight += h.charCount;
+      }
+    });
+    const avgSustainabilityScore =
+      sustainWeight > 0 ? Math.round(sustainSum / sustainWeight) : 100;
+
+    // Words per error: recompute from cumulative totals (most accurate)
+    const cumulativeWordsPerError =
+      totalErrors > 0
+        ? Math.round(((totalChars - totalErrors) / 5 / totalErrors) * 10) / 10
+        : null;
+
+    // Row speeds: weighted average by sample count per row (with backfill)
+    const rowAggregates = {
+      number: { sum: 0, count: 0 },
+      top: { sum: 0, count: 0 },
+      home: { sum: 0, count: 0 },
+      bottom: { sum: 0, count: 0 },
+    };
+    behavioralHistory.forEach((h) => {
+      const { speeds, counts } = backfillRowSpeeds(h);
+      Object.keys(rowAggregates).forEach((row) => {
+        const speed = speeds[row] || 0;
+        const count = counts[row] || 0;
+        if (speed > 0 && count > 0) {
+          rowAggregates[row].sum += speed * count;
+          rowAggregates[row].count += count;
+        }
+      });
+    });
+    const cumulativeRowSpeeds = {};
+    const cumulativeRowCounts = {};
+    Object.keys(rowAggregates).forEach((row) => {
+      cumulativeRowSpeeds[row] =
+        rowAggregates[row].count > 0
+          ? Math.round(rowAggregates[row].sum / rowAggregates[row].count)
+          : 0;
+      cumulativeRowCounts[row] = rowAggregates[row].count;
+    });
+
     // Determine overall archetype from most common or weighted
     let momentumLabel = "balanced";
     if (avgMomentum < 0.5) momentumLabel = "perfectionist";
@@ -4272,6 +4413,13 @@ function App() {
         archetype,
         archetypeDesc,
         confidenceScore,
+        // New metrics
+        burstWpm: avgBurstWpm,
+        bestBurstWpm,
+        sustainabilityScore: avgSustainabilityScore,
+        wordsPerError: cumulativeWordsPerError,
+        rowSpeeds: cumulativeRowSpeeds,
+        rowCounts: cumulativeRowCounts,
       },
     };
   };
@@ -4591,6 +4739,28 @@ function App() {
     const numberRowPenalty =
       avgInterval > 0 ? Math.round((numberRowAvg / avgInterval - 1) * 100) : 0;
 
+    // --- Top row and bottom row speeds (full per-row breakdown) ---
+    const topRow = "qwertyuiop";
+    const bottomRow = "zxcvbnm";
+    let topTotal = 0,
+      topCount = 0,
+      bottomTotal = 0,
+      bottomCount = 0;
+    data.forEach((d) => {
+      if (d.correct && d.interval && d.expected) {
+        const key = d.expected.toLowerCase();
+        if (topRow.includes(key)) {
+          topTotal += d.interval;
+          topCount++;
+        } else if (bottomRow.includes(key)) {
+          bottomTotal += d.interval;
+          bottomCount++;
+        }
+      }
+    });
+    const topRowAvg = topCount > 0 ? topTotal / topCount : 0;
+    const bottomRowAvg = bottomCount > 0 ? bottomTotal / bottomCount : 0;
+
     // --- Speed variance analysis ---
     const speedVariance = stdDev / avgInterval;
     let speedProfile = "steady";
@@ -4649,6 +4819,55 @@ function App() {
         accuracy * 0.3 +
         (100 - Math.min(recoveryPenalty, 100)) * 0.2
     );
+
+    // --- Burst WPM: peak 5-second sliding window WPM ---
+    let burstWpm = 0;
+    if (data.length > 1 && data[0].timestamp !== undefined) {
+      const WINDOW_MS = 5000;
+      let left = 0;
+      for (let right = 1; right < data.length; right++) {
+        // Shrink window from the left while it exceeds 5s
+        while (left < right && data[right].timestamp - data[left].timestamp > WINDOW_MS) {
+          left++;
+        }
+        const windowMs = data[right].timestamp - data[left].timestamp;
+        // Only consider windows that are at least 60% full (3+ seconds) to avoid noise
+        if (windowMs >= WINDOW_MS * 0.6) {
+          let windowChars = 0;
+          for (let k = left; k <= right; k++) {
+            if (!data[k].isBackspace) windowChars++;
+          }
+          const windowMinutes = windowMs / 60000;
+          if (windowMinutes > 0) {
+            const windowWpm = (windowChars / 5) / windowMinutes;
+            if (windowWpm > burstWpm) burstWpm = windowWpm;
+          }
+        }
+      }
+    }
+    burstWpm = Math.round(burstWpm);
+
+    // --- Sustainability score: ratio of last-quarter speed to first-quarter speed (% of pace held) ---
+    // 100 = held pace exactly; >100 = sped up; <100 = slowed down
+    let sustainabilityScore = 100;
+    if (intervals.length >= 8) {
+      const quarterLen = Math.floor(intervals.length / 4);
+      const firstQuarter = intervals.slice(0, quarterLen);
+      const lastQuarter = intervals.slice(-quarterLen);
+      const firstAvg = firstQuarter.reduce((a, b) => a + b, 0) / firstQuarter.length;
+      const lastAvg = lastQuarter.reduce((a, b) => a + b, 0) / lastQuarter.length;
+      // Lower interval = faster. ratio = firstAvg / lastAvg (>1 means held or improved)
+      if (lastAvg > 0) {
+        sustainabilityScore = Math.round((firstAvg / lastAvg) * 100);
+      }
+    }
+
+    // --- Words per error: how many words between typos ---
+    // null = perfect (no errors)
+    const wordsPerError =
+      errorCount > 0
+        ? Math.round((correctChars / 5 / errorCount) * 10) / 10
+        : null;
 
     // ============ END BEHAVIORAL STATS ============
 
@@ -5016,6 +5235,23 @@ function App() {
         archetypeDesc,
         confidenceScore,
         burstCount: bursts.length,
+        // New metrics
+        burstWpm,
+        sustainabilityScore,
+        wordsPerError,
+        // Row-by-row speed breakdown (avg interval ms; 0 if no samples)
+        rowSpeeds: {
+          number: Math.round(numCount > 0 ? numberRowAvg : 0),
+          top: Math.round(topRowAvg),
+          home: Math.round(homeCount > 0 ? homeRowAvg : 0),
+          bottom: Math.round(bottomRowAvg),
+        },
+        rowCounts: {
+          number: numCount,
+          top: topCount,
+          home: homeCount,
+          bottom: bottomCount,
+        },
       },
       keyStats,
       fingerStats,
@@ -6652,6 +6888,57 @@ function App() {
                       </Tooltip>
                     </div>
 
+                    <SkillRadar
+                      stats={stats}
+                      compareStats={
+                        globalAverages && globalAverages.total_sessions > 0
+                          ? {
+                              wpm: globalAverages.avg_wpm,
+                              accuracy: globalAverages.avg_accuracy,
+                              consistency: globalAverages.avg_consistency,
+                              behavioral: {
+                                flowRatio: globalAverages.avg_flow_ratio,
+                                rhythmScore: globalAverages.avg_rhythm_score,
+                              },
+                            }
+                          : null
+                      }
+                      axisRanges={
+                        globalAverages && globalAverages.total_sessions > 0
+                          ? {
+                              wpm: {
+                                min: globalAverages.min_wpm,
+                                max: globalAverages.max_wpm,
+                              },
+                              accuracy: {
+                                min: globalAverages.min_accuracy,
+                                max: globalAverages.max_accuracy,
+                              },
+                              consistency: {
+                                min: globalAverages.min_consistency,
+                                max: globalAverages.max_consistency,
+                              },
+                              flow: {
+                                min: globalAverages.min_flow_ratio,
+                                max: globalAverages.max_flow_ratio,
+                              },
+                              rhythm: {
+                                min: globalAverages.min_rhythm_score,
+                                max: globalAverages.max_rhythm_score,
+                              },
+                            }
+                          : undefined
+                      }
+                      currentLabel="this session"
+                      compareLabel="global avg"
+                      title="Skill Radar"
+                    />
+
+                    <KeyboardRowSpeed
+                      keyAverages={stats.keyStats}
+                      title="Keyboard Row Speed"
+                    />
+
                     <h3 className="behavioral-header">Typing Profile</h3>
 
                     <div className="behavioral-grid four-col">
@@ -6809,6 +7096,65 @@ function App() {
                           </p>
                         </div>
                       </Tooltip>
+
+                      <Tooltip content="Highest WPM achieved in any 5-second window during this session — your peak speed.">
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {stats.behavioral.burstWpm}
+                            </span>
+                            <span className="behavioral-label">peak burst</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            fastest 5s window
+                          </p>
+                        </div>
+                      </Tooltip>
+
+                      <Tooltip content="Speed in the last quarter of the session vs the first quarter. 100% means you held pace; higher means you sped up; lower means you slowed.">
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {stats.behavioral.sustainabilityScore}%
+                            </span>
+                            <span className="behavioral-label">sustained pace</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {stats.behavioral.sustainabilityScore >= 105
+                              ? "finished stronger"
+                              : stats.behavioral.sustainabilityScore >= 95
+                              ? "held pace"
+                              : "faded over time"}
+                          </p>
+                        </div>
+                      </Tooltip>
+
+                      <Tooltip content="How many words you typed correctly between each typo. Higher is better.">
+                        <div
+                          className={`behavioral-card${
+                            stats.behavioral.wordsPerError === null
+                              ? " stat-na"
+                              : ""
+                          }`}
+                        >
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {stats.behavioral.wordsPerError === null
+                                ? "perfect"
+                                : stats.behavioral.wordsPerError}
+                            </span>
+                            <span className="behavioral-label">words per typo</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {stats.behavioral.wordsPerError === null
+                              ? "no errors made"
+                              : `1 typo every ${stats.behavioral.wordsPerError} word${
+                                  stats.behavioral.wordsPerError === 1 ? "" : "s"
+                                }`}
+                          </p>
+                        </div>
+                      </Tooltip>
+
                     </div>
 
                     <div className="behavioral-details">
@@ -7976,6 +8322,57 @@ function App() {
                         );
                       })()}
 
+                    <SkillRadar
+                      stats={cumulativeStats}
+                      compareStats={
+                        globalAverages && globalAverages.total_sessions > 0
+                          ? {
+                              wpm: globalAverages.avg_wpm,
+                              accuracy: globalAverages.avg_accuracy,
+                              consistency: globalAverages.avg_consistency,
+                              behavioral: {
+                                flowRatio: globalAverages.avg_flow_ratio,
+                                rhythmScore: globalAverages.avg_rhythm_score,
+                              },
+                            }
+                          : null
+                      }
+                      axisRanges={
+                        globalAverages && globalAverages.total_sessions > 0
+                          ? {
+                              wpm: {
+                                min: globalAverages.min_wpm,
+                                max: globalAverages.max_wpm,
+                              },
+                              accuracy: {
+                                min: globalAverages.min_accuracy,
+                                max: globalAverages.max_accuracy,
+                              },
+                              consistency: {
+                                min: globalAverages.min_consistency,
+                                max: globalAverages.max_consistency,
+                              },
+                              flow: {
+                                min: globalAverages.min_flow_ratio,
+                                max: globalAverages.max_flow_ratio,
+                              },
+                              rhythm: {
+                                min: globalAverages.min_rhythm_score,
+                                max: globalAverages.max_rhythm_score,
+                              },
+                            }
+                          : undefined
+                      }
+                      currentLabel="your all-time avg"
+                      compareLabel="global avg"
+                      title="Skill Radar"
+                    />
+
+                    <KeyboardRowSpeed
+                      keyAverages={cumulativeStats.keyStats}
+                      title="Keyboard Row Speed (All Time)"
+                    />
+
                     <h3 className="behavioral-header">
                       Typing Profile (All Time)
                     </h3>
@@ -8150,6 +8547,65 @@ function App() {
                           </p>
                         </div>
                       </Tooltip>
+
+                      <Tooltip content="Your best-ever 5-second peak WPM across all sessions. Bursts can briefly exceed your sustained pace.">
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {cumulativeStats.behavioral.bestBurstWpm || 0}
+                            </span>
+                            <span className="behavioral-label">peak burst</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            avg {cumulativeStats.behavioral.burstWpm || 0} per session
+                          </p>
+                        </div>
+                      </Tooltip>
+
+                      <Tooltip content="Average speed in the last quarter of a session vs the first quarter, across all sessions. 100% means you typically hold pace.">
+                        <div className="behavioral-card">
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {cumulativeStats.behavioral.sustainabilityScore}%
+                            </span>
+                            <span className="behavioral-label">sustained pace</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.sustainabilityScore >= 105
+                              ? "typically finishes stronger"
+                              : cumulativeStats.behavioral.sustainabilityScore >= 95
+                              ? "typically holds pace"
+                              : "typically fades"}
+                          </p>
+                        </div>
+                      </Tooltip>
+
+                      <Tooltip content="How many words you type correctly between each typo, computed across your entire history.">
+                        <div
+                          className={`behavioral-card${
+                            cumulativeStats.behavioral.wordsPerError === null
+                              ? " stat-na"
+                              : ""
+                          }`}
+                        >
+                          <div className="behavioral-main">
+                            <span className="behavioral-value">
+                              {cumulativeStats.behavioral.wordsPerError === null
+                                ? "perfect"
+                                : cumulativeStats.behavioral.wordsPerError}
+                            </span>
+                            <span className="behavioral-label">words per typo</span>
+                          </div>
+                          <p className="behavioral-detail">
+                            {cumulativeStats.behavioral.wordsPerError === null
+                              ? "lifetime: no errors"
+                              : `1 typo every ${cumulativeStats.behavioral.wordsPerError} word${
+                                  cumulativeStats.behavioral.wordsPerError === 1 ? "" : "s"
+                                }`}
+                          </p>
+                        </div>
+                      </Tooltip>
+
                     </div>
 
                     <div className="behavioral-details">
@@ -9835,187 +10291,11 @@ function App() {
                     })()
                   : null}
 
-                {/* Row Performance */}
                 {/* Keyboard Row Speed - derived from keyAverages */}
-                {keyAverages &&
-                  Object.keys(keyAverages).length > 0 &&
-                  (() => {
-                    // Define row configurations for base and shifted keys
-                    const rowDefs = {
-                      numberRow: {
-                        label: "Number Row",
-                        baseKeys: "`1234567890-=",
-                        shiftedKeys: "~!@#$%^&*()_+",
-                        baseDisplay: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
-                        shiftedDisplay: ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"],
-                        offset: 0,
-                      },
-                      topRow: {
-                        label: "Top Row",
-                        baseKeys: "qwertyuiop[]\\",
-                        shiftedKeys: "QWERTYUIOP{}|",
-                        baseDisplay: ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-                        shiftedDisplay: ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-                        offset: 0.5,
-                      },
-                      homeRow: {
-                        label: "Home Row",
-                        baseKeys: "asdfghjkl;'",
-                        shiftedKeys: "ASDFGHJKL:\"",
-                        baseDisplay: ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-                        shiftedDisplay: ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-                        offset: 0.75,
-                      },
-                      bottomRow: {
-                        label: "Bottom Row",
-                        baseKeys: "zxcvbnm,./",
-                        shiftedKeys: "ZXCVBNM<>?",
-                        baseDisplay: ["z", "x", "c", "v", "b", "n", "m"],
-                        shiftedDisplay: ["Z", "X", "C", "V", "B", "N", "M"],
-                        offset: 1.25,
-                      },
-                    };
-
-                    // Calculate average speed for each row from keyAverages
-                    const calculateRowSpeeds = (useShifted) => {
-                      const speeds = {};
-                      Object.entries(rowDefs).forEach(([rowName, def]) => {
-                        let totalTime = 0;
-                        let totalCount = 0;
-                        const keys = useShifted ? def.shiftedKeys : def.baseKeys;
-
-                        for (const char of keys) {
-                          const stats = keyAverages[char];
-                          if (stats && stats.avgInterval > 0 && stats.count > 0) {
-                            totalTime += stats.avgInterval * stats.count;
-                            totalCount += stats.count;
-                          }
-                        }
-
-                        if (totalCount >= 5) {
-                          speeds[rowName] = {
-                            avgIntervalMs: totalTime / totalCount,
-                            count: totalCount,
-                          };
-                        }
-                      });
-                      return speeds;
-                    };
-
-                    const baseSpeeds = calculateRowSpeeds(false);
-                    const shiftedSpeeds = calculateRowSpeeds(true);
-                    
-                    const rowSpeeds = rowSpeedShiftMode ? shiftedSpeeds : baseSpeeds;
-                    const hasShiftedData = Object.keys(shiftedSpeeds).length > 0;
-
-                    const validRows = [
-                      "numberRow",
-                      "topRow",
-                      "homeRow",
-                      "bottomRow",
-                    ].filter((r) => rowSpeeds[r]);
-
-                    if (validRows.length === 0 && !hasShiftedData) return null;
-
-                    // Get min/max for color scaling
-                    const allTimes = validRows.map(
-                      (r) => rowSpeeds[r].avgIntervalMs
-                    );
-                    const minTime = allTimes.length > 0 ? Math.min(...allTimes) : 100;
-                    const maxTime = allTimes.length > 0 ? Math.max(...allTimes) : 200;
-
-                    const getRowColor = (time) => {
-                      if (maxTime === minTime) return "var(--accent)";
-                      const t = (time - minTime) / (maxTime - minTime);
-                      // Green (fast) to yellow (slow)
-                      const r = Math.round(145 + (226 - 145) * t);
-                      const g = Math.round(216 - (216 - 183) * t);
-                      const b = Math.round(145 - (145 - 20) * t);
-                      return `rgb(${r}, ${g}, ${b})`;
-                    };
-
-                    return (
-                      <div className="row-performance-section">
-                        <div className="section-header-row">
-                          <h3>Keyboard Row Speed</h3>
-                          <div className="header-controls">
-                            {hasShiftedData && (
-                              <div className="mini-toggle-group">
-                                <button
-                                  className={`mini-toggle ${!rowSpeedShiftMode ? "active" : ""}`}
-                                  onClick={() => setRowSpeedShiftMode(false)}
-                                >
-                                  Base
-                                </button>
-                                <button
-                                  className={`mini-toggle ${rowSpeedShiftMode ? "active" : ""}`}
-                                  onClick={() => setRowSpeedShiftMode(true)}
-                                >
-                                  ⇧ Shift
-                                </button>
-                              </div>
-                            )}
-                            <Tooltip content={TIPS.rowSpeed}>
-                              <button
-                                className="help-btn"
-                                type="button"
-                                aria-label="Help"
-                              >
-                                ?
-                              </button>
-                            </Tooltip>
-                          </div>
-                        </div>
-                        <div className="keyboard-rows-visual">
-                          {validRows.length > 0 ? validRows.map((rowName) => {
-                            const data = rowSpeeds[rowName];
-                            const def = rowDefs[rowName];
-                            const displayKeys = rowSpeedShiftMode ? def.shiftedDisplay : def.baseDisplay;
-
-                            return (
-                              <div key={rowName} className="keyboard-row-item">
-                                <span className="keyboard-row-label">
-                                  {def.label}
-                                </span>
-                                <div
-                                  className="keyboard-row-keys"
-                                  style={{
-                                    paddingLeft: `${def.offset * 1.2}rem`,
-                                  }}
-                                >
-                                  {displayKeys.map((key) => (
-                                    <span
-                                      key={key}
-                                      className="keyboard-row-key"
-                                      style={{
-                                        borderColor: getRowColor(
-                                          data.avgIntervalMs
-                                        ),
-                                      }}
-                                    >
-                                      {key}
-                                    </span>
-                                  ))}
-                                </div>
-                                <span
-                                  className="keyboard-row-time"
-                                  style={{
-                                    color: getRowColor(data.avgIntervalMs),
-                                  }}
-                                >
-                                  {fmt.int(data.avgIntervalMs)}ms
-                                </span>
-                              </div>
-                            );
-                          }) : (
-                            <div className="no-data-message" style={{ padding: '1rem', opacity: 0.6, textAlign: 'center' }}>
-                              No {rowSpeedShiftMode ? 'shifted' : 'base'} key data yet
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                <KeyboardRowSpeed
+                  keyAverages={keyAverages}
+                  title="Keyboard Row Speed"
+                />
 
                 {/* Error Confusion (Most Common Typos) */}
                 {errorConfusion && errorConfusion.length > 0 && (
@@ -10056,6 +10336,43 @@ function App() {
                     </div>
                   </div>
                 )}
+
+                {/* Skill radar — global average within global min/max range */}
+                <SkillRadar
+                  stats={{
+                    wpm: globalAverages.avg_wpm,
+                    accuracy: globalAverages.avg_accuracy,
+                    consistency: globalAverages.avg_consistency,
+                    behavioral: {
+                      flowRatio: globalAverages.avg_flow_ratio,
+                      rhythmScore: globalAverages.avg_rhythm_score,
+                    },
+                  }}
+                  axisRanges={{
+                    wpm: {
+                      min: globalAverages.min_wpm,
+                      max: globalAverages.max_wpm,
+                    },
+                    accuracy: {
+                      min: globalAverages.min_accuracy,
+                      max: globalAverages.max_accuracy,
+                    },
+                    consistency: {
+                      min: globalAverages.min_consistency,
+                      max: globalAverages.max_consistency,
+                    },
+                    flow: {
+                      min: globalAverages.min_flow_ratio,
+                      max: globalAverages.max_flow_ratio,
+                    },
+                    rhythm: {
+                      min: globalAverages.min_rhythm_score,
+                      max: globalAverages.max_rhythm_score,
+                    },
+                  }}
+                  currentLabel="global avg"
+                  title="Skill Radar"
+                />
 
                 {/* Useless Stats (fun but low-value patterns) */}
                 {(typingPatterns && Object.keys(typingPatterns).length > 0) ||

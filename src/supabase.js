@@ -142,6 +142,50 @@ export async function getBehavioralStats() {
 }
 
 /**
+ * Get global behavioral averages directly from running_stats.
+ *
+ * These metrics (flowRatio, rhythmScore, handBalance, homeRowAdvantage) are
+ * tracked globally via DB triggers but aren't exposed by the session_stats
+ * view, so we read from running_stats directly.
+ *
+ * Returns: { flowRatio: { avg, count }, rhythmScore: { ... }, ... } or {} on error.
+ *
+ * READ-ONLY — selects only, never writes or deletes.
+ */
+export async function getGlobalBehavioralAverages() {
+  const stat_keys = [
+    'global:accuracy',
+    'global:consistency',
+    'global:flowRatio',
+    'global:rhythmScore',
+    'global:handBalance',
+    'global:homeRowAdvantage',
+  ]
+  const { data, error } = await supabase
+    .from('running_stats')
+    .select('stat_key, avg_value, std_dev, count, min_value, max_value')
+    .in('stat_key', stat_keys)
+
+  if (error) {
+    console.error('Error fetching global behavioral averages:', error)
+    return {}
+  }
+  const result = {}
+  ;(data || []).forEach((row) => {
+    const name = (row.stat_key || '').replace('global:', '')
+    if (!name) return
+    result[name] = {
+      avg: parseFloat(row.avg_value) || 0,
+      std_dev: parseFloat(row.std_dev) || 0,
+      count: row.count || 0,
+      min: parseFloat(row.min_value) || 0,
+      max: parseFloat(row.max_value) || 0,
+    }
+  })
+  return result
+}
+
+/**
  * Get per-key stats for keyboard heatmap
  */
 export async function getKeyStats() {

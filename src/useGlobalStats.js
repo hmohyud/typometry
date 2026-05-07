@@ -22,6 +22,7 @@ import {
   getRowPerformance,
   getTypingPatterns,
   getTimePatterns,
+  getGlobalBehavioralAverages,
 } from './supabase'
 
 export function useGlobalStats() {
@@ -53,12 +54,12 @@ export function useGlobalStats() {
       
       // Fetch all stats in parallel
       const [
-        stats, 
-        bigrams, 
-        fingers, 
-        transitions, 
-        behavioral, 
-        keys, 
+        stats,
+        bigrams,
+        fingers,
+        transitions,
+        behavioral,
+        keys,
         histograms,
         // New fetches
         charBreakdown,
@@ -70,6 +71,7 @@ export function useGlobalStats() {
         rowPerf,
         typPatterns,
         timePatts,
+        globalBehavioralAvgs,
       ] = await Promise.all([
         getSessionStats(),
         getBigramStats(200),
@@ -88,6 +90,7 @@ export function useGlobalStats() {
         getRowPerformance(),
         getTypingPatterns(),
         getTimePatterns(),
+        getGlobalBehavioralAverages(),
       ])
 
       if (stats) {
@@ -105,6 +108,21 @@ export function useGlobalStats() {
           p50_wpm: parseFloat(stats.median_wpm) || 0,
           p75_wpm: parseFloat(stats.p75_wpm) || 0,
           p90_wpm: parseFloat(stats.p90_wpm) || 0,
+          // Min/max for accuracy + consistency (pulled from running_stats)
+          min_accuracy: globalBehavioralAvgs?.accuracy?.min || 0,
+          max_accuracy: globalBehavioralAvgs?.accuracy?.max || 100,
+          min_consistency: globalBehavioralAvgs?.consistency?.min || 0,
+          max_consistency: globalBehavioralAvgs?.consistency?.max || 100,
+          // Behavioral averages pulled directly from running_stats
+          avg_flow_ratio: globalBehavioralAvgs?.flowRatio?.avg || 0,
+          min_flow_ratio: globalBehavioralAvgs?.flowRatio?.min || 0,
+          max_flow_ratio: globalBehavioralAvgs?.flowRatio?.max || 100,
+          avg_rhythm_score: globalBehavioralAvgs?.rhythmScore?.avg || 0,
+          min_rhythm_score: globalBehavioralAvgs?.rhythmScore?.min || 0,
+          max_rhythm_score: globalBehavioralAvgs?.rhythmScore?.max || 100,
+          avg_hand_balance: globalBehavioralAvgs?.handBalance?.avg || 0,
+          avg_home_row_advantage:
+            globalBehavioralAvgs?.homeRowAdvantage?.avg || 0,
         })
         setSessionCount(stats.total_sessions || 0)
       }
