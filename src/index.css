@@ -4467,18 +4467,25 @@ footer {
   color: var(--accent);
 }
 
-.skill-radar-axis-value-max {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-
 .skill-radar-axis-value-unit {
   font-size: 0.65rem;
   color: var(--text-muted);
   font-weight: 400;
   text-transform: lowercase;
+}
+
+/* Hover zones at each pentagon corner — show what the max value means */
+.skill-radar-corner-zone {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.skill-radar-corner-zone:hover {
+  background: rgba(226, 183, 20, 0.12);
 }
 
 /* Tooltip body styles for skill radar */

@@ -191,6 +191,11 @@ export default function SkillRadar({
       min = range.min ?? 0;
       max = range.max;
     }
+    // Accuracy is bounded by its theoretical maximum, not whatever the highest
+    // session happened to reach.
+    if (axis.key === 'accuracy') {
+      max = 100;
+    }
     return { ...axis, min, max };
   });
 
@@ -208,10 +213,11 @@ export default function SkillRadar({
 
   const gridLevels = [0.25, 0.5, 0.75, 1.0];
 
-  // Pre-compute card positions (in % of svg viewBox, for HTML overlay layout)
+  // Pre-compute card + corner positions (in % of svg viewBox, for HTML overlay layout)
   const labelCards = axes.map((axis, i) => {
     const angle = -90 + i * angleStep;
     const cardCenter = pointFor(angle, radius + 32, cx, cy);
+    const cornerP = pointFor(angle, radius, cx, cy);
     const cosA = Math.cos((angle * Math.PI) / 180);
     const sinA = Math.sin((angle * Math.PI) / 180);
     // Translate so the card sits OUTSIDE the radar, anchored toward the radar
@@ -225,6 +231,8 @@ export default function SkillRadar({
       idx: i,
       xPct: (cardCenter.x / size) * 100,
       yPct: (cardCenter.y / size) * 100,
+      cornerXPct: (cornerP.x / size) * 100,
+      cornerYPct: (cornerP.y / size) * 100,
       transform: `translate(${tx}%, ${ty}%)`,
       textAlign,
     };
@@ -426,9 +434,6 @@ export default function SkillRadar({
                       : compareValues[axis.key]
                   )}
                 </span>
-                <span className="skill-radar-axis-value-max">
-                  / {axis.format(axis.max)}
-                </span>
                 {axis.suffix && (
                   <span className="skill-radar-axis-value-unit">
                     {axis.suffix}
@@ -438,6 +443,45 @@ export default function SkillRadar({
             </div>
           </Tooltip>
         ))}
+
+        {/* Pentagon-corner hover zones — explain what the outer ring max means */}
+        {labelCards.map(({ axis, idx, cornerXPct, cornerYPct }) => {
+          const isCappedAt100 = axis.key === 'accuracy';
+          return (
+            <Tooltip
+              key={`corner-${idx}`}
+              followMouse
+              content={
+                <>
+                  <TipTitle>{axis.label} max</TipTitle>
+                  <TipText>
+                    {isCappedAt100
+                      ? 'Theoretical maximum: '
+                      : 'Current global record: '}
+                    <span
+                      style={{ color: 'var(--accent)', fontWeight: 600 }}
+                    >
+                      {axis.format(axis.max)}
+                      {axis.suffix ? ' ' + axis.suffix : ''}
+                    </span>
+                  </TipText>
+                  <TipText>
+                    The outer ring of this axis represents this value.
+                  </TipText>
+                  <TipHint>The center of the radar = global minimum</TipHint>
+                </>
+              }
+            >
+              <div
+                className="skill-radar-corner-zone"
+                style={{
+                  left: `${cornerXPct}%`,
+                  top: `${cornerYPct}%`,
+                }}
+              />
+            </Tooltip>
+          );
+        })}
       </div>
 
       <div className="skill-radar-legend">
