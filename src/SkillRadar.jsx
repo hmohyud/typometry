@@ -242,7 +242,6 @@ export default function SkillRadar({
       cornerXPct: (cornerP.x / size) * 100,
       cornerYPct: (cornerP.y / size) * 100,
       transform: `translate(${tx}%, ${ty}%)`,
-      textAlign: 'center',
     };
   });
 
@@ -387,7 +386,7 @@ export default function SkillRadar({
         </svg>
 
         {/* HTML label cards — each axis's label + value lives in its own div */}
-        {labelCards.map(({ axis, idx, xPct, yPct, transform, textAlign }) => (
+        {labelCards.map(({ axis, idx, xPct, yPct, transform }) => (
           <Tooltip
             key={`card-${idx}`}
             followMouse
@@ -409,7 +408,6 @@ export default function SkillRadar({
                 left: `${xPct}%`,
                 top: `${yPct}%`,
                 transform,
-                textAlign,
               }}
               onClick={toggleFocus}
               role={hasCompare ? 'button' : undefined}
