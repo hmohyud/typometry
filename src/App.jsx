@@ -5684,24 +5684,27 @@ function App() {
           (!isInRace || raceState.status === 'waiting' || raceState.status === 'finished') &&
           ((cumulativeStats && cumulativeStats.sessions > 0) ||
             (globalAverages && globalAverages.total_sessions > 0)) && (
-            <button
-              className="stats-icon-btn"
-              onClick={() => {
-                setViewingPastStats(true);
-                setIsComplete(true);
-                // Show alltime if user has local stats, otherwise show global
-                if (cumulativeStats && cumulativeStats.sessions > 0) {
-                  setStatsView("alltime");
-                  setComparisonBase("none"); // No comparison by default
-                } else {
-                  setStatsView("global");
-                  setComparisonBase("alltime"); // vs My Average
-                }
-              }}
-              title="View stats"
-            >
-              <GraphIcon />
-            </button>
+            <div className="stats-icon-wrapper">
+              <span className="stats-icon-label">Skip to stats →</span>
+              <button
+                className="stats-icon-btn"
+                onClick={() => {
+                  setViewingPastStats(true);
+                  setIsComplete(true);
+                  // Show alltime if user has local stats, otherwise show global
+                  if (cumulativeStats && cumulativeStats.sessions > 0) {
+                    setStatsView("alltime");
+                    setComparisonBase("none"); // No comparison by default
+                  } else {
+                    setStatsView("global");
+                    setComparisonBase("alltime"); // vs My Average
+                  }
+                }}
+                title="View stats"
+              >
+                <GraphIcon />
+              </button>
+            </div>
           )}
 
         <header>
