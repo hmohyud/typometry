@@ -165,6 +165,17 @@ function AxisTooltipBody({
         Range: {fmt(axis.min)} – {fmt(axis.max)}
         {hasCompare ? ' · click to switch focus' : ''}
       </TipHint>
+      <p
+        style={{
+          fontSize: '0.7rem',
+          color: 'var(--text-muted)',
+          fontStyle: 'italic',
+          margin: '0.4rem 0 0 0',
+          opacity: 0.75,
+        }}
+      >
+        hover over the pentagon corners to see what each max represents
+      </p>
     </>
   );
 }
@@ -223,9 +234,6 @@ export default function SkillRadar({
     // Translate so the card sits OUTSIDE the radar, anchored toward the radar
     const tx = -50 + cosA * 50;
     const ty = -50 + sinA * 50;
-    let textAlign = 'center';
-    if (cosA > 0.3) textAlign = 'left';
-    else if (cosA < -0.3) textAlign = 'right';
     return {
       axis,
       idx: i,
@@ -234,7 +242,7 @@ export default function SkillRadar({
       cornerXPct: (cornerP.x / size) * 100,
       cornerYPct: (cornerP.y / size) * 100,
       transform: `translate(${tx}%, ${ty}%)`,
-      textAlign,
+      textAlign: 'center',
     };
   });
 
