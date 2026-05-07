@@ -5685,7 +5685,7 @@ function App() {
           ((cumulativeStats && cumulativeStats.sessions > 0) ||
             (globalAverages && globalAverages.total_sessions > 0)) && (
             <div className="stats-icon-wrapper">
-              <span className="stats-icon-label">Skip to stats →</span>
+              <span className="stats-icon-label">Jump to stats →</span>
               <button
                 className="stats-icon-btn"
                 onClick={() => {
