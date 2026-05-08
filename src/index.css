@@ -827,6 +827,8 @@ h1 {
   font-weight: 600;
   color: var(--accent);
   margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .archetype-desc {
@@ -2127,6 +2129,7 @@ footer {
   color: var(--accent);
   white-space: nowrap;
   pointer-events: none;
+  text-transform: lowercase;
   user-select: none;
   animation: stats-label-fade 2s ease-in-out infinite;
 }
