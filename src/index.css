@@ -124,6 +124,7 @@ h1 {
   color: var(--text-muted);
   font-family: inherit;
   font-size: 0.75rem;
+  text-transform: lowercase;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -148,6 +149,7 @@ h1 {
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.15s ease;
+  text-transform: lowercase;
 }
 
 .toggle-btn:hover {
@@ -2803,6 +2805,7 @@ footer {
   padding-right: 1.75rem;
   font-size: 0.75rem;
   font-family: inherit;
+  text-transform: lowercase;
   background: var(--bg-secondary);
   border: 1px solid var(--bg-tertiary);
   border-radius: 6px;
@@ -2872,6 +2875,7 @@ footer {
   cursor: pointer;
   transition: all 0.1s ease;
   white-space: nowrap;
+  text-transform: lowercase;
 }
 
 .comparison-select-option:hover {
