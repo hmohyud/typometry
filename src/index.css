@@ -230,6 +230,7 @@ h1 {
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   border-radius: 3px;
+  text-transform: lowercase;
   transition: all 0.15s ease;
 }
 
@@ -954,7 +955,7 @@ h1 {
   color: var(--text-muted);
   text-transform: lowercase;
   letter-spacing: 0.05em;
-  margin-bottom: 1rem;
+  margin: 1.5rem 0 1rem;
   text-align: center;
 }
 
@@ -1281,6 +1282,7 @@ h1 {
   text-decoration-color: rgba(226, 183, 20, 0.4);
   text-underline-offset: 3px;
   cursor: help;
+  text-transform: lowercase;
 }
 
 .histogram-close-btn {
@@ -2274,6 +2276,7 @@ footer {
   gap: 0.5rem;
   color: #646669;
   font-size: 0.85rem;
+  text-transform: lowercase;
 }
 
 .finger-hands-note {
@@ -2460,6 +2463,7 @@ footer {
   font-size: 0.85rem;
   color: var(--text);
   font-weight: 500;
+  text-transform: lowercase;
 }
 
 .chord-subtitle {
@@ -2895,6 +2899,7 @@ footer {
   font-weight: 500;
   color: var(--text);
   margin: 0 0 0.25rem 0;
+  text-transform: lowercase;
 }
 
 /* Header for standalone views */
@@ -2912,6 +2917,7 @@ footer {
   font-weight: 500;
   color: var(--text);
   margin: 0;
+  text-transform: lowercase;
 }
 
 .global-stats-subtitle {
@@ -4391,7 +4397,7 @@ footer {
   background: var(--bg-secondary);
   border-radius: 8px;
   padding: 1rem 1rem 0.85rem;
-  margin: 0 0 1.5rem;
+  margin: 2rem 0 1.5rem;
 }
 
 .skill-radar .section-header-row {
@@ -4403,7 +4409,7 @@ footer {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--text);
-  text-transform: none;
+  text-transform: lowercase;
 }
 
 .skill-radar-wrap {
