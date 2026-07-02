@@ -10823,7 +10823,10 @@ function App() {
               racing...
             </span>
           )}
-          {!isInRace && (
+          {!isInRace &&
+            statsView !== "global" &&
+            cumulativeStats &&
+            cumulativeStats.sessions > 0 && (
             <button
               className="reset-btn danger hold-btn"
               onMouseDown={startClearHold}

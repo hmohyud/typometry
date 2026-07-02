@@ -2134,21 +2134,19 @@ footer {
   pointer-events: none;
   text-transform: lowercase;
   user-select: none;
-  animation: stats-label-fade 2s ease-in-out infinite;
+  opacity: 0.9;
 }
 
-@keyframes stats-label-fade {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 1; }
-}
-
-@keyframes stats-icon-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(226, 183, 20, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(226, 183, 20, 0);
-  }
+/* Attention cue: a springy bounce + expanding "radar ping" ring. Motion
+   catches the eye far better than a color/brightness change. Plays a few
+   times on appear, with a rest between each, then settles static. */
+@keyframes stats-icon-attn {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(226, 183, 20, 0.55); }
+  8%   { transform: scale(1.3);  box-shadow: 0 0 0 4px rgba(226, 183, 20, 0.35); }
+  17%  { transform: scale(0.88); box-shadow: 0 0 0 10px rgba(226, 183, 20, 0.12); }
+  26%  { transform: scale(1.14); box-shadow: 0 0 0 14px rgba(226, 183, 20, 0); }
+  34%  { transform: scale(1);    box-shadow: 0 0 0 0 rgba(226, 183, 20, 0); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(226, 183, 20, 0); }
 }
 
 /* Stats icon button - positioned in corner */
@@ -2164,12 +2162,23 @@ footer {
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s, transform 0.15s;
-  animation: stats-icon-pulse 3s ease-in-out infinite;
+  /* Bounce + ping 3 times on appear (~4.5s), then rest as a static button. */
+  animation: stats-icon-attn 1.5s ease-out 3;
 }
 
 .stats-icon-btn:hover {
   background: #232528;
-  transform: scale(1.05);
+  transform: scale(1.08);
+  filter: brightness(1.15);
+}
+
+/* Respect users who prefer reduced motion — keep the button visible,
+   drop the flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .stats-icon-btn,
+  .stats-icon-label {
+    animation: none;
+  }
 }
 
 /* Typing hint container - fixed height to prevent shift */
